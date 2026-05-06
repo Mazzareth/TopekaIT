@@ -1,0 +1,11 @@
+@code {
+    [Parameter] public string IconName { get; set; } = "Ticket";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
+
+<div class="empty">
+    <Icon Name="@IconName" Size="24" />
+    <div style="font-weight: 500; color: var(--text); margin-bottom: 4px;">@Title</div>
+    <div>@ChildContent</div>
+</div>

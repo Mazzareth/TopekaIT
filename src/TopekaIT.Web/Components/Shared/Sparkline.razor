@@ -1,0 +1,48 @@
+@* Lightweight SVG sparkline for embedding in table rows *@
+<svg width="@Width" height="@Height" viewBox="0 0 @Width @Height" style="display: block;">
+    @if (!string.IsNullOrEmpty(_pathData))
+    {
+        <polyline points="@_pathData"
+                  fill="none"
+                  stroke="@Color"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round" />
+    }
+</svg>
+
+@code {
+    [Parameter] public IEnumerable<decimal> Values { get; set; } = Array.Empty<decimal>();
+    [Parameter] public int Width { get; set; } = 80;
+    [Parameter] public int Height { get; set; } = 24;
+    [Parameter] public string Color { get; set; } = "#3b82f6";
+
+    string _pathData = "";
+
+    protected override void OnParametersSet()
+    {
+        var points = Values.ToList();
+        if (points.Count < 2)
+        {
+            _pathData = "";
+            return;
+        }
+
+        var min = points.Min();
+        var max = points.Max();
+        var range = max - min;
+        if (range == 0) range = 1; // avoid division by zero
+
+        var step = (double)Width / (points.Count - 1);
+        var coords = new List<string>();
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            var x = i * step;
+            var y = Height - ((double)(points[i] - min) / (double)range * (Height - 4)) - 2;
+            coords.Add($"{x:F1},{y:F1}");
+        }
+
+        _pathData = string.Join(" ", coords);
+    }
+}

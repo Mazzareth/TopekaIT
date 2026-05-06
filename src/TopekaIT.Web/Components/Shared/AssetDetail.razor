@@ -1,0 +1,342 @@
+@using TopekaIT.Core.Services
+@using System.Security.Claims
+@inject AssetService AssetService
+@inject TicketService TicketService
+@inject ActivityService ActivityService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+
+@code {
+    [Parameter] public Asset? Asset { get; set; }
+    [Parameter] public string? Action { get; set; }
+    [Parameter] public IReadOnlyList<User> Users { get; set; } = Array.Empty<User>();
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    string _holder = "";
+    string _holderSearch = "";
+    bool _showAssignDropdown;
+    string _condition = "ok";
+    string _lastKey = "";
+
+    protected override void OnParametersSet()
+    {
+        var key = $"{Asset?.Id}|{Action}";
+        if (key != _lastKey)
+        {
+            _lastKey = key;
+            _holder = Asset?.HolderId ?? "";
+            _holderSearch = "";
+            _showAssignDropdown = false;
+            _condition = "ok";
+        }
+    }
+
+    async Task DoCheckOut()
+    {
+        if (Asset == null || string.IsNullOrEmpty(_holder)) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        var a = await AssetService.CheckOutAsync(Asset.Id, _holder, 0);
+        var holder = Users.FirstOrDefault(u => u.Id == _holder);
+        if (a != null && holder != null)
+        {
+            await ActivityService.PushAsync("asset_out", $"{a.Tag} checked out to {holder.Name} by {actor}");
+            State.PushToast($"{a.Tag} → {holder.Name}", "up");
+        }
+        await OnChanged.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    async Task DoCheckIn()
+    {
+        if (Asset == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        var holder = Users.FirstOrDefault(u => u.Id == Asset.HolderId);
+        var a = await AssetService.CheckInAsync(Asset.Id, _condition);
+        if (a != null)
+        {
+            var holderText = holder != null ? $" — was with {holder.Name}" : "";
+            var condText = _condition == "ok" ? "good condition" : _condition;
+            await ActivityService.PushAsync("asset_in", $"{a.Tag} checked in ({condText}) by {actor}{holderText}");
+            State.PushToast($"{a.Tag} checked in", "up");
+        }
+        await OnChanged.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    async Task DoAssign()
+    {
+        if (Asset == null || string.IsNullOrEmpty(_holder)) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        await AssetService.AssignHolderAsync(Asset.Id, _holder, actor);
+        var holder = Users.FirstOrDefault(u => u.Id == _holder);
+        if (holder != null)
+        {
+            State.PushToast($"{Asset.Tag ?? Asset.Serial} → {holder.Name}", "up");
+        }
+        await OnChanged.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    async Task Unassign()
+    {
+        if (Asset == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        await AssetService.AssignHolderAsync(Asset.Id, "", actor);
+        State.PushToast($"{Asset.Tag ?? Asset.Serial} unassigned", "up");
+        await OnChanged.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    async Task SetStatus(AssetStatus status)
+    {
+        if (Asset == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        await AssetService.SetStatusAsync(Asset.Id, status, actor);
+        
+        if (status == AssetStatus.InRMA || status == AssetStatus.Repair)
+        {
+            var label = !string.IsNullOrWhiteSpace(Asset.Tag) ? Asset.Tag : (!string.IsNullOrWhiteSpace(Asset.Serial) ? Asset.Serial : Asset.Id);
+            await TicketService.CreateForRepairAsync(Asset.Id, label, userId, status);
+            State.PushToast($"Device marked {status} — IT ticket created", "up");
+        }
+        else
+        {
+            State.PushToast($"Status → {status}", "up");
+        }
+        await OnChanged.InvokeAsync();
+    }
+
+    string EffectiveAction()
+    {
+        if (Asset?.Category == AssetCategory.Battery) return "detail";
+        if (!string.IsNullOrEmpty(Action)) return Action!;
+        return Asset?.Status == AssetStatus.Out ? "in" : "out";
+    }
+
+    User? CurrentHolder => Asset == null ? null : Users.FirstOrDefault(u => u.Id == Asset.HolderId);
+    IEnumerable<User> Workers => Users.Where(u => u.Role == UserRole.Worker || u.Role == UserRole.Manager);
+
+    static string ScanCode(Asset asset)
+        => !string.IsNullOrWhiteSpace(asset.Tag)
+            ? $"tag:{asset.Tag}"
+            : !string.IsNullOrWhiteSpace(asset.Serial)
+                ? $"serial:{asset.Serial}"
+                : $"id:{asset.Id}";
+
+    static string Label(Asset asset)
+        => !string.IsNullOrWhiteSpace(asset.Tag)
+            ? asset.Tag
+            : !string.IsNullOrWhiteSpace(asset.Serial)
+                ? asset.Serial
+                : asset.Id;
+
+    static string CategoryLabel(AssetCategory category) => category switch
+    {
+        AssetCategory.PodTc77 => "POD TC77",
+        AssetCategory.Battery => "Battery",
+        _ => "SAE device",
+    };
+}
+
+<Modal Open="@(Asset != null)" OnClose="OnClose" Wide>
+    <Title>
+        @if (Asset != null)
+        {
+            <span style="display: flex; gap: 10px; align-items: center;">
+                <Icon Name="Watch" Size="16" />
+                <span>@Label(Asset)</span>
+                <span style="color: var(--text-faint); font-weight: 400; font-size: 13px;">· @Asset.Model</span>
+            </span>
+        }
+    </Title>
+    <ChildContent>
+        @if (Asset != null)
+        {
+            <div style="display: grid; grid-template-columns: 220px 1fr; gap: 20px;">
+                <div>
+                    <QRCode Value="@ScanCode(Asset)" Big />
+                    <div style="font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 8px; text-align: center;">
+                        @ScanCode(Asset)
+                    </div>
+                    @if (!string.IsNullOrEmpty(Asset.ScannerType))
+                    {
+                        <div style="text-align: center; margin-top: 8px;">
+                            <Pill Kind="pill-info">@Asset.ScannerType</Pill>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px;">
+                        <div style="padding: 10px; background: var(--bg-sunken); border-radius: 4px;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px;">Type</div>
+                            <div>@CategoryLabel(Asset.Category)</div>
+                        </div>
+                        <div style="padding: 10px; background: var(--bg-sunken); border-radius: 4px;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px;">Status</div>
+                            <div>@Asset.Status</div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Asset.Serial))
+                        {
+                            <div style="padding: 10px; background: var(--bg-sunken); border-radius: 4px;">
+                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px;">Serial</div>
+                                <div class="mono">@Asset.Serial</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Asset.Imei))
+                        {
+                            <div style="padding: 10px; background: var(--bg-sunken); border-radius: 4px;">
+                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px;">IMEI</div>
+                                <div class="mono">@Asset.Imei</div>
+                            </div>
+                        }
+                        @if (Asset.Category == AssetCategory.Battery)
+                        {
+                            <div style="padding: 10px; background: var(--bg-sunken); border-radius: 4px;">
+                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 2px;">Quantity</div>
+                                <div>@Asset.Quantity</div>
+                            </div>
+                        }
+                    </div>
+                    @if (Asset.Status == AssetStatus.Out && CurrentHolder != null)
+                    {
+                        <div style="padding: 10px; background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 6px; margin-bottom: 14px; font-size: 13px;">
+                            Currently held by <b>@CurrentHolder.Name</b> since @Format.RelTime(Asset.CheckedOutAt ?? DateTimeOffset.UtcNow)
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(Asset.Notes))
+                    {
+                        <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 14px; padding: 10px; background: var(--bg-sunken); border-radius: 4px; white-space: pre-wrap;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; letter-spacing: 0.06em;">Notes</div>
+                            @Asset.Notes
+                        </div>
+                    }
+
+                    @if (Asset.LoanRecords.Any())
+                    {
+                        <div style="margin-bottom: 14px;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; letter-spacing: 0.06em;">Recent Loans</div>
+                            @foreach (var loan in Asset.LoanRecords.OrderByDescending(r => r.DateLoaned))
+                            {
+                                <div style="font-size: 12px; padding: 6px 10px; background: var(--bg-sunken); border-radius: 4px; margin-bottom: 4px;">
+                                    <b>@(Users.FirstOrDefault(u => u.Id == loan.BorrowerId)?.Name ?? loan.BorrowerId)</b>
+                                    @if (loan.IsDayLoan) { <Pill Kind="pill-warn">Day Loan</Pill> }
+                                    <div style="color: var(--text-dim);">@loan.Reason</div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (Asset.RmaRecords.Any())
+                    {
+                        <div style="margin-bottom: 14px;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; letter-spacing: 0.06em;">RMA History</div>
+                            @foreach (var rma in Asset.RmaRecords.OrderByDescending(r => r.DateSubmitted))
+                            {
+                                <div style="font-size: 12px; padding: 6px 10px; background: var(--bg-sunken); border-radius: 4px; margin-bottom: 4px; border-left: 2px solid @(rma.IsReceived ? "var(--up)" : "var(--warn)")">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span>Submitted: @(rma.DateSubmitted?.ToString("d") ?? "Unknown")</span>
+                                        <span style="color: @(rma.IsReceived ? "var(--up)" : "var(--warn)")">@(rma.IsReceived ? "Received" : "Pending")</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(rma.Comments))
+                                    {
+                                        <div style="color: var(--text-dim); margin-top: 4px;">@rma.Comments</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (Asset.Category == AssetCategory.SaeDevice)
+                    {
+                        <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px; margin-bottom: 14px;">
+                            <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; letter-spacing: 0.06em;">Status</div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                @foreach (var s in new[] { AssetStatus.InUse, AssetStatus.InRMA, AssetStatus.Repair, AssetStatus.Holding, AssetStatus.MIA })
+                                {
+                                    <button class="@(Asset.Status == s ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick="() => SetStatus(s)">@s.ToString()</button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (EffectiveAction() == "out" && Asset.Status == AssetStatus.In && Asset.Category != AssetCategory.SaeDevice)
+                    {
+                        <div class="form-row">
+                            <label>Check out to</label>
+                            <select @bind="_holder">
+                                <option value="">Select person…</option>
+                                @foreach (var w in Workers)
+                                {
+                                    <option value="@w.Id">@w.Name · @w.Role</option>
+                                }
+                            </select>
+                        </div>
+                        <button class="btn btn-accent" disabled="@string.IsNullOrEmpty(_holder)" @onclick="DoCheckOut">
+                            <Icon Name="ArrowOut" Size="14" /> Confirm check out
+                        </button>
+                    }
+                    else if (EffectiveAction() == "in" && Asset.Status == AssetStatus.Out && Asset.Category != AssetCategory.SaeDevice)
+                    {
+                        <div class="form-row">
+                            <label>Condition</label>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button class="@(_condition == "ok" ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick='() => _condition = "ok"'><Icon Name="Check" Size="12" /> Good</button>
+                                <button class="@(_condition == "issue" ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick='() => _condition = "issue"'>Minor issue</button>
+                                <button class="@(_condition == "repair" ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick='() => _condition = "repair"'>Needs repair → IT</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-accent" @onclick="DoCheckIn">
+                            <Icon Name="ArrowIn" Size="14" /> Confirm check in
+                        </button>
+                    }
+                    else if (EffectiveAction() == "assign" || Asset.Category == AssetCategory.SaeDevice)
+                    {
+                        <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px;">
+                            <div class="form-row">
+                                <label>Assign to employee</label>
+                                <div style="position: relative;">
+                                    <input value="@_holderSearch" @oninput="(e) => { _holderSearch = e.Value?.ToString() ?? string.Empty; _showAssignDropdown = true; }" placeholder="Type to search..." autocomplete="off" />
+                                    @if (_showAssignDropdown)
+                                    {
+                                        var matches = Workers.Where(w => string.IsNullOrWhiteSpace(_holderSearch) || w.Name.Contains(_holderSearch, StringComparison.OrdinalIgnoreCase)).Take(5).ToList();
+                                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10; margin-top: 4px;">
+                                            @foreach (var m in matches)
+                                            {
+                                                <div style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border-subtle);" @onclick="() => { _holder = m.Id; _holderSearch = m.Name; _showAssignDropdown = false; }">
+                                                    @m.Name
+                                                </div>
+                                            }
+                                            <div style="padding: 8px 12px; font-size: 12px;">
+                                                <a href="/it/users">Can't find them? Add employee →</a>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            
+                            @if (!string.IsNullOrEmpty(_holder) && _holder != Asset.HolderId)
+                            {
+                                <button class="btn btn-primary" style="margin-top: 10px; width: 100%;" @onclick="DoAssign">Save Assignment</button>
+                            }
+                            @if (!string.IsNullOrEmpty(Asset.HolderId))
+                            {
+                                <button class="btn btn-ghost" style="margin-top: 10px; width: 100%;" @onclick="Unassign">Unassign</button>
+                            }
+                        </div>
+                    }
+                    else if (EffectiveAction() == "out" && Asset.Status != AssetStatus.In)
+                    {
+                        <div style="font-size: 13px; color: var(--text-dim);">This asset is not available to check out right now.</div>
+                    }
+                </div>
+            </div>
+        }
+    </ChildContent>
+</Modal>

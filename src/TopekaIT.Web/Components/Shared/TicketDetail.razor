@@ -1,0 +1,250 @@
+@using TopekaIT.Core.Services
+@using System.Security.Claims
+@inject TicketService TicketService
+@inject UserService UserService
+@inject PrinterService PrinterService
+@inject AssetService AssetService
+@inject AuthenticationStateProvider AuthProvider
+
+@code {
+    [Parameter] public Ticket? Ticket { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    List<User> _users = new();
+    List<Printer> _printers = new();
+    List<Asset> _assets = new();
+    bool _canEdit;
+    bool _loaded;
+    string _assigneeId = "";
+    string _assigneeSearch = "";
+    bool _showAssignDropdown;
+    string _resolutionText = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Ticket != null && !_loaded)
+        {
+            _loaded = true;
+            _users = (await UserService.GetAllAsync()).ToList();
+            _printers = (await PrinterService.GetAllAsync()).ToList();
+            _assets = (await AssetService.GetAllAsync()).ToList();
+            var auth = await AuthProvider.GetAuthenticationStateAsync();
+            _canEdit = auth.User.FindFirst(ClaimTypes.Role)?.Value is "IT" or "SuperAdmin";
+        }
+        if (Ticket != null)
+        {
+            _assigneeId = Ticket.AssigneeId ?? "";
+            _assigneeSearch = "";
+            _resolutionText = Ticket.Resolution ?? "";
+        }
+    }
+
+    async Task Close()
+    {
+        _loaded = false;
+        await OnClose.InvokeAsync();
+    }
+
+    async Task UpdateStatus(TicketStatus status)
+    {
+        if (Ticket == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        await TicketService.UpdateStatusAsync(Ticket.Id, status, userId);
+        await OnChanged.InvokeAsync();
+    }
+
+    async Task Resolve()
+    {
+        if (Ticket == null) return;
+        await UpdateStatus(TicketStatus.Resolved);
+        await Close();
+    }
+
+    async Task SaveAssignee()
+    {
+        if (Ticket == null) return;
+        await TicketService.UpdateAssigneeAsync(Ticket.Id, _assigneeId);
+        await OnChanged.InvokeAsync();
+        _showAssignDropdown = false;
+        Ticket.AssigneeId = string.IsNullOrWhiteSpace(_assigneeId) ? null : _assigneeId;
+    }
+
+    async Task SaveResolution()
+    {
+        if (Ticket == null) return;
+        await TicketService.UpdateResolutionAsync(Ticket.Id, _resolutionText);
+        await OnChanged.InvokeAsync();
+        Ticket.Resolution = _resolutionText;
+    }
+
+    User? Reporter() => Ticket == null ? null : _users.FirstOrDefault(u => u.Id == Ticket.ReportedById);
+    User? Assignee() => Ticket == null ? null : _users.FirstOrDefault(u => u.Id == Ticket.AssigneeId);
+
+    string? AssetDisplayName()
+    {
+        if (Ticket == null) return null;
+        if (Ticket.AssetType == AssetKind.Printer)
+            return _printers.FirstOrDefault(p => p.Id == Ticket.AssetId)?.Name;
+        if (Ticket.AssetType == AssetKind.Asset)
+            return _assets.FirstOrDefault(a => a.Id == Ticket.AssetId)?.Tag;
+        return null;
+    }
+
+    string? AssetDisplaySerial()
+    {
+        if (Ticket == null) return null;
+        if (Ticket.AssetType == AssetKind.Printer)
+            return _printers.FirstOrDefault(p => p.Id == Ticket.AssetId)?.Model;
+        if (Ticket.AssetType == AssetKind.Asset)
+            return _assets.FirstOrDefault(a => a.Id == Ticket.AssetId)?.Serial;
+        return null;
+    }
+}
+
+<Modal Open="@(Ticket != null)" OnClose="Close" Wide>
+    <Title>
+        @if (Ticket != null)
+        {
+            <span style="display: flex; gap: 8px; align-items: center;">
+                <span class="mono" style="color: var(--text-faint); font-size: 13px;">@Ticket.Id</span>
+                <span>@Ticket.Title</span>
+            </span>
+        }
+    </Title>
+    <ChildContent>
+        @if (Ticket != null)
+        {
+            <div style="display: grid; grid-template-columns: 1fr 180px; gap: 16px;">
+                <div>
+                    <div style="font-size: 13px; color: var(--text-dim); margin-bottom: 16px; white-space: pre-wrap;">
+                        @if (string.IsNullOrWhiteSpace(Ticket.Description))
+                        {
+                            <em style="color: var(--text-faint);">No description</em>
+                        }
+                        else
+                        {
+                            @Ticket.Description
+                        }
+                    </div>
+                    @if (_canEdit || !string.IsNullOrEmpty(Ticket.Resolution))
+                    {
+                        <div style="padding: 12px; background: var(--up-bg); border: 1px solid var(--up); border-radius: 6px; font-size: 13px; color: var(--text);">
+                            <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--up); margin-bottom: 4px; letter-spacing: 0.06em;">Resolution</div>
+                            @if (_canEdit)
+                            {
+                                <textarea @bind="_resolutionText" placeholder="Enter resolution details..." style="width: 100%; min-height: 80px; margin-bottom: 8px;"></textarea>
+                                <button class="btn btn-sm btn-primary" @onclick="SaveResolution">Save Resolution</button>
+                            }
+                            else
+                            {
+                                @Ticket.Resolution
+                            }
+                        </div>
+                    }
+                    @if (_canEdit)
+                    {
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                            <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; letter-spacing: 0.06em;">Update status</div>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                @foreach (var s in Enum.GetValues<TicketStatus>())
+                                {
+                                    var label = Format.StatusLabel(s);
+                                    var cls = Ticket.Status == s ? "btn btn-sm btn-primary active" : "btn btn-sm";
+                                    <button class="@cls" @onclick="() => UpdateStatus(s)">@label</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div style="font-size: 13px; display: grid; gap: 10px; align-content: flex-start;">
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Status</div>
+                        <div style="margin-top: 4px;"><Pill Kind="@Format.StatusPill(Ticket.Status)" Dot>@Format.StatusLabel(Ticket.Status)</Pill></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Reporter</div>
+                        <div style="margin-top: 4px;">@(Reporter()?.Name ?? "—")</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Assignee</div>
+                        <div style="margin-top: 4px;">
+                            @if (_canEdit)
+                            {
+                                <div style="position: relative;">
+                                    <input value="@_assigneeSearch" @oninput="(e) => { _assigneeSearch = e.Value?.ToString() ?? string.Empty; _showAssignDropdown = true; }" placeholder="@(Assignee()?.Name ?? "Unassigned")" autocomplete="off" style="width: 100%; padding: 4px;" />
+                                    @if (_showAssignDropdown)
+                                    {
+                                        var matches = _users.Where(w => (w.Role == UserRole.IT || w.Role == UserRole.SuperAdmin) && (string.IsNullOrWhiteSpace(_assigneeSearch) || w.Name.Contains(_assigneeSearch, StringComparison.OrdinalIgnoreCase))).Take(5).ToList();
+                                        <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10;">
+                                            @foreach (var m in Enumerable.Concat(new[] { new User { Id = "", Name = "(Unassign)" } }, matches))
+                                            {
+                                                <div style="padding: 6px; cursor: pointer; border-bottom: 1px solid var(--border-subtle);" @onclick="() => { _assigneeId = m.Id; _assigneeSearch = m.Name; _showAssignDropdown = false; }">
+                                                    @m.Name
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                @if (_assigneeId != (Ticket.AssigneeId ?? ""))
+                                {
+                                    <button class="btn btn-sm btn-primary" style="margin-top: 6px; width: 100%;" @onclick="SaveAssignee">Save</button>
+                                }
+                            }
+                            else
+                            {
+                                @if (Assignee() != null)
+                                {
+                                    @Assignee()!.Name
+                                }
+                                else
+                                {
+                                    <span style="color: var(--text-faint);">Unassigned</span>
+                                }
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Asset</div>
+                        <div style="margin-top: 4px;">
+                            @if (AssetDisplayName() != null)
+                            {
+                                <div>@AssetDisplayName()</div>
+                                <div class="mono" style="font-size: 11px; color: var(--text-faint);">@AssetDisplaySerial()</div>
+                            }
+                            else
+                            {
+                                <span style="color: var(--text-faint);">—</span>
+                            }
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Created</div>
+                        <div style="margin-top: 4px;" class="mono">@Format.RelTime(Ticket.CreatedAt)</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); letter-spacing: 0.06em;">Updated</div>
+                        <div style="margin-top: 4px;" class="mono">@Format.RelTime(Ticket.UpdatedAt)</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_canEdit && Ticket != null)
+        {
+            <button class="btn btn-ghost" @onclick="Close">Close</button>
+            @if (Ticket.Status != TicketStatus.Resolved)
+            {
+                <button class="btn btn-primary" @onclick="Resolve">
+                    <Icon Name="Check" Size="14" /> Mark resolved
+                </button>
+            }
+        }
+        else
+        {
+            <button class="btn btn-ghost" @onclick="Close">Close</button>
+        }
+    </Footer>
+</Modal>

@@ -1,0 +1,706 @@
+@page "/it/printers"
+@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Services
+@inject PrinterService PrinterService
+@inject PrinterModelService PrinterModelService
+@inject PrinterSetupService PrinterSetupService
+@inject DivisionService DivisionService
+@inject ITenantContext TenantContext
+@inject PingHistoryService PingHistory
+@inject PrinterEventService PrinterEvents
+@inject ActivityService ActivityService
+@inject NavigationManager Nav
+@inject AppState State
+
+<PageTitle>Printer admin · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Printers</h1>
+            <div class="page-sub">Health first, configuration second.</div>
+        </div>
+        <div class="page-actions">
+            <button class="btn" @onclick="() => _setupOpen = !_setupOpen">
+                <Icon Name="Wifi" Size="14" /> Auto setup
+            </button>
+            <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add printer</button>
+        </div>
+    </div>
+
+    <div class="health-strip">
+        <div class="health-cell down">
+            <span class="mono">@_rows.Count(r => r.Status == PrinterStatus.Down)</span>
+            <span>down</span>
+        </div>
+        <div class="health-cell warn">
+            <span class="mono">@_rows.Count(r => r.Status == PrinterStatus.Warn)</span>
+            <span>warnings</span>
+        </div>
+        <div class="health-cell">
+            <span class="mono">@_rows.Count(r => r.LastLatencyMs >= 600)</span>
+            <span>slow latency</span>
+        </div>
+        <div class="health-cell">
+            <span class="mono">@_errorLog.Count</span>
+            <span>logged errors</span>
+        </div>
+    </div>
+
+    <div class="card setup-card @(_setupOpen ? "open" : "")">
+        <div class="setup-summary" @onclick="() => _setupOpen = !_setupOpen">
+            <div>
+                <strong>Auto Printer Setup</strong>
+                <span>@(_setupRows.Count > 0 ? $"{_setupRows.Count} IPs tested" : "Bulk discover and configure T8000 printers")</span>
+            </div>
+            <button class="btn btn-sm" @onclick:stopPropagation="true" @onclick="() => _setupOpen = !_setupOpen">
+                @(_setupOpen ? "Close" : "Open")
+            </button>
+        </div>
+        @if (_setupOpen)
+        {
+            <div class="setup-body">
+                <div style="display: grid; grid-template-columns: minmax(240px, 360px) auto; gap: 12px; align-items: end;">
+                    <label>
+                        <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">IP addresses</div>
+                        <textarea class="inline-input mono"
+                                  style="width: 100%; min-height: 86px;"
+                                  @bind="_setupIpInput"
+                                  @bind:event="oninput"
+                                  placeholder="10.36.155.20&#10;10.36.155.21"></textarea>
+                    </label>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <button class="btn btn-accent" @onclick="TestPrinterSetup" disabled="@(_setupTesting || string.IsNullOrWhiteSpace(_setupIpInput))">
+                            <Icon Name="Wifi" Size="14" /> Test
+                        </button>
+                        <button class="btn" @onclick="RunPrinterSetup" disabled="@(!CanRunPrinterSetup)">
+                            <Icon Name="Play" Size="14" /> Run all
+                        </button>
+                        @if (_setupTesting)
+                        {
+                            <span style="font-size: 12px; color: var(--text-faint);">Testing.</span>
+                        }
+                        @if (_setupRunning)
+                        {
+                            <span style="font-size: 12px; color: var(--text-faint);">Running setup.</span>
+                        }
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_setupError))
+                {
+                    <div style="color: var(--down); font-size: 13px; margin-top: 10px;">@_setupError</div>
+                }
+
+                @if (_setupRows.Count > 0)
+                {
+                    <div style="margin-top: 14px;">
+                        <div class="asset-table-head" style="grid-template-columns: 120px 100px 1fr 1fr 180px 160px;">
+                            <div>IP</div>
+                            <div>Status</div>
+                            <div>Name</div>
+                            <div>Detected model</div>
+                            <div>Portal model</div>
+                            <div style="text-align: right;">Result</div>
+                        </div>
+                        @foreach (var row in _setupRows)
+                        {
+                            <div class="asset-row" style="grid-template-columns: 120px 100px 1fr 1fr 180px 160px; align-items: center;">
+                                <div class="mono" style="font-size: 12px;">@row.IpAddress</div>
+                                <div>
+                                    <Pill Kind="@(row.Connected ? "pill-up" : "pill-down")">@row.Status</Pill>
+                                </div>
+                                <div>@DisplaySetupValue(row.DetectedName)</div>
+                                <div>
+                                    <div>@DisplaySetupValue(row.DetectedModel)</div>
+                                    @if (!string.IsNullOrWhiteSpace(row.ErrorMessage))
+                                    {
+                                        <div style="font-size: 12px; color: var(--down);">@row.ErrorMessage</div>
+                                    }
+                                </div>
+                                <div>
+                                    @if (row.Connected)
+                                    {
+                                        <select class="inline-input" @bind="row.SelectedModel">
+                                            <option value="">Select model</option>
+                                            @foreach (var model in _printerModels)
+                                            {
+                                                <option value="@model.Name">@model.Name</option>
+                                            }
+                                        </select>
+                                    }
+                                </div>
+                                <div style="text-align: right;">
+                                    @if (!string.IsNullOrWhiteSpace(row.RunStatus))
+                                    {
+                                        <div style="font-size: 13px;">@row.RunStatus</div>
+                                        @if (!string.IsNullOrWhiteSpace(row.RunError))
+                                        {
+                                            <div style="font-size: 12px; color: var(--down);">@row.RunError</div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="toolbar">
+        <div class="seg">
+            <button class="@(_printerFilter == "all" ? "active" : "")" @onclick='() => _printerFilter = "all"'>All <span class="count">@_rows.Count</span></button>
+            <button class="@(_printerFilter == "attention" ? "active" : "")" @onclick='() => _printerFilter = "attention"'>Attention <span class="count">@_rows.Count(r => r.Status != PrinterStatus.Up)</span></button>
+            <button class="@(_printerFilter == "slow" ? "active" : "")" @onclick='() => _printerFilter = "slow"'>Slow <span class="count">@_rows.Count(r => r.LastLatencyMs >= 600)</span></button>
+        </div>
+        <label class="field">
+            <span class="lbl">Sort</span>
+            <select @bind="_printerSort">
+                <option value="health">Health</option>
+                <option value="name">Printer</option>
+                <option value="latency">Latency</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="card">
+        <div class="asset-table-head" style="grid-template-columns: 1.2fr 1fr 1.2fr 1fr 90px 120px 80px 150px;">
+            <div>Printer</div>
+            <div>Department</div>
+            <div>Model</div>
+            <div>IP Address</div>
+            <div>Status</div>
+            <div>Latency</div>
+            <div>Trend</div>
+            <div style="text-align: right;">Actions</div>
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <EmptyState IconName="Printer" Title="No printers yet">Add your first printer to start tracking status.</EmptyState>
+        }
+
+        @foreach (var row in FilteredPrinterRows())
+        {
+            @if (row.IsNew || row.IsEditing)
+            {
+                <div class="asset-row" style="grid-template-columns: 1.2fr 1fr 1.2fr 1fr 90px 120px 80px 150px; align-items: center;">
+                    <input class="inline-input" @bind="row.Name" @bind:event="oninput" placeholder="e.g. PICK-P03" />
+                    <input class="inline-input" @bind="row.Department" @bind:event="oninput" placeholder="e.g. Dry Dock" />
+                    <div style="display: flex; gap: 6px;">
+                        @if (row.IsAddingModel)
+                        {
+                            <input class="inline-input" style="min-width: 0;" @bind="row.NewModelName" @bind:event="oninput" placeholder="Model name" />
+                            <button class="btn btn-sm btn-accent" @onclick="() => SaveNewModel(row)" disabled="@(string.IsNullOrWhiteSpace(row.NewModelName))">
+                                <Icon Name="Check" Size="12" />
+                            </button>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => CancelNewModel(row)"><Icon Name="X" Size="12" /></button>
+                        }
+                        else
+                        {
+                            <select class="inline-input" style="min-width: 0;" @bind="row.Model">
+                                @foreach (var model in _printerModels)
+                                {
+                                    <option value="@model.Name">@model.Name</option>
+                                }
+                            </select>
+                            <button class="btn btn-sm" @onclick="() => BeginAddModel(row)"><Icon Name="Plus" Size="12" /></button>
+                        }
+                    </div>
+                    <input class="inline-input mono" @bind="row.IpAddress" @bind:event="oninput" placeholder="10.14.0.42" />
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                    <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
+                        <button class="btn btn-sm btn-accent" @onclick="() => SaveRow(row)" disabled="@(string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Model))">
+                            <Icon Name="Check" Size="12" />
+                        </button>
+                        <button class="btn btn-sm btn-ghost" @onclick="() => CancelRow(row)"><Icon Name="X" Size="12" /></button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="asset-row printer-admin-row @PrinterRowClass(row)" style="grid-template-columns: 1.2fr 1fr 1.2fr 1fr 90px 120px 80px 150px;">
+                    <div>
+                        <div class="printer-name-with-alerts">
+                            <span style="font-weight: 500;">@row.Name</span>
+                            @foreach (var alert in VisibleAlerts(row.Id))
+                            {
+                                <span class="printer-alert-blip @AlertBlipClass(alert.Severity)" title="@alert.FriendlyMessage">!</span>
+                            }
+                        </div>
+                        @if (AllAlerts(row.Id).Count > 0)
+                        {
+                            <div class="printer-alert-inline">
+                                @foreach (var alert in AllAlerts(row.Id))
+                                {
+                                    <button class="alert-toggle"
+                                            title="@alert.FriendlyMessage"
+                                            @onclick="() => ClearAlert(alert)">
+                                        @alert.AlertCategory
+                                        <span>Clear</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div>@row.Department</div>
+                    <div>@row.Model</div>
+                    <div class="mono" style="font-size: 12px;">@row.IpAddress</div>
+                    <div>@StatusText(row)</div>
+                    <div class="mono" style="font-size: 11px; color: var(--text-faint);">
+                        @if (row.LastPingAt.HasValue)
+                        {
+                            @TopekaIT.Web.Services.Format.RelTime(row.LastPingAt.Value)
+                            @if (row.LastLatencyMs.HasValue)
+                            {
+                                <span> · @row.LastLatencyMs ms</span>
+                            }
+                        }
+                        else
+                        {
+                            <span>-</span>
+                        }
+                    </div>
+                    <div>
+                        @if (_sparklines.TryGetValue(row.Id, out var values) && values.Count > 1)
+                        {
+                            <Sparkline Values="values" Width="70" Height="20" />
+                        }
+                    </div>
+                    <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
+                        <button class="btn btn-sm" @onclick="() => ViewDetails(row)">Details</button>
+                        <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-head">
+            <span class="card-title">Printer Error Log</span>
+            @if (_errorLog.Count > 0)
+            {
+                <span style="font-size: 12px; color: var(--text-faint);">@_errorLog.Count shown</span>
+            }
+        </div>
+
+        @if (_errorLog.Count == 0)
+        {
+            <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                No printer errors have been received for this division.
+            </div>
+        }
+        else
+        {
+            <div class="asset-table-head" style="grid-template-columns: 120px 1fr 1fr 120px 1.6fr 90px;">
+                <div>Time</div>
+                <div>Printer</div>
+                <div>Department</div>
+                <div>IP Address</div>
+                <div>Message</div>
+                <div style="text-align: right;">Actions</div>
+            </div>
+            @foreach (var ev in _errorLog)
+            {
+                <div class="asset-row" style="grid-template-columns: 120px 1fr 1fr 120px 1.6fr 90px;">
+                    <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</div>
+                    <div style="font-weight: 500;">@ev.PrinterName</div>
+                    <div>@ev.Department</div>
+                    <div class="mono" style="font-size: 12px;">@ev.IpAddress</div>
+                    <div style="font-size: 13px;">
+                        <div>@(!string.IsNullOrWhiteSpace(ev.FriendlyMessage) ? ev.FriendlyMessage : ev.RawMessage)</div>
+                        @if (!string.IsNullOrWhiteSpace(ev.FriendlyMessage))
+                        {
+                            <details class="raw-message-details">
+                                <summary>Full message</summary>
+                                <div class="raw-message">@ev.RawMessage</div>
+                            </details>
+                        }
+                    </div>
+                    <div style="text-align: right;">
+                        <button class="btn btn-sm" @onclick="() => ViewDetails(ev.PrinterId)"><Icon Name="Eye" Size="12" /></button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    List<PrinterRow> _rows = new();
+    List<PrinterModel> _printerModels = new();
+    List<PrinterErrorLogEntry> _errorLog = new();
+    List<PrinterAlertState> _alertStates = new();
+    Dictionary<string, List<decimal>> _sparklines = new();
+    List<PrinterSetupRow> _setupRows = new();
+    string _setupIpInput = "";
+    string _setupError = "";
+    string _printerFilter = "all";
+    string _printerSort = "health";
+    bool _setupOpen;
+    bool _setupTesting;
+    bool _setupRunning;
+
+    bool CanRunPrinterSetup => !_setupTesting
+        && !_setupRunning
+        && _setupRows.Any(r => r.Connected && !string.IsNullOrWhiteSpace(r.SelectedModel));
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        var unsavedNewRows = _rows.Where(r => r.IsNew).ToList();
+        _printerModels = (await PrinterModelService.GetAllAsync()).OrderBy(m => m.Name).ToList();
+        var printers = (await PrinterService.GetAllAsync()).OrderBy(p => p.Name).ToList();
+        _errorLog = (await PrinterEvents.GetErrorsAsync()).ToList();
+        _alertStates = (await PrinterEvents.GetActiveAlertsAsync()).ToList();
+        _rows = printers.Select(p => new PrinterRow
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Department = p.Department,
+            Model = p.Model,
+            IpAddress = p.IpAddress,
+            Status = p.Status,
+            LastPingAt = p.LastPingAt,
+            LastLatencyMs = p.LastLatencyMs,
+            ConsecutiveFailures = p.ConsecutiveFailures,
+            IsNew = false,
+            IsEditing = false,
+        }).ToList();
+        
+        foreach (var unsaved in unsavedNewRows)
+        {
+            _rows.Insert(0, unsaved);
+        }
+
+        // Load sparkline data (last hour of latency per printer)
+        var now = DateTimeOffset.UtcNow;
+        var from = now.AddHours(-1);
+        _sparklines.Clear();
+        foreach (var printer in printers.Where(p => PrinterModels.SupportsLogging(p.Model)))
+        {
+            var samples = await PingHistory.GetSamplesAsync(printer.Id, from, now);
+            var latencies = samples
+                .Where(s => s.Success && s.LatencyMs.HasValue)
+                .Select(s => (decimal)s.LatencyMs!.Value)
+                .ToList();
+            if (latencies.Count > 1)
+            {
+                _sparklines[printer.Id] = latencies;
+            }
+        }
+    }
+
+    async Task TestPrinterSetup()
+    {
+        _setupTesting = true;
+        _setupError = "";
+        foreach (var row in _setupRows)
+        {
+            row.RunStatus = "";
+            row.RunError = "";
+        }
+
+        try
+        {
+            var division = await CurrentDivisionAsync();
+            if (division == null)
+            {
+                _setupError = "No active division is selected.";
+                return;
+            }
+
+            _printerModels = (await PrinterModelService.GetAllAsync()).OrderBy(m => m.Name).ToList();
+            var results = await PrinterSetupService.TestAsync(division, _setupIpInput);
+            _setupRows = results.Select(r => new PrinterSetupRow
+            {
+                IpAddress = r.IpAddress,
+                Connected = r.Connected,
+                Status = r.Status,
+                ErrorMessage = r.ErrorMessage ?? "",
+                DetectedName = r.DetectedName,
+                DetectedModel = r.DetectedModel,
+                SelectedModel = r.SelectedModel,
+            }).ToList();
+        }
+        finally
+        {
+            _setupTesting = false;
+        }
+    }
+
+    async Task RunPrinterSetup()
+    {
+        _setupRunning = true;
+        _setupError = "";
+
+        try
+        {
+            var division = await CurrentDivisionAsync();
+            if (division == null)
+            {
+                _setupError = "No active division is selected.";
+                return;
+            }
+
+            var requests = _setupRows
+                .Where(r => r.Connected && !string.IsNullOrWhiteSpace(r.SelectedModel))
+                .Select(r => new PrinterSetupRunRequest(r.IpAddress, r.DetectedName, r.DetectedModel, r.SelectedModel))
+                .ToList();
+
+            var results = await PrinterSetupService.RunAllAsync(division, requests);
+            foreach (var result in results)
+            {
+                var row = _setupRows.FirstOrDefault(r => string.Equals(r.IpAddress, result.IpAddress, StringComparison.OrdinalIgnoreCase));
+                if (row == null) continue;
+
+                row.RunStatus = result.Status;
+                row.RunError = result.ErrorMessage ?? "";
+            }
+
+            State.PushToast("Printer setup run completed.", "up");
+            await Load();
+        }
+        finally
+        {
+            _setupRunning = false;
+        }
+    }
+
+    async Task<Division?> CurrentDivisionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(TenantContext.DivisionId))
+        {
+            return null;
+        }
+
+        return await DivisionService.GetByIdAsync(TenantContext.DivisionId);
+    }
+
+    void AddRow()
+    {
+        _rows.Insert(0, new PrinterRow { IsNew = true, Model = DefaultPrinterModelName() });
+    }
+
+    void EditRow(PrinterRow row)
+    {
+        row.IsEditing = true;
+        row._backupName = row.Name;
+        row._backupDepartment = row.Department;
+        row._backupModel = row.Model;
+        row._backupIp = row.IpAddress;
+    }
+
+    void CancelRow(PrinterRow row)
+    {
+        if (row.IsNew)
+        {
+            _rows.Remove(row);
+        }
+        else
+        {
+            row.Name = row._backupName;
+            row.Department = row._backupDepartment;
+            row.Model = row._backupModel;
+            row.IpAddress = row._backupIp;
+            row.IsEditing = false;
+        }
+    }
+
+    async Task SaveRow(PrinterRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Model)) return;
+
+        if (row.IsNew)
+        {
+            var printer = new Printer
+            {
+                Name = row.Name.Trim(),
+                Department = row.Department?.Trim() ?? "",
+                Model = row.Model.Trim(),
+                IpAddress = row.IpAddress.Trim(),
+            };
+            var added = await PrinterService.AddAsync(printer);
+            await ActivityService.PushAsync("printer", $"{added.Name} added");
+            State.PushToast($"Added {added.Name}", "up");
+            _rows.Remove(row);
+        }
+        else
+        {
+            var existing = (await PrinterService.GetAllAsync()).FirstOrDefault(p => p.Id == row.Id);
+            if (existing != null)
+            {
+                existing.Name = row.Name.Trim();
+                existing.Department = row.Department?.Trim() ?? "";
+                existing.Model = row.Model.Trim();
+                existing.IpAddress = row.IpAddress.Trim();
+                await PrinterService.UpdateAsync(existing);
+                State.PushToast($"Updated {existing.Name}", "");
+            }
+        }
+        await Load();
+    }
+
+    void BeginAddModel(PrinterRow row)
+    {
+        row.IsAddingModel = true;
+        row.NewModelName = "";
+    }
+
+    void CancelNewModel(PrinterRow row)
+    {
+        row.IsAddingModel = false;
+        row.NewModelName = "";
+    }
+
+    async Task SaveNewModel(PrinterRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.NewModelName)) return;
+
+        var model = await PrinterModelService.AddAsync(row.NewModelName);
+        row.Model = model.Name;
+        row.IsAddingModel = false;
+        row.NewModelName = "";
+        _printerModels = (await PrinterModelService.GetAllAsync()).OrderBy(m => m.Name).ToList();
+    }
+
+    string DefaultPrinterModelName() =>
+        _printerModels.FirstOrDefault(m => m.Name.Equals(PrinterModels.T8000, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? PrinterModels.T8000;
+
+    void ViewDetails(PrinterRow row)
+    {
+        ViewDetails(row.Id);
+    }
+
+    void ViewDetails(string printerId) => Nav.NavigateTo($"/it/printers/{printerId}");
+
+    List<PrinterRow> FilteredPrinterRows()
+    {
+        IEnumerable<PrinterRow> query = _rows;
+
+        query = _printerFilter switch
+        {
+            "attention" => query.Where(r => r.IsNew || r.IsEditing || r.Status != PrinterStatus.Up),
+            "slow" => query.Where(r => r.IsNew || r.IsEditing || r.LastLatencyMs >= 600),
+            _ => query,
+        };
+
+        query = _printerSort switch
+        {
+            "latency" => query.OrderByDescending(r => r.LastLatencyMs ?? -1).ThenBy(r => r.Name),
+            "name" => query.OrderByDescending(r => r.IsNew || r.IsEditing).ThenBy(r => r.Name),
+            _ => query.OrderByDescending(PrinterHealthRank).ThenBy(r => r.Name),
+        };
+
+        return query.ToList();
+    }
+
+    static int PrinterHealthRank(PrinterRow row)
+    {
+        if (row.IsNew || row.IsEditing) return 5;
+        if (row.Status == PrinterStatus.Down) return 4;
+        if (row.Status == PrinterStatus.Warn) return 3;
+        if (row.LastLatencyMs >= 600) return 2;
+        return 0;
+    }
+
+    static string PrinterRowClass(PrinterRow row)
+    {
+        if (row.Status == PrinterStatus.Down) return "down";
+        if (row.Status == PrinterStatus.Warn || row.LastLatencyMs >= 600) return "warn";
+        return "";
+    }
+
+    static string StatusText(PrinterRow row) => row.Status switch
+    {
+        PrinterStatus.Down => "Down",
+        PrinterStatus.Warn => "Warning",
+        _ => "",
+    };
+
+    IReadOnlyList<PrinterAlertState> AllAlerts(string printerId) =>
+        _alertStates
+            .Where(a => a.PrinterId == printerId)
+            .OrderByDescending(a => SeverityRank(a.Severity))
+            .ThenByDescending(a => a.LastSeenAt)
+            .ToList();
+
+    IEnumerable<PrinterAlertState> VisibleAlerts(string printerId) => AllAlerts(printerId);
+
+    async Task ClearAlert(PrinterAlertState alert)
+    {
+        await PrinterEvents.ClearAlertAsync(alert.PrinterId, alert.AlertKey);
+        State.PushToast("Printer alert cleared", "");
+        await Load();
+    }
+
+    static string AlertBlipClass(string? severity) => severity?.ToUpperInvariant() switch
+    {
+        "CRITICAL" => "critical",
+        "ERROR" => "critical",
+        "WARNING" => "warning",
+        _ => "info",
+    };
+
+    static int SeverityRank(string? severity) => severity?.ToUpperInvariant() switch
+    {
+        "CRITICAL" => 3,
+        "ERROR" => 3,
+        "WARNING" => 2,
+        _ => 1,
+    };
+
+    static string DisplaySetupValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
+
+    async Task Remove(PrinterRow row)
+    {
+        await PrinterService.DeleteAsync(row.Id);
+        State.PushToast($"Removed {row.Name}", "");
+        await Load();
+    }
+
+    class PrinterRow
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Department { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string NewModelName { get; set; } = "";
+        public string IpAddress { get; set; } = "";
+        public PrinterStatus Status { get; set; }
+        public DateTimeOffset? LastPingAt { get; set; }
+        public int? LastLatencyMs { get; set; }
+        public int ConsecutiveFailures { get; set; }
+        public bool IsNew { get; set; }
+        public bool IsEditing { get; set; }
+        public bool IsAddingModel { get; set; }
+
+        // backup for cancel
+        internal string _backupName = "";
+        internal string _backupDepartment = "";
+        internal string _backupModel = "";
+        internal string _backupIp = "";
+    }
+
+    class PrinterSetupRow
+    {
+        public string IpAddress { get; set; } = "";
+        public bool Connected { get; set; }
+        public string Status { get; set; } = "";
+        public string ErrorMessage { get; set; } = "";
+        public string DetectedName { get; set; } = "";
+        public string DetectedModel { get; set; } = "";
+        public string SelectedModel { get; set; } = "";
+        public string RunStatus { get; set; } = "";
+        public string RunError { get; set; } = "";
+    }
+}

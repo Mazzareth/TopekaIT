@@ -1,0 +1,137 @@
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@using System.Security.Claims
+@inject AssetService AssetService
+@inject UserService UserService
+@inject AuthenticationStateProvider AuthProvider
+
+@code {
+    [Parameter] public Asset? Spare { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public string? PreSelectedUserId { get; set; }
+    [Parameter] public EventCallback OnIssued { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    string _borrowerId = "";
+    string _borrowerSearch = "";
+    string _selectedSpareId = "";
+    bool _showDropdown;
+    string _reason = "Unit In RMA";
+    LoanDuration _duration = LoanDuration.DayLoan;
+    string _comments = "";
+    List<User> _users = new();
+    List<Asset> _spares = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if ((Spare != null || IsOpen) && _users.Count == 0)
+        {
+            _users = (await UserService.GetAllAsync()).ToList();
+            _spares = (await AssetService.GetSparePoolAsync()).ToList();
+        }
+        
+        if (IsOpen || Spare != null)
+        {
+            if (!string.IsNullOrEmpty(PreSelectedUserId) && string.IsNullOrEmpty(_borrowerId))
+            {
+                _borrowerId = PreSelectedUserId;
+                var u = _users.FirstOrDefault(x => x.Id == PreSelectedUserId);
+                if (u != null) _borrowerSearch = u.Name;
+            }
+            if (Spare != null)
+            {
+                _selectedSpareId = Spare.Id;
+            }
+        }
+    }
+
+    async Task Submit()
+    {
+        var targetSpareId = Spare?.Id ?? _selectedSpareId;
+        if (string.IsNullOrWhiteSpace(targetSpareId) || string.IsNullOrWhiteSpace(_borrowerId)) return;
+        
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        
+        await AssetService.IssueSpareAsync(targetSpareId, _borrowerId, _reason, _duration, _comments, actor);
+        await OnIssued.InvokeAsync();
+        Cancel();
+    }
+
+    void Cancel()
+    {
+        _borrowerId = "";
+        _borrowerSearch = "";
+        _selectedSpareId = "";
+        _comments = "";
+        OnClose.InvokeAsync();
+    }
+}
+
+<Modal Open="@(IsOpen || Spare != null)" OnClose="Cancel">
+    <Title>Issue Spare @(Spare != null ? $": {Spare.Tag ?? Spare.Serial}" : "")</Title>
+    <ChildContent>
+        @if (Spare == null)
+        {
+            <div class="form-row">
+                <label>Select Spare</label>
+                <select @bind="_selectedSpareId">
+                    <option value="">-- Choose available spare --</option>
+                    @foreach (var s in _spares)
+                    {
+                        <option value="@s.Id">@(s.Tag ?? s.Serial) · @s.Model</option>
+                    }
+                </select>
+            </div>
+        }
+        <div class="form-row">
+            <label>Employee</label>
+            <div style="position: relative;">
+                <input value="@_borrowerSearch" @oninput="(e) => { _borrowerSearch = e.Value?.ToString() ?? string.Empty; _showDropdown = true; }" placeholder="Search employee..." autocomplete="off" />
+                @if (_showDropdown)
+                {
+                    var matches = _users.Where(w => string.IsNullOrWhiteSpace(_borrowerSearch) || w.Name.Contains(_borrowerSearch, StringComparison.OrdinalIgnoreCase)).Take(5).ToList();
+                    <div style="position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 10;">
+                        @foreach (var m in matches)
+                        {
+                            <div style="padding: 8px; cursor: pointer; border-bottom: 1px solid var(--border-subtle);" @onclick="() => { _borrowerId = m.Id; _borrowerSearch = m.Name; _showDropdown = false; }">
+                                @m.Name
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label>Reason</label>
+            <select @bind="_reason">
+                <option value="Unit In RMA">Unit In RMA</option>
+                <option value="Assigned Unit MIA">Assigned Unit MIA</option>
+                <option value="Unassigned">Unassigned</option>
+                <option value="Assessing for RMA">Assessing for RMA</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Duration</label>
+            <select @bind="_duration">
+                <option value="@LoanDuration.DayLoan">Day Loan</option>
+                <option value="@LoanDuration.LessThanWeek">Less Than 1 Week</option>
+                <option value="@LoanDuration.MoreThanWeek">More Than 1 Week (RMA)</option>
+                <option value="@LoanDuration.TbdRma">TBD (RMA)</option>
+                <option value="@LoanDuration.TbdMia">TBD (MIA)</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Comments</label>
+            <textarea @bind="_comments" placeholder="Additional details..." style="height: 60px;"></textarea>
+        </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-ghost" @onclick="Cancel">Cancel</button>
+        <button class="btn btn-primary" disabled="@(string.IsNullOrWhiteSpace(_borrowerId) || (Spare == null && string.IsNullOrWhiteSpace(_selectedSpareId)))" @onclick="Submit">Issue Spare</button>
+    </Footer>
+</Modal>

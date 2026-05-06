@@ -1,0 +1,515 @@
+@page "/it/users"
+@page "/manager/users"
+@page "/admin/users"
+@attribute [Authorize(Roles = "IT,Manager,SuperAdmin")]
+@using TopekaIT.Core.Services
+@inject UserService UserService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject ITenantContext TenantContext
+@inject DivisionService DivisionService
+@inject IJSRuntime JS
+
+<PageTitle>@(_isSuperAdmin || _isIT ? "Users" : "Workers") · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>@(_isSuperAdmin || _isIT ? "Users" : "Workers")</h1>
+            <div class="page-sub">Accounts, lockers, audit access, and stale activity.</div>
+        </div>
+        <div class="page-actions">
+            @if (_selected.Count > 0)
+            {
+                <button class="btn" @onclick="() => _selected.Clear()">@_selected.Count selected</button>
+            }
+            <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add user</button>
+        </div>
+    </div>
+
+    <div class="role-strip">
+        @foreach (var item in RoleStats())
+        {
+            <div class="role-stat">
+                <span class="mono">@item.Count</span>
+                <span>@item.Label</span>
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <div class="asset-table-head user-cols" style="@UserGridStyle">
+            <label class="checkbox"><input type="checkbox" checked="@AllVisibleSelected" @onchange="ToggleAll" /></label>
+            <div>Name</div>
+            <div>Username</div>
+            @if (_isSuperAdmin)
+            {
+                <div>Division</div>
+            }
+            <div>Position</div>
+            <div>Locker</div>
+            <div>Last active</div>
+            <div>Audit</div>
+            <div>Role</div>
+            <div style="text-align: right;">Actions</div>
+        </div>
+
+        @if (_rows.Count == 0)
+        {
+            <EmptyState IconName="Users" Title="@(_isSuperAdmin || _isIT ? "No users yet" : "No workers yet")">Add an account to get started.</EmptyState>
+        }
+
+        @foreach (var row in _rows)
+        {
+            @if (row.IsNew || row.IsEditing)
+            {
+                <div>
+                    <div class="asset-row user-cols" style="@UserGridStyle">
+                        <div></div>
+                        <input class="inline-input" @bind="row.Name" @bind:event="oninput" placeholder="Full name" />
+                        <input class="inline-input mono" @bind="row.Username" @bind:event="oninput" placeholder="username" />
+                        @if (_isSuperAdmin)
+                        {
+                            <select class="inline-input" @bind="row.DivisionId" disabled="@(row.Role == UserRole.SuperAdmin)">
+                                <option value="">Global</option>
+                                @foreach (var division in _divisions)
+                                {
+                                    <option value="@division.Id">@division.Name</option>
+                                }
+                            </select>
+                        }
+                        <input class="inline-input" @bind="row.Position" @bind:event="oninput" placeholder="Position" />
+                        <input class="inline-input mono" @bind="row.LockerNumber" @bind:event="oninput" placeholder="L#" />
+                        <div></div>
+                        <label class="checkbox"><input type="checkbox" @bind="row.Audit" /></label>
+                        <select class="inline-input" @bind="row.Role" disabled="@(!_isIT && !_isSuperAdmin)">
+                            <option value="@UserRole.Worker">Worker</option>
+                            @if (_isIT || _isSuperAdmin)
+                            {
+                                <option value="@UserRole.Manager">Manager</option>
+                                <option value="@UserRole.IT">IT</option>
+                            }
+                            @if (_isSuperAdmin)
+                            {
+                                <option value="@UserRole.SuperAdmin">SuperAdmin</option>
+                            }
+                        </select>
+                        <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
+                            <button class="btn btn-sm btn-accent" @onclick="() => SaveRow(row)" disabled="@(string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Username))">
+                                <Icon Name="Check" Size="12" />
+                            </button>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => CancelRow(row)"><Icon Name="X" Size="12" /></button>
+                        </div>
+                    </div>
+                    @if (row.IsNew)
+                    {
+                        <div class="new-row-extra">
+                            <label>Initial password</label>
+                            <input type="password" class="inline-input" @bind="row.Password" @bind:event="oninput" placeholder="Leave blank for no password" />
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="asset-row user-cols user-signal-row @UserRowClass(row)" style="@UserGridStyle">
+                    <label class="checkbox"><input type="checkbox" checked="@_selected.Contains(row.Id)" @onchange="args => ToggleSelected(row.Id, args)" /></label>
+                    <div style="font-weight: 500;">@row.Name</div>
+                    <div class="mono" style="font-size: 12px;">@row.Username</div>
+                    @if (_isSuperAdmin)
+                    {
+                        <div style="font-size: 12px;">@DivisionName(row.DivisionId)</div>
+                    }
+                    <div style="font-size: 12px;">@row.Position</div>
+                    <div class="mono" style="font-size: 12px;">@LockerText(row)</div>
+                    <div class="mono" style="font-size: 11px; color: var(--text-faint);">@LastActiveText(row.LastActiveAt)</div>
+                    <div style="font-size: 12px;">@(row.Audit ? "Yes" : "No")</div>
+                    <div class="quiet-role">@row.Role</div>
+                    <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
+                        @if (_isIT || _isSuperAdmin)
+                        {
+                            <button class="btn btn-sm" @onclick="() => ResetPassword(row)" title="Reset password"><Icon Name="Key" Size="12" /></button>
+                        }
+                        <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                    </div>
+                </div>
+            }
+        }
+        <div class="table-footer-integrity">
+            <span>@_rows.Count users shown</span>
+            <span>@_rows.Count(r => string.IsNullOrWhiteSpace(r.LockerNumber)) without locker</span>
+            <span>@_rows.Count(r => r.LastActiveAt == null) never active</span>
+        </div>
+    </div>
+
+</div>
+
+@* Set Password Modal *@
+<Modal Open="@_showSetPassword" OnClose="CloseSetPasswordModal">
+    <Title>Set Password</Title>
+    <ChildContent>
+        <p style="margin-top: 0; color: var(--text-dim); font-size: 0.9rem;">
+            Set a new password for <strong>@_pendingResetRow?.Name</strong>.
+        </p>
+        <div style="margin-top: 12px;">
+            <label style="font-size: 0.8rem; color: var(--text-dim); display: block; margin-bottom: 6px;">New Password</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input class="inline-input mono" type="text" style="flex: 1;"
+                       placeholder="Leave blank to auto-generate"
+                       @bind="_setPasswordInput" @bind:event="oninput" />
+                <button class="btn btn-sm" @onclick="GeneratePasswordPreview" title="Generate password">
+                    <Icon Name="RefreshCw" Size="14" />
+                </button>
+            </div>
+        </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn" @onclick="CloseSetPasswordModal">Cancel</button>
+        <button class="btn btn-accent" @onclick="ConfirmSetPassword">
+            <Icon Name="Key" Size="14" /> Set Password
+        </button>
+    </Footer>
+</Modal>
+
+@* Temp Password Modal *@
+<Modal Open="@_showTempPassword" OnClose="CloseTempPasswordModal">
+    <Title>Temporary Password</Title>
+    <ChildContent>
+        <p style="margin-top: 0; color: var(--text-dim); font-size: 0.9rem;">
+            Password set for <strong>@_resetUserName</strong>.
+        </p>
+        <p style="margin-bottom: 8px; font-size: 0.85rem; color: var(--text-dim);">
+            Share this password with the user. They should change it after logging in.
+        </p>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--radius); margin-top: 8px;">
+            <code class="mono" style="flex: 1; font-weight: 600; user-select: all;">@_tempPassword</code>
+            <button class="btn btn-sm btn-accent" @onclick="CopyTempPassword" title="Copy to clipboard">
+                <Icon Name="@(string.IsNullOrEmpty(_copyFeedback) ? "Copy" : "Check")" Size="14" />
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(_copyFeedback))
+        {
+            <div style="color: var(--up); font-size: 0.8rem; margin-top: 6px;">@_copyFeedback</div>
+        }
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-accent" @onclick="CloseTempPasswordModal"><Icon Name="Check" Size="14" /> Done</button>
+    </Footer>
+</Modal>
+
+@code {
+    List<UserRow> _rows = new();
+    List<Division> _divisions = new();
+    HashSet<string> _selected = new();
+    bool _isIT;
+    bool _isSuperAdmin;
+    string? _currentDivisionId;
+    string UserGridStyle => _isSuperAdmin
+        ? "grid-template-columns: 40px 1fr 1fr 120px 100px 90px 105px 70px 90px 160px;"
+        : "grid-template-columns: 40px 1fr 1fr 100px 90px 105px 70px 90px 160px;";
+    bool AllVisibleSelected => _rows.Count > 0 && _rows.Where(r => !r.IsNew && !r.IsEditing).All(r => _selected.Contains(r.Id));
+
+    // Set password modal state
+    bool _showSetPassword;
+    string _setPasswordInput = "";
+    UserRow? _pendingResetRow;
+
+    // Temp password result modal state
+    bool _showTempPassword;
+    string _tempPassword = "";
+    string _resetUserName = "";
+    string _copyFeedback = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _isIT = auth.User.IsInRole("IT");
+        _isSuperAdmin = auth.User.IsInRole("SuperAdmin");
+        _currentDivisionId = auth.User.FindFirst("division")?.Value;
+        if (string.IsNullOrWhiteSpace(_currentDivisionId))
+        {
+            _currentDivisionId = auth.User.FindFirst("active_division")?.Value;
+        }
+        _divisions = (await DivisionService.GetAllAsync()).ToList();
+        await Load();
+    }
+
+    async Task Load()
+    {
+        var unsavedNewRows = _rows.Where(r => r.IsNew).ToList();
+        IEnumerable<User> allUsers = await UserService.GetAllAsync();
+        if (_isSuperAdmin)
+        {
+            // SuperAdmin sees all users.
+        }
+        else if (_isIT)
+        {
+            allUsers = allUsers.Where(u => u.DivisionId == _currentDivisionId);
+        }
+        else
+        {
+            allUsers = allUsers.Where(u => u.DivisionId == _currentDivisionId && u.Role == UserRole.Worker);
+        }
+        var users = allUsers.OrderBy(u => u.Name).ToList();
+        _rows = users.Select(u => new UserRow
+        {
+            Id = u.Id,
+            Name = u.Name,
+            Username = u.Username,
+            Role = u.Role,
+            Avatar = u.Avatar,
+            Position = u.Position,
+            LockerNumber = u.LockerNumber,
+            Audit = u.Audit,
+            DivisionId = u.DivisionId,
+            LastActiveAt = u.LastActiveAt,
+            IsNew = false,
+            IsEditing = false,
+        }).ToList();
+
+        foreach (var unsaved in unsavedNewRows)
+        {
+            _rows.Insert(0, unsaved);
+        }
+    }
+
+    IEnumerable<RoleStat> RoleStats()
+        => Enum.GetValues<UserRole>()
+            .Select(role => new RoleStat(role.ToString(), _rows.Count(r => r.Role == role)))
+            .Where(stat => stat.Count > 0);
+
+    void ToggleAll(ChangeEventArgs args)
+    {
+        var isChecked = args.Value is bool b && b;
+        if (!isChecked)
+        {
+            _selected.Clear();
+            return;
+        }
+
+        foreach (var row in _rows.Where(r => !r.IsNew && !r.IsEditing))
+        {
+            _selected.Add(row.Id);
+        }
+    }
+
+    void ToggleSelected(string id, ChangeEventArgs args)
+    {
+        var isChecked = args.Value is bool b && b;
+        if (isChecked)
+        {
+            _selected.Add(id);
+        }
+        else
+        {
+            _selected.Remove(id);
+        }
+    }
+
+    void AddRow()
+    {
+        _rows.Insert(0, new UserRow { IsNew = true, Role = UserRole.Worker, DivisionId = _currentDivisionId });
+    }
+
+    void EditRow(UserRow row)
+    {
+        row.IsEditing = true;
+        row._backupName = row.Name;
+        row._backupUsername = row.Username;
+        row._backupRole = row.Role;
+        row._backupDivisionId = row.DivisionId;
+        row._backupPosition = row.Position;
+        row._backupLockerNumber = row.LockerNumber;
+        row._backupAudit = row.Audit;
+    }
+
+    void CancelRow(UserRow row)
+    {
+        if (row.IsNew)
+        {
+            _rows.Remove(row);
+        }
+        else
+        {
+            row.Name = row._backupName;
+            row.Username = row._backupUsername;
+            row.Role = row._backupRole;
+            row.DivisionId = row._backupDivisionId;
+            row.Position = row._backupPosition;
+            row.LockerNumber = row._backupLockerNumber;
+            row.Audit = row._backupAudit;
+            row.IsEditing = false;
+        }
+    }
+
+    async Task SaveRow(UserRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Username)) return;
+
+        if (!_isIT && !_isSuperAdmin && row.Role != UserRole.Worker)
+        {
+            State.PushToast("Managers can only manage Workers.", "down");
+            return;
+        }
+
+        if (!_isSuperAdmin && row.Role == UserRole.SuperAdmin)
+        {
+            State.PushToast("Only SuperAdmin can create SuperAdmin users.", "down");
+            return;
+        }
+
+        var divisionId = row.Role == UserRole.SuperAdmin
+            ? null
+            : (_isSuperAdmin ? row.DivisionId : _currentDivisionId);
+
+        if (row.Role != UserRole.SuperAdmin && string.IsNullOrWhiteSpace(divisionId))
+        {
+            State.PushToast("Select a division.", "down");
+            return;
+        }
+
+        if (row.IsNew)
+        {
+            var created = await UserService.CreateAsync(row.Name.Trim(), row.Username.Trim(), row.Password, row.Role, divisionId);
+            created.Position = row.Position;
+            created.LockerNumber = row.LockerNumber;
+            created.Audit = row.Audit;
+            await UserService.UpdateAsync(created, null);
+            State.PushToast($"Added {created.Name}", "up");
+            _rows.Remove(row);
+        }
+        else
+        {
+            var existing = (await UserService.GetAllAsync()).FirstOrDefault(u => u.Id == row.Id);
+            if (existing != null)
+            {
+                existing.Name = row.Name.Trim();
+                existing.Username = row.Username.Trim();
+                existing.Role = row.Role;
+                existing.DivisionId = divisionId;
+                existing.Position = row.Position;
+                existing.LockerNumber = row.LockerNumber;
+                existing.Audit = row.Audit;
+                await UserService.UpdateAsync(existing, string.IsNullOrEmpty(row.Password) ? null : row.Password);
+                State.PushToast($"Updated {existing.Name}", "");
+            }
+        }
+        await Load();
+    }
+
+    async Task Remove(UserRow row)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete {row.Name}? This cannot be undone.");
+        if (!confirmed) return;
+        await UserService.DeleteAsync(row.Id);
+        State.PushToast($"Removed {row.Name}", "");
+        await Load();
+    }
+
+    void ResetPassword(UserRow row)
+    {
+        _pendingResetRow = row;
+        _setPasswordInput = "";
+        _showSetPassword = true;
+    }
+
+    void CloseSetPasswordModal()
+    {
+        _showSetPassword = false;
+        _setPasswordInput = "";
+        _pendingResetRow = null;
+    }
+
+    void GeneratePasswordPreview()
+    {
+        _setPasswordInput = UserService.GenerateTempPassword();
+    }
+
+    async Task ConfirmSetPassword()
+    {
+        if (_pendingResetRow == null) return;
+        var row = _pendingResetRow;
+        var custom = string.IsNullOrWhiteSpace(_setPasswordInput) ? null : _setPasswordInput;
+        CloseSetPasswordModal();
+        try
+        {
+            _tempPassword = await UserService.ResetPasswordAsync(row.Id, custom);
+            _resetUserName = row.Name;
+            _copyFeedback = "";
+            _showTempPassword = true;
+            State.PushToast($"Password set for {row.Name}", "up");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SetPassword error for {row.Id}: {ex}");
+            State.PushToast("Failed to set password.", "down");
+        }
+    }
+
+    async Task CopyTempPassword()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", _tempPassword);
+        _copyFeedback = "Copied to clipboard!";
+    }
+
+    void CloseTempPasswordModal()
+    {
+        _showTempPassword = false;
+        _tempPassword = "";
+        _resetUserName = "";
+        _copyFeedback = "";
+    }
+
+    string RolePill(UserRole role) => role switch
+    {
+        UserRole.IT => "pill-info",
+        UserRole.SuperAdmin => "pill-info",
+        UserRole.Manager => "pill-warn",
+        _ => "pill-dim",
+    };
+
+    static string LockerText(UserRow row) => string.IsNullOrWhiteSpace(row.LockerNumber) ? "No locker" : row.LockerNumber;
+
+    static string LastActiveText(DateTimeOffset? lastActiveAt) =>
+        lastActiveAt.HasValue ? Format.RelTime(lastActiveAt.Value) : "Never";
+
+    static string UserRowClass(UserRow row)
+    {
+        if (!row.LastActiveAt.HasValue) return "warn";
+        return row.LastActiveAt.Value < DateTimeOffset.UtcNow.AddDays(-30) ? "warn" : "";
+    }
+
+    string DivisionName(string? divisionId)
+    {
+        if (string.IsNullOrWhiteSpace(divisionId)) return "Global";
+        return _divisions.FirstOrDefault(d => d.Id == divisionId)?.Name ?? divisionId;
+    }
+
+    class UserRow
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Username { get; set; } = "";
+        public string Password { get; set; } = "";
+        public string? DivisionId { get; set; }
+        public string? Position { get; set; }
+        public string? LockerNumber { get; set; }
+        public DateTimeOffset? LastActiveAt { get; set; }
+        public bool Audit { get; set; }
+        public UserRole Role { get; set; }
+        public string Avatar { get; set; } = "";
+        public bool IsNew { get; set; }
+        public bool IsEditing { get; set; }
+
+        internal string _backupName = "";
+        internal string _backupUsername = "";
+        internal UserRole _backupRole;
+        internal string? _backupDivisionId;
+        internal string? _backupPosition;
+        internal string? _backupLockerNumber;
+        internal bool _backupAudit;
+    }
+
+    record RoleStat(string Label, int Count);
+}

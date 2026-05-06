@@ -1,0 +1,114 @@
+@page "/admin/divisions/new"
+@attribute [Authorize(Roles = "SuperAdmin")]
+@using Microsoft.EntityFrameworkCore
+@using TopekaIT.Infrastructure.Data
+@using TopekaIT.Infrastructure.Seed
+@inject DivisionService DivisionService
+@inject AppState State
+@inject NavigationManager Nav
+
+<PageTitle>New Division · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>New Division</h1>
+            <div class="page-sub">Create and provision a division database.</div>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 16px; max-width: 780px;">
+        <div style="display: grid; gap: 12px;">
+            <label>
+                <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Division code</div>
+                <input class="inline-input mono" style="width: 160px; text-transform: uppercase;" @bind="_code" @bind:event="oninput" placeholder="6I-B" />
+            </label>
+            <label>
+                <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Division name</div>
+                <input class="inline-input" style="width: 100%;" @bind="_name" @bind:event="oninput" placeholder="Kansas City" />
+            </label>
+            <div style="display: grid; grid-template-columns: 160px 160px; gap: 12px;">
+                <label>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Printer password code</div>
+                    <input class="inline-input mono" style="width: 100%; text-transform: uppercase;" @bind="_printerPasswordCode" @bind:event="oninput" placeholder="6I" />
+                </label>
+                <label>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Printer password ZIP</div>
+                    <input class="inline-input mono" style="width: 100%;" @bind="_printerPasswordZipCode" @bind:event="oninput" placeholder="66618" />
+                </label>
+            </div>
+            <div>
+                <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Database</div>
+                <div class="mono" style="font-size: 13px;">@DatabasePreview</div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div style="color: var(--down); font-size: 13px;">@_error</div>
+            }
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="btn" @onclick='() => Nav.NavigateTo("/admin")'>Cancel</button>
+                <button class="btn btn-accent" @onclick="Save" disabled="@IsDisabled">
+                    <Icon Name="Check" Size="14" /> Save
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    string _code = "";
+    string _name = "";
+    string _printerPasswordCode = "";
+    string _printerPasswordZipCode = "";
+    string _error = "";
+    bool _saving;
+    bool IsDisabled => _saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name);
+    string DatabasePreview => string.IsNullOrWhiteSpace(_code)
+        ? "Enter a division code"
+        : DivisionService.BuildDatabaseName(_code);
+
+    async Task Save()
+    {
+        _saving = true;
+        _error = "";
+        Division? created = null;
+
+        try
+        {
+            var connectionString = DivisionService.BuildLocalDbConnectionString(_code);
+            created = await DivisionService.CreateAsync(_code, _name, connectionString);
+            created.PrinterPasswordCode = NormalizeNullable(_printerPasswordCode.ToUpperInvariant());
+            created.PrinterPasswordZipCode = NormalizeNullable(_printerPasswordZipCode);
+            await DivisionService.UpdateAsync(created);
+
+            var options = new DbContextOptionsBuilder<TopekaDbContext>()
+                .UseSqlServer(created.ConnectionString, sql => sql.CommandTimeout(120))
+                .Options;
+            await using var db = new TopekaDbContext(options);
+            await DataSeeder.SeedDivisionAsync(db);
+
+            State.PushToast($"Created {created.Name}", "up");
+            Nav.NavigateTo("/admin");
+        }
+        catch (Exception ex)
+        {
+            if (created != null)
+            {
+                await DivisionService.RemoveAsync(created.Id);
+            }
+
+            _error = ex.Message;
+            State.PushToast("Division provisioning failed.", "down");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    static string? NormalizeNullable(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+}

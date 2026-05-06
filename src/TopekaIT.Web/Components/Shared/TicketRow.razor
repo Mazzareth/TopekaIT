@@ -1,0 +1,87 @@
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Web.Services
+
+@code {
+    [Parameter, EditorRequired] public Ticket Ticket { get; set; } = default!;
+    [Parameter] public IReadOnlyList<User> Users { get; set; } = Array.Empty<User>();
+    [Parameter] public IReadOnlyList<Printer> Printers { get; set; } = Array.Empty<Printer>();
+    [Parameter] public IReadOnlyList<Asset> AssetList { get; set; } = Array.Empty<Asset>();
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public EventCallback<Ticket> OnClick { get; set; }
+
+    async Task Clicked() => await OnClick.InvokeAsync(Ticket);
+
+    string AssetLabel()
+    {
+        if (Ticket.AssetType == AssetKind.Printer)
+        {
+            var p = Printers.FirstOrDefault(x => x.Id == Ticket.AssetId);
+            return p?.Name ?? "—";
+        }
+        if (Ticket.AssetType == AssetKind.Asset)
+        {
+            var a = AssetList.FirstOrDefault(x => x.Id == Ticket.AssetId);
+            if (a == null) return "—";
+            return !string.IsNullOrWhiteSpace(a.Tag)
+                ? a.Tag
+                : !string.IsNullOrWhiteSpace(a.Serial)
+                    ? a.Serial
+                    : a.Id;
+        }
+        return "—";
+    }
+
+    User? Reporter() => Users.FirstOrDefault(u => u.Id == Ticket.ReportedById);
+
+    string PriorityBorder() => Ticket.Priority switch
+    {
+        TicketPriority.Urgent => "border-left: 4px solid var(--down);",
+        TicketPriority.High => "border-left: 4px solid var(--warn);",
+        _ => ""
+    };
+
+    string PriorityPillKind() => Ticket.Priority switch
+    {
+        TicketPriority.Urgent => "pill-danger",
+        TicketPriority.High => "pill-warn",
+        _ => "pill-default"
+    };
+}
+
+@if (Compact)
+{
+    <div class="ticket-row" style="grid-template-columns: 80px 1fr auto; @PriorityBorder()" @onclick="Clicked">
+        <div class="ticket-id">@Ticket.Id</div>
+        <div>
+            <div class="ticket-title">@Ticket.Title</div>
+            <div class="ticket-desc">@Format.RelTime(Ticket.UpdatedAt)</div>
+        </div>
+        <div style="display: flex; gap: 4px; align-items: center;">
+            <Pill Kind="@PriorityPillKind()">@Ticket.Priority</Pill>
+            <Pill Kind="@Format.StatusPill(Ticket.Status)" Dot>@Format.StatusLabel(Ticket.Status)</Pill>
+        </div>
+    </div>
+}
+else
+{
+    <div class="ticket-row" style="@PriorityBorder()" @onclick="Clicked">
+        <div class="ticket-id">@Ticket.Id</div>
+        <div>
+            <div class="ticket-title">@Ticket.Title</div>
+            <div class="ticket-desc">@Ticket.Description</div>
+        </div>
+        <div class="ticket-who">
+            <div style="color: var(--text-dim);">
+                @AssetLabel() <span class="mono" style="font-size: 11px; color: var(--text-faint);">by @(Reporter()?.Name ?? "—")</span>
+            </div>
+            <div class="ticket-when" style="margin-top: 4px;">
+                updated @Format.RelTime(Ticket.UpdatedAt)
+            </div>
+        </div>
+        <div style="text-align: right; display: flex; gap: 4px; flex-direction: column; align-items: flex-end;">
+            <Pill Kind="@Format.StatusPill(Ticket.Status)" Dot>@Format.StatusLabel(Ticket.Status)</Pill>
+            <Pill Kind="@PriorityPillKind()">@Ticket.Priority</Pill>
+        </div>
+    </div>
+}

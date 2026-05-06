@@ -1,0 +1,27 @@
+# Build outputs
+bin/
+obj/
+
+# IDE and editor state
+.vs/
+.idea/
+.vscode/
+.claude/
+*.user
+*.suo
+*.rsuser
+
+# Publish staging directories
+publish-temp/
+publish-temp.zip
+publish/
+publish-manual/
+publish-test/
+
+# Worktree/agent build artifacts — should never land in source tree
+src/TopekaIT.Web/artifacts/
+artifacts/
+
+# Local diagnostics and runtime logs
+.diagnostics/
+*.log

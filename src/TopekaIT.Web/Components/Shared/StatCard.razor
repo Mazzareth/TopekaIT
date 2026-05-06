@@ -1,0 +1,15 @@
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public RenderFragment? Foot { get; set; }
+    [Parameter] public string? Tone { get; set; }
+}
+
+<div class="stat @Tone">
+    <div class="stat-label">@Label</div>
+    <div class="stat-value">@Value</div>
+    @if (Foot != null)
+    {
+        <div class="stat-foot">@Foot</div>
+    }
+</div>

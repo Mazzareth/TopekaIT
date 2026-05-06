@@ -1,0 +1,322 @@
+@page "/it"
+@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@using TopekaIT.Core.Services
+@inject TicketService TicketService
+@inject PrinterService PrinterService
+@inject AssetService AssetService
+@inject UserService UserService
+@inject ActivityService ActivityService
+@inject NavigationManager Nav
+
+<PageTitle>Control room · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Control room</h1>
+            <div class="page-sub">Floor-wide IT pulse across tickets, printers, assets, and activity.</div>
+        </div>
+        <div class="page-actions">
+            <div class="seg">
+                @foreach (var scope in _scopes)
+                {
+                    <button class="@(_scope == scope.Id ? "active" : "")" @onclick="() => SetScope(scope.Id)">@scope.Label</button>
+                }
+            </div>
+            <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/it/tickets")'>
+                <Icon Name="Ticket" Size="14" /> Queue
+            </button>
+        </div>
+    </div>
+
+    <div class="ops-kpi-grid">
+        <div class="ops-kpi @(_open > 8 ? "warn" : "")">
+            <div class="kpi-label">Open tickets</div>
+            <div class="kpi-value">@_open</div>
+            <div class="kpi-foot">@_urgent urgent · @_highP high · @_newInScope new in @_scopeLabel</div>
+        </div>
+        <div class="ops-kpi @(_downP > 0 ? "down" : _warnP > 0 ? "warn" : "")">
+            <div class="kpi-label">Printer attention</div>
+            <div class="kpi-value">@(_downP + _warnP)</div>
+            <div class="kpi-foot">@_downP down · @_warnP warning · @_upP quiet</div>
+        </div>
+        <div class="ops-kpi @(_repair > 0 ? "warn" : "")">
+            <div class="kpi-label">Assets out</div>
+            <div class="kpi-value">@_out</div>
+            <div class="kpi-foot">@_repair in repair · @_batteryQty batteries tracked</div>
+        </div>
+        <div class="ops-kpi @(_avgCloseHours <= 8 && _resolved > 0 ? "up" : "")">
+            <div class="kpi-label">Avg time to close</div>
+            <div class="kpi-value">@AvgCloseLabel</div>
+            <div class="kpi-foot">@_resolved resolved in @_scopeLabel</div>
+        </div>
+    </div>
+
+    <div class="control-grid">
+        <section class="card">
+            <div class="card-head">
+                <div class="card-title">Printer fleet</div>
+                <span class="card-link">@_printers.Count total</span>
+            </div>
+            @if (_printers.Count == 0)
+            {
+                <EmptyState IconName="Printer" Title="No printers">Add printers to see fleet health here.</EmptyState>
+            }
+            else
+            {
+                <div class="fleet-heatmap">
+                    @foreach (var printer in _printers.OrderByDescending(PrinterRank).ThenBy(p => p.Name))
+                    {
+                        <button class="fleet-tile @PrinterTileClass(printer)" @onclick="() => OpenPrinter(printer)">
+                            <span class="fleet-name">@printer.Name</span>
+                            <span class="fleet-meta">@printer.Department</span>
+                            <span class="fleet-latency">@LatencyLabel(printer)</span>
+                            <span class="fleet-pulse"></span>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="card">
+            <div class="card-head">
+                <div class="card-title">Event shape</div>
+                <span class="card-link">@_scopeLabel</span>
+            </div>
+            <div class="event-histogram">
+                @foreach (var bucket in _histogram)
+                {
+                    <div class="event-bar" style="height: @bucket.Height%" title="@bucket.Label: @bucket.Count events"></div>
+                }
+            </div>
+            <div class="histogram-axis">
+                <span>@_scopeStart.LocalDateTime.ToString("M/d h:mm tt")</span>
+                <span>now</span>
+            </div>
+        </section>
+    </div>
+
+    <div class="control-grid lower">
+        <section class="card">
+            <div class="card-head">
+                <div class="card-title">Top of queue</div>
+                <a class="card-link" @onclick='() => Nav.NavigateTo("/it/tickets")' style="cursor: pointer;">Full queue -></a>
+            </div>
+            @if (_topTickets.Count == 0)
+            {
+                <EmptyState IconName="Ticket" Title="All clear">Queue is empty.</EmptyState>
+            }
+            else
+            {
+                <div class="ops-queue">
+                    @foreach (var ticket in _topTickets)
+                    {
+                        <button class="ops-queue-row priority-@ticket.Priority.ToString().ToLowerInvariant()" @onclick="() => OpenTicket(ticket)">
+                            <span class="mono">#@ShortId(ticket.Id)</span>
+                            <span>
+                                <strong>@ticket.Title</strong>
+                                <small>@ReportedBy(ticket) · @AssignedTo(ticket)</small>
+                            </span>
+                            <span class="mono">@Age(ticket.CreatedAt)</span>
+                        </button>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="card">
+            <div class="card-head">
+                <div class="card-title">Recent activity</div>
+            </div>
+            @if (_activity.Count == 0)
+            {
+                <EmptyState IconName="Activity" Title="Quiet">No activity yet.</EmptyState>
+            }
+            else
+            {
+                <div class="feed">
+                    @foreach (var ev in _activity)
+                    {
+                        <div class="feed-item">
+                            <div class="feed-icon"><Icon Name="@ActIcon(ev.Kind)" Size="14" /></div>
+                            <div class="feed-text">@ev.Text</div>
+                            <div class="feed-time">@Format.RelTime(ev.Timestamp)</div>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    </div>
+</div>
+
+<TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Refresh" />
+
+@code {
+    private readonly ScopeOption[] _scopes =
+    [
+        new("1h", "1h", TimeSpan.FromHours(1)),
+        new("24h", "24h", TimeSpan.FromHours(24)),
+        new("7d", "7d", TimeSpan.FromDays(7)),
+        new("30d", "30d", TimeSpan.FromDays(30)),
+    ];
+
+    Ticket? _viewing;
+    string _scope = "24h";
+    string _scopeLabel = "24h";
+    DateTimeOffset _scopeStart;
+    double _avgCloseHours;
+    int _open, _urgent, _highP, _downP, _warnP, _upP, _out, _repair, _resolved, _newInScope, _batteryQty;
+    List<Ticket> _tickets = new();
+    List<Ticket> _topTickets = new();
+    List<User> _users = new();
+    List<Printer> _printers = new();
+    List<Asset> _assets = new();
+    List<ActivityEvent> _activity = new();
+    List<HistogramBucket> _histogram = new();
+
+    string AvgCloseLabel => _resolved == 0 ? "-" : _avgCloseHours < 24 ? $"{_avgCloseHours:0.0}h" : $"{_avgCloseHours / 24:0.0}d";
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    async Task Refresh()
+    {
+        _tickets = (await TicketService.GetAllAsync()).ToList();
+        _users = (await UserService.GetAllAsync()).ToList();
+        _printers = (await PrinterService.GetAllAsync()).ToList();
+        _assets = (await AssetService.GetAllAsync()).ToList();
+        _activity = (await ActivityService.GetRecentAsync(8)).ToList();
+
+        Recalculate();
+    }
+
+    void SetScope(string scope)
+    {
+        _scope = scope;
+        Recalculate();
+    }
+
+    void Recalculate()
+    {
+        var selected = _scopes.First(s => s.Id == _scope);
+        _scopeLabel = selected.Label;
+        var now = DateTimeOffset.UtcNow;
+        _scopeStart = now.Subtract(selected.Window);
+        var scopedTickets = _tickets.Where(t => t.CreatedAt >= _scopeStart || t.UpdatedAt >= _scopeStart).ToList();
+        var resolved = _tickets.Where(t => t.Status == TicketStatus.Resolved && t.UpdatedAt >= _scopeStart).ToList();
+
+        _open = _tickets.Count(t => t.Status != TicketStatus.Resolved);
+        _urgent = _tickets.Count(t => t.Status != TicketStatus.Resolved && t.Priority == TicketPriority.Urgent);
+        _highP = _tickets.Count(t => t.Status != TicketStatus.Resolved && t.Priority == TicketPriority.High);
+        _newInScope = _tickets.Count(t => t.CreatedAt >= _scopeStart);
+
+        _downP = _printers.Count(p => p.Status == PrinterStatus.Down);
+        _warnP = _printers.Count(p => p.Status == PrinterStatus.Warn);
+        _upP = _printers.Count(p => p.Status == PrinterStatus.Up);
+
+        _out = _assets.Count(a => a.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned);
+        _repair = _assets.Count(a => a.Status is AssetStatus.Repair or AssetStatus.InRMA or AssetStatus.Investigating);
+        _batteryQty = _assets.Where(a => a.Category == AssetCategory.Battery).Sum(a => Math.Max(a.Quantity, 0));
+
+        _resolved = resolved.Count;
+        _avgCloseHours = resolved.Count == 0
+            ? 0
+            : resolved.Average(t => Math.Max(0.1, (t.UpdatedAt - t.CreatedAt).TotalHours));
+
+        _topTickets = _tickets
+            .Where(t => t.Status != TicketStatus.Resolved)
+            .OrderByDescending(t => (int)t.Priority)
+            .ThenBy(t => t.CreatedAt)
+            .Take(6)
+            .ToList();
+
+        BuildHistogram(scopedTickets, now);
+    }
+
+    void BuildHistogram(List<Ticket> scopedTickets, DateTimeOffset now)
+    {
+        const int bucketCount = 12;
+        var window = now - _scopeStart;
+        var bucketWidth = TimeSpan.FromTicks(Math.Max(1, window.Ticks / bucketCount));
+        var counts = new int[bucketCount];
+
+        foreach (var ticket in scopedTickets)
+        {
+            AddToBucket(ticket.CreatedAt);
+            if (ticket.UpdatedAt != ticket.CreatedAt)
+            {
+                AddToBucket(ticket.UpdatedAt);
+            }
+        }
+
+        var max = Math.Max(1, counts.Max());
+        _histogram = Enumerable.Range(0, bucketCount)
+            .Select(i =>
+            {
+                var start = _scopeStart + TimeSpan.FromTicks(bucketWidth.Ticks * i);
+                return new HistogramBucket(start.LocalDateTime.ToString("M/d h tt"), counts[i], 8 + (counts[i] * 92 / max));
+            })
+            .ToList();
+
+        void AddToBucket(DateTimeOffset timestamp)
+        {
+            if (timestamp < _scopeStart || timestamp > now)
+            {
+                return;
+            }
+
+            var index = (int)((timestamp - _scopeStart).Ticks / bucketWidth.Ticks);
+            counts[Math.Clamp(index, 0, bucketCount - 1)]++;
+        }
+    }
+
+    void OpenTicket(Ticket t) => _viewing = t;
+    void OpenPrinter(Printer printer) => Nav.NavigateTo($"/it/printers/{printer.Id}");
+
+    int PrinterRank(Printer printer) => printer.Status switch
+    {
+        PrinterStatus.Down => 3,
+        PrinterStatus.Warn => 2,
+        _ => printer.LastLatencyMs >= 600 ? 1 : 0,
+    };
+
+    string PrinterTileClass(Printer printer) => printer.Status switch
+    {
+        PrinterStatus.Down => "down",
+        PrinterStatus.Warn => "warn",
+        _ when printer.LastLatencyMs >= 600 => "warn",
+        _ => "",
+    };
+
+    static string LatencyLabel(Printer printer)
+        => printer.LastLatencyMs.HasValue ? $"{printer.LastLatencyMs} ms" : "no ping";
+
+    string ReportedBy(Ticket ticket)
+        => _users.FirstOrDefault(u => u.Id == ticket.ReportedById)?.Name ?? "Unassigned reporter";
+
+    string AssignedTo(Ticket ticket)
+        => string.IsNullOrWhiteSpace(ticket.AssigneeId)
+            ? "unassigned"
+            : _users.FirstOrDefault(u => u.Id == ticket.AssigneeId)?.Name ?? "assigned";
+
+    static string ShortId(string id) => id.Length <= 6 ? id : id[..6];
+
+    static string Age(DateTimeOffset created)
+    {
+        var span = DateTimeOffset.UtcNow - created;
+        return span.TotalHours < 1 ? $"{Math.Max(1, (int)span.TotalMinutes)}m" :
+            span.TotalDays < 1 ? $"{(int)span.TotalHours}h" :
+            $"{(int)span.TotalDays}d";
+    }
+
+    string ActIcon(string kind) => kind switch
+    {
+        "asset_out" => "ArrowOut",
+        "asset_in" => "ArrowIn",
+        "ticket" => "Ticket",
+        "printer" => "Printer",
+        _ => "Activity",
+    };
+
+    private sealed record ScopeOption(string Id, string Label, TimeSpan Window);
+    private sealed record HistogramBucket(string Label, int Count, int Height);
+}

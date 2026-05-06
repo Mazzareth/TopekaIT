@@ -1,0 +1,442 @@
+																			01/04/2026 17:09:35					03/31/2026																					
+	SAE EQUIPMENT RMA TRACKING												Picture																																
+																																													
+			QUICK SEARCH																																										
+																																													
+																																													
+																																													
+			ROW	UNIT SERIAL NUMBER	ASSET #	SECTION #	RETURNED	TENTATIVE RMA RETURN DATE	TOTAL UNITS IN RMA	TOTAL UNITS OVERDUE								ASSET TAGS																											
+			-	-	-	-	-	-	12	4									UNIT TAGGED?				IF ASSIGNED, NOT LOST																						
+																																													
+			ROW	UNIT SERIAL NUMBER	ASSET #	SAE	SCANNER	DATE RMA SUBMITTED	I.T. HAND OFF DATE	TENTATIVE RMA RETURN DATE	RECEIVED	COMMENTS	SECTION					ASSET TAG #	YES	NO	LOST	UNIT SERIAL #	LOCKER #	DATE TAGGED																					
+1			1	25031T03	N/A	FALSE	TRUE	11/20/2025	11/20/2025	12/4/2025	TRUE	RECEIVED 1/20/26	1	SECTION 1				380000	TRUE	FALSE	FALSE	18340523020117	000	8/16/2024																					
+2			2	UNKNOWN -BROKEN SN BAND	N/A	FALSE	TRUE	11/30/2025	11/30/2025	12/14/2025	TRUE	RECEIVED 1/5/2026	1					380001	TRUE	FALSE	FALSE	18339523021139	1	8/16/2024																					
+3			3	18340523020066	380056	TRUE	FALSE	12/2/2025	12/2/2025	12/16/2025	TRUE	RECEIVED 1/6/26	1					380002	TRUE	FALSE	FALSE	18339523022133	2	8/16/2024																					
+4			4	25088525100943	N/A	FALSE	TRUE	12/4/2025	12/4/2025	12/18/2025	TRUE	RECEIVED 1/6/26	1					380003	TRUE	FALSE	FALSE	18340523020438	3	8/16/2024																					
+5			5	25059525100212	N/A	FALSE	TRUE	12/4/2025	12/4/2025	12/18/2025	TRUE	RECEIVED 1/6/26	1					380004	TRUE	FALSE	FALSE	24187060000003	4	8/16/2024																					
+6			6	18339523021210	380023	TRUE	FALSE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 1/20/26	1					380005	TRUE	FALSE	FALSE	19300523020733	5	8/16/2024																					
+7			7	18340523020373	380083	TRUE	FALSE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 1/6/26	1					380006	TRUE	FALSE	FALSE	18339523021134	6	8/16/2024																					
+8			8	18340523020268	380036	TRUE	FALSE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 1/6/26	1					380007	TRUE	FALSE	FALSE	18339523021834	7	8/16/2024																					
+9			9	19197523021005	380010	TRUE	FALSE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 1/6/26	1					380008	TRUE	FALSE	FALSE	18339523020928	8	8/16/2024																					
+10			10	23327523022599	380072	TRUE	FALSE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 1/6/26	1					380009	TRUE	FALSE	FALSE	23327523022403	9	8/16/2024																					
+11			11	M1W95F09L	N/A	FALSE	TRUE	1/1/2026	1/1/2026	1/15/2026	TRUE	RECEIVED 2/8/26	1					380010	TRUE	FALSE	FALSE	19197523021005	10	8/16/2024																					
+12			12	18340523020247	380042	TRUE	FALSE	1/12/2026	1/12/2026	1/26/2026	TRUE	RECEIVED 1/29/26	1					380011	TRUE	FALSE	FALSE	23278523020859	11	8/16/2024																					
+13			13	23353525100459	N/A	FALSE	TRUE	1/13/2026	1/13/2026	1/27/2026	TRUE	RECEIVED 2/2/26	1					380012	TRUE	FALSE	FALSE	18340523020448	12	8/16/2024																					
+14			14	18339523020928	380008	TRUE	FALSE	1/18/2026	1/18/2026	2/1/2026	TRUE	RECEIVED 1/19/26	1					380013	TRUE	FALSE	FALSE	18340523020391	13	8/16/2024																					
+15			15	18340523020083	380038	TRUE	FALSE	1/18/2026	1/18/2026	2/1/2026	TRUE	RECEIVED 1/19/26	1					380014	TRUE	FALSE	TRUE	24317523022356	14	8/16/2024																					
+16			16	18339523021139	380001	TRUE	FALSE	1/18/2026	1/18/2026	2/1/2026	TRUE	RECEIVED 1/29/26	2	SECTION 2				380015	TRUE	FALSE	FALSE	18339523020672	15	8/16/2024																					
+17			17	M1W95D99D	N/A	FALSE	TRUE	11/30/2025	11/30/2025	12/14/2025	TRUE	RECEIVED 1/6/26	2					380016	TRUE	FALSE	FALSE	18339523021235	16	8/16/2024																					
+18			18	M1Y55Y29C	N/A	FALSE	TRUE	1/22/2026	1/22/2026	2/5/2026	TRUE	 RECEIVED 2/27/26	2					380017	TRUE	FALSE	FALSE	18340223020365	17	8/16/2024																					
+19			19	18339523020504	380029	FALSE	FALSE	1/25/2026	1/25/2026	2/8/2026	TRUE	RECEIVED 1/27/26	2					380018	TRUE	FALSE	FALSE	18339523020994	18	8/16/2024																					
+20			20	18339523020837	380045	FALSE	FALSE	1/25/2026	1/25/2026	2/8/2026	TRUE	RECEIVED 1/27/26	2					380019	TRUE	FALSE	FALSE	18340523020167	19	8/16/2024																					
+21			21	19197523021323	380035	FALSE	FALSE	1/25/2026	1/25/2026	2/8/2026	TRUE	RECEIVED 1/27/26	2					380020	TRUE	FALSE	FALSE	18339523020834	20	8/16/2024																					
+22			22	23327523022403	380009	TRUE	FALSE	1/27/2026	1/27/2026	2/10/2026	TRUE	RECEIVED 1/29/26	2					380021	TRUE	FALSE	FALSE	23328523021051	21	8/16/2024																					
+23			23	M1W95D98R	N/A	FALSE	TRUE	1/27/2026	1/27/2026	2/10/2026	FALSE		2					380022	TRUE	FALSE	FALSE	18339523020767	22	8/16/2024																					
+24			24	183405523020149	380078	TRUE	FALSE	1/28/2026	1/28/2026	2/11/2026	TRUE	RECEIVED 1/29/26	2					380023	TRUE	FALSE	FALSE	18339523021210	23	8/16/2024																					
+25			25	18339523021188	380030	TRUE	FALSE	2/2/2026	2/2/2026	2/16/2026	TRUE	RECEIVED 2/12/26	2					380024	TRUE	FALSE	FALSE	19302523020260	24	8/16/2024																					
+26			26	23327523022403	380009	TRUE	FALSE	2/4/2026	2/4/2026	2/18/2026	TRUE	RECEIVED 2/25/26	2					380025	TRUE	FALSE	FALSE	18339523020935	25	8/16/2024																					
+27			27	183395223021229	383270	TRUE	FALSE	2/4/2026	2/4/2026	2/18/2026	TRUE	RECEIVED 2/22/26	2					380026	TRUE	FALSE	FALSE	18339523021105	26	8/16/2024																					
+28			28	24317523022356	383291	TRUE	FALSE	2/4/2026	2/4/2026	2/18/2026	TRUE	RECEIVED 2/25/26	2					380027	TRUE	FALSE	FALSE	18339523020844	27	8/16/2024																					
+29			29	18339523020924	380079	TRUE	FALSE	2/4/2026	2/4/2026	2/18/2026	TRUE	RECEIVED 2/22/26	2					380028	TRUE	FALSE	FALSE	18339523021233	28	8/16/2024																					
+30			30	18339523020833	spare 6	TRUE	FALSE	1/25/2026	1/25/2026	2/8/2026	TRUE	RECEIVED 2/10/26	2					380029	TRUE	FALSE	FALSE	18339523020504	29	8/16/2024																					
+31			31	18340523020816	380064	TRUE	FALSE	2/25/2026	2/25/2026	3/11/2026	TRUE	RECEIVED 2/25/26	3	SECTION 3				380030	TRUE	FALSE	FALSE	18339523021188	30	8/16/2024																					
+32			32	18339523020504	380029	TRUE	FALSE	2/25/2026	2/25/2026	3/11/2026	TRUE	RECEIVED 2/25/26	3					380031	TRUE	FALSE	FALSE	18340523020412	31	8/16/2024																					
+33			33	18338523021759	383299	TRUE	FALSE	2/25/2026	2/25/2026	3/11/2026	TRUE	RECEIVED 2/25/26	3					380032	TRUE	FALSE	FALSE	18339523021152	32	8/16/2024																					
+34			34	183405123020823	380082	TRUE	FALSE	2/26/2026	2/26/2026	3/12/2026	TRUE	RECEIVED 3/25/26	3					380033	TRUE	FALSE	FALSE	18340523020411	33	8/16/2024																					
+35			35	18340523020268	380036	TRUE	FALSE	2/26/2026	2/26/2026	3/12/2026	TRUE	RECEIVED 3/25/26	3					380034	TRUE	FALSE	FALSE	18339523020394	34	8/16/2024																					
+36			36	18339523020394	380034	TRUE	FALSE	3/10/2026	3/10/2026	3/24/2026	FALSE		3					380035	TRUE	FALSE	FALSE	19197523021323	35	8/16/2024																					
+37			37	18339523020844	380027	TRUE	FALSE	3/12/2026	3/12/2026	3/26/2026	FALSE		3					380036	TRUE	FALSE	FALSE	18340523020268	36	8/16/2024																					
+38			38	18339523020684	380053	TRUE	FALSE	3/23/2026	3/23/2026	4/6/2026	TRUE	RECEIVED 3/25/26	3					380037	TRUE	FALSE	FALSE	18340523020146	37	8/16/2024																					
+39			39	25288T101	N/A	FALSE	TRUE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380038	TRUE	FALSE	FALSE	18340523020083	38	8/16/2024																					
+40			40	M1W95E411R	N/A	FALSE	TRUE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380039	FALSE	FALSE	TRUE		39	8/16/2024																					
+41			41	25079T107	N/A	FALSE	TRUE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380040	FALSE	FALSE	TRUE		40	8/16/2024																					
+42			42	22311T122	N/A	FALSE	TRUE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380041	TRUE	FALSE	FALSE	18339523020803	41	8/16/2024																					
+43			43	M1W95D86H	N/A	FALSE	TRUE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380042	TRUE	FALSE	FALSE	18340523020247	42	8/16/2024																					
+44			44	18339523021233	380028	TRUE	FALSE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380043	TRUE	FALSE	FALSE	18339523020831	43	8/16/2024																					
+45			45	18339523020935	380025	TRUE	FALSE	3/31/2026	3/31/2026	4/14/2026	FALSE		3					380044	TRUE	FALSE	FALSE	18340523020318	44	8/16/2024																					
+46			46	18339523021211	380068	TRUE	FALSE	3/31/2026	3/31/2026	4/14/2026	FALSE		4	SECTION 4				380045	FALSE	TRUE	FALSE	18339523020837	45	8/16/2024																					
+47			47	18339523021886	380060	TRUE	FALSE	3/31/2026	3/31/2026	9/5/2025	FALSE		4					380046	FALSE	FALSE	TRUE	18339523021229	N/A	8/16/2024																					
+48			48			FALSE	FALSE			1/14/1900	FALSE		4					380047	TRUE	FALSE	FALSE	18339523020832	47	8/16/2024																					
+49			49			FALSE	FALSE			1/14/1900	FALSE		4					380048	FALSE	FALSE	TRUE		N/A	8/16/2024																					
+50			50			FALSE	FALSE			1/14/1900	FALSE		4					380049	FALSE	FALSE	TRUE		N/A	8/16/2024																					
+51			51			FALSE	FALSE			1/14/1900	FALSE		4					380050	TRUE	FALSE	FALSE	18339523020652	50	8/16/2024																					
+52			52			FALSE	FALSE			1/14/1900	FALSE		4					380051	TRUE	FALSE	FALSE	24317523022327	51	8/16/2024																					
+53			53			FALSE	FALSE			1/14/1900	FALSE		4					380052	TRUE	FALSE	FALSE	18339523021773	52	8/16/2024																					
+54			54			FALSE	FALSE			1/14/1900	FALSE		4					380053	TRUE	FALSE	FALSE	18339523020684	53	8/16/2024																					
+55			55			FALSE	FALSE			1/14/1900	FALSE		4					380054	TRUE	FALSE	FALSE	18340523020247	54	8/16/2024																					
+56			56			FALSE	FALSE			1/14/1900	FALSE		4					380055	TRUE	FALSE	FALSE	18340523020323	55	8/16/2024																					
+57			57			FALSE	FALSE			1/14/1900	FALSE		4					380056	TRUE	FALSE	FALSE	18340523020066	56	8/16/2024																					
+58			58			FALSE	FALSE			1/14/1900	FALSE		4					380057	TRUE	FALSE	FALSE	23327523022428	57	8/16/2024																					
+59			59			FALSE	FALSE			1/14/1900	FALSE		4					380058	TRUE	FALSE	FALSE	23278523020677	58	8/16/2024																					
+60			60			FALSE	FALSE			1/14/1900	FALSE		4					380059	FALSE	FALSE	TRUE	18340523020397	n/a	8/16/2024																					
+61			61			FALSE	FALSE			1/14/1900	FALSE		5	SECTION 5				380060	TRUE	FALSE	FALSE	18339522302186	60	8/16/2024																					
+62			62			FALSE	FALSE			1/14/1900	FALSE		5					380061	FALSE	FALSE	TRUE	18339523021154	61	8/16/2024																					
+63			63			FALSE	FALSE			1/14/1900	FALSE		5					380062	TRUE	FALSE	FALSE	18339523021982	62	8/16/2024																					
+64			64			FALSE	FALSE			1/14/1900	FALSE		5					380063	TRUE	FALSE	FALSE	19300523020702	63	8/16/2024																					
+65			65			FALSE	FALSE			1/14/1900	FALSE		5					380064	TRUE	FALSE	FALSE	18340523020816	64	8/16/2024																					
+66			66			FALSE	FALSE			1/14/1900	FALSE		5					380065	TRUE	FALSE	FALSE	18339523021154	65	8/16/2024																					
+67			67			FALSE	FALSE			1/14/1900	FALSE		5					380066	TRUE	FALSE	FALSE	18339523020441	66	8/16/2024																					
+68			68			FALSE	FALSE			1/14/1900	FALSE		5					380067	TRUE	FALSE	FALSE	23328523021000	67	8/16/2024																					
+69			69			FALSE	FALSE			1/14/1900	FALSE		5					380068	TRUE	FALSE	FALSE	18339523021211	68	8/16/2024																					
+70			70			FALSE	FALSE			1/14/1900	FALSE		5					380069	TRUE	FALSE	FALSE	18339523020477	69	8/16/2024																					
+71			71			FALSE	FALSE			1/14/1900	FALSE		5					380070	TRUE	FALSE	FALSE	18339523021311	70	8/16/2024																					
+72			72			FALSE	FALSE			1/14/1900	FALSE		5					380071	TRUE	FALSE	FALSE	23278523021161	71	8/16/2024																					
+73			73			FALSE	FALSE			1/14/1900	FALSE		5					380072	TRUE	FALSE	FALSE	23327523022599	72	8/16/2024																					
+74			74			FALSE	FALSE			1/14/1900	FALSE		5					380073	TRUE	FALSE	FALSE	19197523021202	73	8/16/2024																					
+75			75			FALSE	FALSE			1/14/1900	FALSE		5					380074	FALSE	FALSE	TRUE		74	8/16/2024																					
+76			76			FALSE	FALSE			1/14/1900	FALSE		6	SECTION 6				380075	TRUE	FALSE	FALSE	18339523020495	75	8/16/2024																					
+77			77			FALSE	FALSE			1/14/1900	FALSE		6					380076	TRUE	FALSE	FALSE	19301523021524	76	8/16/2024																					
+78			78			FALSE	FALSE			1/14/1900	FALSE		6					380077	FALSE	FALSE	TRUE	18339523021236	n/a	8/16/2024																					
+79			79			FALSE	FALSE			1/14/1900	FALSE		6					380078	TRUE	FALSE	FALSE	18340523020149	78	8/16/2024																					
+80			80			FALSE	FALSE			1/14/1900	FALSE		6					380079	TRUE	FALSE	FALSE	18339523020924	79	8/16/2024																					
+81			81			FALSE	FALSE			1/14/1900	FALSE		6					380080	TRUE	FALSE	FALSE	18339523021121	80	8/16/2024																					
+82			82			FALSE	FALSE			1/14/1900	FALSE		6					380081	FALSE	FALSE	TRUE		81	8/16/2024																					
+83			83			FALSE	FALSE			1/14/1900	FALSE		6					380082	TRUE	FALSE	FALSE	18340523020823	82	8/16/2024																					
+84			84			FALSE	FALSE			1/14/1900	FALSE		6					380083	FALSE	FALSE	TRUE		83	8/16/2024																					
+85			85			FALSE	FALSE			1/14/1900	FALSE		6					380084	FALSE	FALSE	TRUE		84	8/16/2024																					
+86			86			FALSE	FALSE			1/14/1900	FALSE		6					380085	TRUE	FALSE	FALSE	18339523020761	85	8/16/2024																					
+87			87			FALSE	FALSE			1/14/1900	FALSE		6					380086	TRUE	FALSE	FALSE	18339523020635	86	8/16/2024																					
+88			88			FALSE	FALSE			1/14/1900	FALSE		6					380087	TRUE	FALSE	FALSE	18340523020833	87	8/16/2024																					
+89			89			FALSE	FALSE			1/14/1900	FALSE		6					380088	FALSE	FALSE	TRUE		88	8/16/2024																					
+90			90			FALSE	FALSE			1/14/1900	FALSE		6					380089	FALSE	FALSE	TRUE		89	8/16/2024																					
+91			91			FALSE	FALSE			1/14/1900	FALSE		7	SECTION 7					FALSE	FALSE	FALSE																								
+92			92			FALSE	FALSE			1/14/1900	FALSE		7					380090	FALSE	FALSE	TRUE		90	8/16/2024																					
+93			93			FALSE	FALSE			1/14/1900	FALSE		7					380091	FALSE	FALSE	TRUE			8/16/2024																					
+94			94			FALSE	FALSE			1/14/1900	FALSE		7					380092	TRUE	FALSE	FALSE	18339523022147	90	8/16/2024																					
+95			95			FALSE	FALSE			1/14/1900	FALSE		7					380093	TRUE	FALSE	FALSE	18340523020462	115	8/16/2024																					
+96			96			FALSE	FALSE			1/14/1900	FALSE		7					380094	TRUE	FALSE	FALSE	18339523021124	114	8/16/2024																					
+97			97			FALSE	FALSE			1/14/1900	FALSE		7					380095	TRUE	FALSE	FALSE	18339523021253	113	8/16/2024																					
+98			98			FALSE	FALSE			1/14/1900	FALSE		7					380096	TRUE	FALSE	FALSE	18339523021249	N/A	8/16/2024																					
+99			99			FALSE	FALSE			1/14/1900	FALSE		7					380097	TRUE	FALSE	FALSE	19197523021496	N/A	8/16/2024																					
+100			100			FALSE	FALSE			1/14/1900	FALSE		7					380098	TRUE	FALSE	FALSE	18340523020678	N/A	8/16/2024																					
+101			101			FALSE	FALSE			1/14/1900	FALSE		7						FALSE	FALSE	FALSE																								
+102			102			FALSE	FALSE			1/14/1900	FALSE		7						FALSE	FALSE	FALSE																								
+103			103			FALSE	FALSE			1/14/1900	FALSE		7					380099	FALSE	FALSE	TRUE			8/16/2024																					
+104			104			FALSE	FALSE			1/14/1900	FALSE		7						FALSE	FALSE	FALSE																								
+105			105			FALSE	FALSE			1/14/1900	FALSE		7					383260	TRUE	FALSE	FALSE	18339523021241	48	1/28/25																					
+106			106			FALSE	FALSE			1/14/1900	FALSE		8	SECTION 8				383261	TRUE	FALSE	FALSE	18340523020349	49	1/28/25																					
+107			107			FALSE	FALSE			1/14/1900	FALSE		8					383262	TRUE	FALSE	FALSE	24318523021026	110	1/28/25																					
+108			108			FALSE	FALSE			1/14/1900	FALSE		8					383263	TRUE	FALSE	FALSE	19302523020152	111	1/28/25																					
+109			109			FALSE	FALSE			1/14/1900	FALSE		8					383264	TRUE	FALSE	FALSE	18340523020513	112	1/28/25																					
+110			110			FALSE	FALSE			1/14/1900	FALSE		8					383265	TRUE	FALSE	FALSE	18339523021082	0000	3/12/25																					
+111			111			FALSE	FALSE			1/14/1900	FALSE		8					383266	TRUE	FALSE	FALSE	18339523021125	0000	3/12/25																					
+112			112			FALSE	FALSE			1/14/1900	FALSE		8					383267	FALSE	TRUE	FALSE																								
+113			113			FALSE	FALSE			1/14/1900	FALSE		8					383268	FALSE	TRUE	FALSE																								
+114			114			FALSE	FALSE			1/14/1900	FALSE		8					383269	FALSE	TRUE	FALSE																								
+115			115			FALSE	FALSE			1/14/1900	FALSE		8					383270	TRUE	FALSE	FALSE	18339523021229	46	12/20/26																					
+116			116			FALSE	FALSE			1/14/1900	FALSE		8					383271	TRUE	FALSE	FALSE	18340523020397	59	12/20/26																					
+117			117			FALSE	FALSE			1/14/1900	FALSE		8					383272	TRUE	FALSE	FALSE	18339523021236	77	2/15/26																					
+118			118			FALSE	FALSE			1/14/1900	FALSE		8					383273	FALSE	TRUE	FALSE																								
+119			119			FALSE	FALSE			1/14/1900	FALSE		8					383274	FALSE	TRUE	FALSE																								
+120			120			FALSE	FALSE			1/14/1900	FALSE		8					383275	FALSE	TRUE	FALSE																								
+121			121			FALSE	FALSE			1/14/1900	FALSE		9	SECTION 9				383276	FALSE	TRUE	FALSE																								
+122			122			FALSE	FALSE			1/14/1900	FALSE		9					383277	FALSE	TRUE	FALSE																								
+123			123			FALSE	FALSE			1/14/1900	FALSE		9					383278	FALSE	TRUE	FALSE																								
+124			124			FALSE	FALSE			1/14/1900	FALSE		9					383279	FALSE	TRUE	FALSE																								
+125			125			FALSE	FALSE			1/14/1900	FALSE		9					383280	FALSE	TRUE	FALSE																								
+126			126			FALSE	FALSE			1/14/1900	FALSE		9					383281	FALSE	TRUE	FALSE																								
+127			127			FALSE	FALSE			1/14/1900	FALSE		9					383282	FALSE	TRUE	FALSE																								
+128			128			FALSE	FALSE			1/14/1900	FALSE		9					383283	FALSE	TRUE	FALSE																								
+129			129			FALSE	FALSE			1/14/1900	FALSE		9					383284	FALSE	TRUE	FALSE																								
+130			130			FALSE	FALSE			1/14/1900	FALSE		9					383285	FALSE	TRUE	FALSE																								
+131			131			FALSE	FALSE			1/14/1900	FALSE		9					383286	FALSE	TRUE	FALSE																								
+132			132			FALSE	FALSE			1/14/1900	FALSE		9					383287	FALSE	TRUE	FALSE																								
+133			133			FALSE	FALSE			1/14/1900	FALSE		9					383288	FALSE	TRUE	FALSE																								
+134			134			FALSE	FALSE			1/14/1900	FALSE		9					383289	FALSE	TRUE	FALSE																								
+135			135			FALSE	FALSE			1/14/1900	FALSE		9					383290	TRUE	FALSE	FALSE	18339523021288	CC	45683																					
+136			136			FALSE	FALSE			1/14/1900	FALSE		10	SECTION 10				383291	TRUE	FALSE	FALSE	24317523022356	14	11/13/25																					
+137			137			FALSE	FALSE			1/14/1900	FALSE		10					383292	FALSE	TRUE	FALSE																								
+138			138			FALSE	FALSE			1/14/1900	FALSE		10					383293	FALSE	TRUE	FALSE																								
+139			139			FALSE	FALSE			1/14/1900	FALSE		10					383294	FALSE	TRUE	FALSE																								
+140			140			FALSE	FALSE			1/14/1900	FALSE		10					383295	FALSE	TRUE	FALSE																								
+141			141			FALSE	FALSE			1/14/1900	FALSE		10					383296	FALSE	TRUE	FALSE																								
+142			142			FALSE	FALSE			1/14/1900	FALSE		10					383297	FALSE	TRUE	FALSE																								
+143			143			FALSE	FALSE			1/14/1900	FALSE		10					383298	FALSE	TRUE	FALSE																								
+144			144			FALSE	FALSE			1/14/1900	FALSE		10					383299	FALSE	TRUE	FALSE																								
+145			145			FALSE	FALSE			1/14/1900	FALSE		10					383300	FALSE	TRUE	FALSE																								
+146			146			FALSE	FALSE			1/14/1900	FALSE		10					383301	FALSE	TRUE	FALSE																								
+147			147			FALSE	FALSE			1/14/1900	FALSE		10					383302	FALSE	TRUE	FALSE																								
+148			148			FALSE	FALSE			1/14/1900	FALSE		10					383303	FALSE	TRUE	FALSE																								
+149			149			FALSE	FALSE			1/14/1900	FALSE		10					383304	FALSE	TRUE	FALSE																								
+150			150			FALSE	FALSE			1/14/1900	FALSE		10					383305	FALSE	TRUE	FALSE																								
+151			151			FALSE	FALSE			1/14/1900	FALSE		11	SECTION 11				383306	FALSE	TRUE	FALSE																								
+152			152			FALSE	FALSE			1/14/1900	FALSE		11					383307	FALSE	TRUE	FALSE																								
+153			153			FALSE	FALSE			1/14/1900	FALSE		11					383308	FALSE	TRUE	FALSE																								
+154			154			FALSE	FALSE			1/14/1900	FALSE		11					383309	FALSE	TRUE	FALSE																								
+155			155			FALSE	FALSE			1/14/1900	FALSE		11					383310	FALSE	TRUE	FALSE																								
+156			156			FALSE	FALSE			1/14/1900	FALSE		11					383311	FALSE	TRUE	FALSE																								
+157			157			FALSE	FALSE			1/14/1900	FALSE		11					383312	FALSE	TRUE	FALSE																								
+158			158			FALSE	FALSE			1/14/1900	FALSE		11					383313	FALSE	TRUE	FALSE																								
+159			159			FALSE	FALSE			1/14/1900	FALSE		11					383314	FALSE	TRUE	FALSE																								
+160			160			FALSE	FALSE			1/14/1900	FALSE		11					383315	FALSE	TRUE	FALSE																								
+161			161			FALSE	FALSE			1/14/1900	FALSE		11					383316	FALSE	TRUE	FALSE																								
+162			162			FALSE	FALSE			1/14/1900	FALSE		11					383317	FALSE	TRUE	FALSE																								
+163			163			FALSE	FALSE			1/14/1900	FALSE		11					383318	FALSE	TRUE	FALSE																								
+164			164			FALSE	FALSE			1/14/1900	FALSE		11					383319	FALSE	TRUE	FALSE																								
+165			165			FALSE	FALSE			1/14/1900	FALSE		11					383320	FALSE	TRUE	FALSE																								
+166			166			FALSE	FALSE			1/14/1900	FALSE		12	SECTION 12				383321	FALSE	TRUE	FALSE																								
+167			167			FALSE	FALSE			1/14/1900	FALSE		12					383322	FALSE	TRUE	FALSE																								
+168			168			FALSE	FALSE			1/14/1900	FALSE		12					383323	FALSE	TRUE	FALSE																								
+169			169			FALSE	FALSE			1/14/1900	FALSE		12					383324	FALSE	TRUE	FALSE																								
+170			170			FALSE	FALSE			1/14/1900	FALSE		12					383325	FALSE	TRUE	FALSE																								
+171			171			FALSE	FALSE			1/14/1900	FALSE		12					383326	FALSE	TRUE	FALSE																								
+172			172			FALSE	FALSE			1/14/1900	FALSE		12					383327	FALSE	TRUE	FALSE																								
+173			173			FALSE	FALSE			1/14/1900	FALSE		12					383328	FALSE	TRUE	FALSE																								
+174			174			FALSE	FALSE			1/14/1900	FALSE		12					383329	FALSE	TRUE	FALSE																								
+175			175			FALSE	FALSE			1/14/1900	FALSE		12					383330	FALSE	TRUE	FALSE																								
+176			176			FALSE	FALSE			1/14/1900	FALSE		12					383331	FALSE	TRUE	FALSE																								
+177			177			FALSE	FALSE			1/14/1900	FALSE		12					383332	FALSE	TRUE	FALSE																								
+178			178			FALSE	FALSE			1/14/1900	FALSE		12					383333	FALSE	TRUE	FALSE																								
+179			179			FALSE	FALSE			1/14/1900	FALSE		12					383334	FALSE	TRUE	FALSE																								
+180			180			FALSE	FALSE			1/14/1900	FALSE		12					383335	FALSE	TRUE	FALSE																								
+181			181			FALSE	FALSE			1/14/1900	FALSE		13	SECTION 13				383336	FALSE	TRUE	FALSE																								
+182			182			FALSE	FALSE			1/14/1900	FALSE		13					383337	FALSE	TRUE	FALSE																								
+183			183			FALSE	FALSE			1/14/1900	FALSE		13					383338	FALSE	TRUE	FALSE																								
+184			184			FALSE	FALSE			1/14/1900	FALSE		13					383339	FALSE	TRUE	FALSE																								
+185			185			FALSE	FALSE			1/14/1900	FALSE		13					383340	FALSE	TRUE	FALSE																								
+186			186			FALSE	FALSE			1/14/1900	FALSE		13					383341	FALSE	TRUE	FALSE																								
+187			187			FALSE	FALSE			1/14/1900	FALSE		13					383342	FALSE	TRUE	FALSE																								
+188			188			FALSE	FALSE			1/14/1900	FALSE		13					383343	FALSE	TRUE	FALSE																								
+189			189			FALSE	FALSE			1/14/1900	FALSE		13					383344	FALSE	TRUE	FALSE																								
+190			190			FALSE	FALSE			1/14/1900	FALSE		13					383345	FALSE	TRUE	FALSE																								
+191			191			FALSE	FALSE			1/14/1900	FALSE		13					383346	FALSE	TRUE	FALSE																								
+192			192			FALSE	FALSE			1/14/1900	FALSE		13					383347	FALSE	TRUE	FALSE																								
+193			193			FALSE	FALSE			1/14/1900	FALSE		13					383348	FALSE	TRUE	FALSE																								
+194			194			FALSE	FALSE			1/14/1900	FALSE		13					383349	FALSE	TRUE	FALSE																								
+195			195			FALSE	FALSE			1/14/1900	FALSE		13					383350	FALSE	TRUE	FALSE																								
+196			196			FALSE	FALSE			1/14/1900	FALSE		14	SECTION 14				383351	FALSE	TRUE	FALSE																								
+197			197			FALSE	FALSE			1/14/1900	FALSE		14					383352	FALSE	TRUE	FALSE																								
+198			198			FALSE	FALSE			1/14/1900	FALSE		14					383353	FALSE	TRUE	FALSE																								
+199			199			FALSE	FALSE			1/14/1900	FALSE		14					383354	FALSE	TRUE	FALSE																								
+200			200			FALSE	FALSE			1/14/1900	FALSE		14					383355	FALSE	TRUE	FALSE																								
+201			201			FALSE	FALSE			1/14/1900	FALSE		14					383356	FALSE	TRUE	FALSE																								
+202			202			FALSE	FALSE			1/14/1900	FALSE		14					383357	FALSE	TRUE	FALSE																								
+203			203			FALSE	FALSE			1/14/1900	FALSE		14					383358	FALSE	TRUE	FALSE																								
+204			204			FALSE	FALSE			1/14/1900	FALSE		14					383359	FALSE	TRUE	FALSE																								
+205			205			FALSE	FALSE			1/14/1900	FALSE		14																																
+206			206			FALSE	FALSE			1/14/1900	FALSE		14																																
+207			207			FALSE	FALSE			1/14/1900	FALSE		14																																
+208			208			FALSE	FALSE			1/14/1900	FALSE		14																																
+209			209			FALSE	FALSE			1/14/1900	FALSE		14																																
+210			210			FALSE	FALSE			1/14/1900	FALSE		14																																
+211			211			FALSE	FALSE			1/14/1900	FALSE		15	SECTION 15																															
+212			212			FALSE	FALSE			1/14/1900	FALSE		15																																
+213			213			FALSE	FALSE			1/14/1900	FALSE		15																																
+214			214			FALSE	FALSE			1/14/1900	FALSE		15																																
+215			215			FALSE	FALSE			1/14/1900	FALSE		15																																
+216			216			FALSE	FALSE			1/14/1900	FALSE		15																																
+217			217			FALSE	FALSE			1/14/1900	FALSE		15																																
+218			218			FALSE	FALSE			1/14/1900	FALSE		15																																
+219			219			FALSE	FALSE			1/14/1900	FALSE		15																																
+220			220			FALSE	FALSE			1/14/1900	FALSE		15																																
+221			221			FALSE	FALSE			1/14/1900	FALSE		15																																
+222			222			FALSE	FALSE			1/14/1900	FALSE		15																																
+223			223			FALSE	FALSE			1/14/1900	FALSE		15																																
+224			224			FALSE	FALSE			1/14/1900	FALSE		15																																
+225			225			FALSE	FALSE			1/14/1900	FALSE		15																																
+226			226			FALSE	FALSE			1/14/1900	FALSE		16	SECTION 16																								1/14/1900							
+227			227			FALSE	FALSE			1/14/1900	FALSE		16																																
+228			228			FALSE	FALSE			1/14/1900	FALSE		16																																
+229			229			FALSE	FALSE			1/14/1900	FALSE		16																																
+230			230			FALSE	FALSE			1/14/1900	FALSE		16																																
+231			231			FALSE	FALSE			1/14/1900	FALSE		16																																
+232			232			FALSE	FALSE			1/14/1900	FALSE		16																																
+233			233			FALSE	FALSE			1/14/1900	FALSE		16																																
+234			234			FALSE	FALSE			1/14/1900	FALSE		16																																
+235			235			FALSE	FALSE			1/14/1900	FALSE		16																																
+236			236			FALSE	FALSE			1/14/1900	FALSE		16																																
+237			237			FALSE	FALSE			1/14/1900	FALSE		16																																
+238			238			FALSE	FALSE			1/14/1900	FALSE		16																																
+239			239			FALSE	FALSE			1/14/1900	FALSE		16																																
+240			240			FALSE	FALSE			1/14/1900	FALSE		16																																
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+								NO PRINT OPTIONS AVAILABLE FOR THIS PAGE																																					
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													
+																																													

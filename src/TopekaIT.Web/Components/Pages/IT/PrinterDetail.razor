@@ -1,0 +1,509 @@
+@page "/it/printers/{Id}"
+@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@using ApexCharts
+@using TopekaIT.Core.Services
+@inject PrinterService PrinterService
+@inject PingHistoryService PingHistory
+@inject PrinterEventService PrinterEvents
+@inject NavigationManager Nav
+@inject AppState State
+@implements IDisposable
+
+<PageTitle>@(_printer?.Name ?? "Printer") · Topeka IT</PageTitle>
+
+@if (_printer == null)
+{
+    <div class="page">
+        <EmptyState IconName="Printer" Title="Printer not found">The requested printer could not be found.</EmptyState>
+    </div>
+}
+else
+{
+    <div class="page">
+        <div class="page-head">
+            <div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/it/printers")'>
+                        <Icon Name="ArrowLeft" Size="14" />
+                    </button>
+                    <h1 style="margin: 0;">@_printer.Name</h1>
+                    <Pill Kind="@TopekaIT.Web.Services.Format.PrinterPill(_printer.Status)" Dot>@TopekaIT.Web.Services.Format.PrinterLabel(_printer.Status)</Pill>
+                </div>
+                <div class="page-sub" style="margin-left: 38px;">
+                    @if (!string.IsNullOrEmpty(_printer.Model))
+                    {
+                        <span>@_printer.Model</span>
+                        <span style="margin: 0 6px; color: var(--text-faint);">·</span>
+                    }
+                    <span class="mono" style="font-size: 12px;">@_printer.IpAddress</span>
+                    @if (_printer.LastPingAt.HasValue)
+                    {
+                        <span style="margin: 0 6px; color: var(--text-faint);">·</span>
+                        <span>Last ping @TopekaIT.Web.Services.Format.RelTime(_printer.LastPingAt.Value)</span>
+                        @if (_printer.LastLatencyMs.HasValue)
+                        {
+                            <span> · @_printer.LastLatencyMs.Value ms</span>
+                        }
+                        @if (_printer.ConsecutiveFailures > 0)
+                        {
+                            <span style="color: var(--danger);"> · @_printer.ConsecutiveFailures consecutive fails</span>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_printer.SerialNumber) || !string.IsNullOrEmpty(_printer.Location))
+        {
+            <div class="card" style="margin-bottom: 16px;">
+                <div style="display: flex; gap: 24px; font-size: 13px; flex-wrap: wrap;">
+                    @if (!string.IsNullOrEmpty(_printer.SerialNumber))
+                    {
+                        <div><span style="color: var(--text-faint);">Serial:</span> <span class="mono">@_printer.SerialNumber</span></div>
+                    }
+                    @if (!string.IsNullOrEmpty(_printer.FirmwareVersion))
+                    {
+                        <div><span style="color: var(--text-faint);">Firmware:</span> <span class="mono">@_printer.FirmwareVersion</span></div>
+                    }
+                    @if (!string.IsNullOrEmpty(_printer.MacAddress))
+                    {
+                        <div><span style="color: var(--text-faint);">MAC:</span> <span class="mono">@_printer.MacAddress</span></div>
+                    }
+                    @if (!string.IsNullOrEmpty(_printer.Location))
+                    {
+                        <div><span style="color: var(--text-faint);">Location:</span> @_printer.Location</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_printer.Contact))
+                    {
+                        <div><span style="color: var(--text-faint);">Contact:</span> @_printer.Contact</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Online / Offline timeline — last 24h -->
+        <div class="card" style="margin-bottom: 16px;">
+            <div class="card-head">
+                <span class="card-title">Online / Offline — last 24h</span>
+            </div>
+            @if (_uptimeWindows.Count == 0)
+            {
+                <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                    No ping data yet. Data will appear after the first monitoring cycle.
+                </div>
+            }
+            else
+            {
+                <ApexChart TItem="UptimeDataPoint" Options="_uptimeChartOptions" Height="80">
+                    <ApexPointSeries TItem="UptimeDataPoint"
+                                     Items="_uptimeDataPoints"
+                                     Name="Status"
+                                     XValue="@(e => e.Label)"
+                                     YValue="@(e => e.Value)" />
+                </ApexChart>
+            }
+        </div>
+
+        <!-- Latency chart — last 24h -->
+        <div class="card" style="margin-bottom: 16px;">
+            <div class="card-head">
+                <span class="card-title">Latency (ms) — last 24h</span>
+            </div>
+            @if (_latencyDataPoints.Count == 0)
+            {
+                <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                    No latency data yet.
+                </div>
+            }
+            else
+            {
+                <ApexChart TItem="LatencyDataPoint" Options="_latencyChartOptions" Height="200">
+                    <ApexPointSeries TItem="LatencyDataPoint"
+                                     Items="_latencyDataPoints"
+                                     Name="Latency"
+                                     XValue="@(e => e.Timestamp)"
+                                     YValue="@(e => e.LatencyMs)"
+                                     Color="#3b82f6" />
+                </ApexChart>
+            }
+        </div>
+
+        <!-- Current Alerts -->
+        @if (_activeAlerts.Count > 0)
+        {
+            <div class="card" style="margin-bottom: 16px;">
+                <div class="card-head">
+                    <span class="card-title">Current Alerts</span>
+                    <span style="font-size: 12px; color: var(--text-faint);">@_activeAlerts.Count tracked</span>
+                </div>
+                <div class="printer-current-alerts">
+                    @foreach (var alert in _activeAlerts)
+                    {
+                        <div class="printer-current-alert">
+                            <div>
+                                <div class="printer-alert-title">
+                                    <Pill Kind="@EventSeverityPill(alert.Severity)">@alert.Severity</Pill>
+                                    <span>@(!string.IsNullOrWhiteSpace(alert.AlertDetail) ? alert.AlertDetail : alert.AlertTitle)</span>
+                                    @if (alert.TrainingLevel.HasValue)
+                                    {
+                                        <span class="training-badge">Training @alert.TrainingLevel</span>
+                                    }
+                                </div>
+                                <div class="printer-alert-message">@alert.FriendlyMessage</div>
+                                <div class="mono" style="font-size: 11px; color: var(--text-faint);">Last seen @TopekaIT.Web.Services.Format.RelTime(alert.LastSeenAt)</div>
+                            </div>
+                            <button class="btn btn-sm" @onclick="() => ClearAlert(alert)">
+                                Clear
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Printer Log -->
+        <div class="card">
+            <div class="card-head">
+                <span class="card-title">Printer Log</span>
+                @if (_printerLog.Count > 0)
+                {
+                    <span style="font-size: 12px; color: var(--text-faint);">@FilteredPrinterLog().Count() / @_printerLog.Count shown</span>
+                }
+            </div>
+            @if (_printerLog.Count == 0)
+            {
+                <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                    No printer events yet. Events will appear when TCP/UDP logs or SNMP traps are received.
+                </div>
+            }
+            else
+            {
+                <div class="printer-log-filter">
+                    <div class="seg">
+                        <button class="@(_severityFilter == "all" ? "active" : "")" @onclick='() => SetSeverityFilter("all")'>All <span class="count">@_printerLog.Count</span></button>
+                        <button class="@(_severityFilter == "error" ? "active" : "")" @onclick='() => SetSeverityFilter("error")'>Errors <span class="count">@_printerLog.Count(IsErrorEvent)</span></button>
+                        <button class="@(_severityFilter == "warning" ? "active" : "")" @onclick='() => SetSeverityFilter("warning")'>Warnings <span class="count">@_printerLog.Count(IsWarningEvent)</span></button>
+                        <button class="@(_severityFilter == "info" ? "active" : "")" @onclick='() => SetSeverityFilter("info")'>Info <span class="count">@_printerLog.Count(IsInfoEvent)</span></button>
+                    </div>
+
+                    <select class="inline-input printer-log-select" @bind="_eventTypeFilter">
+                        <option value="all">All event types</option>
+                        @foreach (var type in EventTypes())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+
+                    <select class="inline-input printer-log-select" @bind="_timeFilter">
+                        <option value="all">Any time</option>
+                        <option value="15m">Last 15 min</option>
+                        <option value="1h">Last hour</option>
+                        <option value="24h">Last 24 hours</option>
+                    </select>
+
+                    <input class="inline-input printer-log-search"
+                           @bind="_logSearch"
+                           @bind:event="oninput"
+                           placeholder="Search message, OID, fault text..." />
+
+                    @if (HasActiveLogFilters())
+                    {
+                        <button class="btn btn-sm btn-ghost" @onclick="ClearLogFilters">Clear</button>
+                    }
+                </div>
+
+                var filteredLog = FilteredPrinterLog().ToList();
+                @if (filteredLog.Count == 0)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        No events match the active filters.
+                    </div>
+                }
+                else
+                {
+                <div class="asset-table-head" style="grid-template-columns: 100px 80px 1fr;">
+                    <div>Time</div>
+                    <div>Type</div>
+                    <div>Message</div>
+                </div>
+                @foreach (var ev in filteredLog)
+                {
+                    <div class="asset-row" style="grid-template-columns: 100px 80px 1fr;">
+                        <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("h:mm:ss tt")</div>
+                        <div>
+                            <Pill Kind="@EventSeverityPill(ev.Severity)">@ev.EventType</Pill>
+                        </div>
+                        <div style="font-size: 13px;">
+                            <div>@DisplayEventMessage(ev)</div>
+                            @if (!string.IsNullOrWhiteSpace(ev.FriendlyMessage))
+                            {
+                                <details class="raw-message-details">
+                                    <summary>Full message</summary>
+                                    <div class="raw-message">@ev.RawMessage</div>
+                                </details>
+                            }
+                        </div>
+                    </div>
+                }
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    Printer? _printer;
+    List<UptimeWindow> _uptimeWindows = new();
+    List<UptimeDataPoint> _uptimeDataPoints = new();
+    List<LatencyDataPoint> _latencyDataPoints = new();
+    IReadOnlyList<PrinterEvent> _printerLog = Array.Empty<PrinterEvent>();
+    IReadOnlyList<PrinterAlertState> _activeAlerts = Array.Empty<PrinterAlertState>();
+    string _severityFilter = "all";
+    string _eventTypeFilter = "all";
+    string _timeFilter = "all";
+    string _logSearch = "";
+
+    ApexChartOptions<UptimeDataPoint> _uptimeChartOptions = new();
+    ApexChartOptions<LatencyDataPoint> _latencyChartOptions = new();
+
+    Timer? _refreshTimer;
+
+    record UptimeDataPoint(string Label, decimal Value, string Color);
+    record LatencyDataPoint(DateTime Timestamp, decimal LatencyMs);
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChange += OnThemeChanged;
+
+        _printer = await PrinterService.GetByIdAsync(Id);
+        if (_printer == null) return;
+
+        SetupChartOptions();
+        await LoadData();
+
+        // Auto-refresh every 10 seconds
+        _refreshTimer = new Timer(async _ =>
+        {
+            _printer = await PrinterService.GetByIdAsync(Id);
+            await LoadData();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    void SetupChartOptions()
+    {
+        var isDark = State.Theme == "dark";
+        var chartMode = isDark ? Mode.Dark : Mode.Light;
+        var gridColor = isDark ? "#2c2a26" : "#e2ded5";
+
+        _uptimeChartOptions = new ApexChartOptions<UptimeDataPoint>
+        {
+            Chart = new Chart { Type = ChartType.Bar, Stacked = true, Toolbar = new Toolbar { Show = false }, Sparkline = new ChartSparkline { Enabled = false } },
+            Theme = new Theme { Mode = chartMode },
+            PlotOptions = new PlotOptions
+            {
+                Bar = new PlotOptionsBar { Horizontal = true, BarHeight = "100%", BorderRadius = 2 }
+            },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Labels = new XAxisLabels { DatetimeFormatter = new DatetimeFormatter { Hour = "h:mm A" } }
+            },
+            Yaxis = new List<YAxis> { new YAxis { Show = false } },
+            Tooltip = new Tooltip { Enabled = true },
+            Legend = new Legend { Show = false },
+            Grid = new Grid { Show = false },
+            DataLabels = new DataLabels { Enabled = false },
+        };
+
+        _latencyChartOptions = new ApexChartOptions<LatencyDataPoint>
+        {
+            Chart = new Chart { Type = ChartType.Line, Toolbar = new Toolbar { Show = false }, Sparkline = new ChartSparkline { Enabled = false } },
+            Theme = new Theme { Mode = chartMode },
+            Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Labels = new XAxisLabels { DatetimeFormatter = new DatetimeFormatter { Hour = "h:mm A" } }
+            },
+            Yaxis = new List<YAxis> { new YAxis { Title = new AxisTitle { Text = "ms" }, Min = 0 } },
+            Tooltip = new Tooltip { Enabled = true, X = new TooltipX { Format = "h:mm:ss A" } },
+            Legend = new Legend { Show = false },
+            Grid = new Grid { BorderColor = gridColor },
+            DataLabels = new DataLabels { Enabled = false },
+            Markers = new Markers { Size = 0, Hover = new MarkersHover { SizeOffset = 3 } },
+        };
+    }
+
+    void OnThemeChanged()
+    {
+        SetupChartOptions();
+        InvokeAsync(StateHasChanged);
+    }
+
+    async Task LoadData()
+    {
+        if (_printer == null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var from24h = now.AddHours(-24);
+
+        // Load ping samples for charts
+        var samples = await PingHistory.GetSamplesAsync(Id, from24h, now);
+
+        // Build uptime windows
+        _uptimeWindows = await PingHistory.GetUptimeWindowAsync(Id, TimeSpan.FromHours(24));
+
+        // Convert uptime windows to chart data points (range bar)
+        _uptimeDataPoints = _uptimeWindows.Select(w => new UptimeDataPoint(
+            w.Start.LocalDateTime.ToString("h:mm tt"),
+            (decimal)(w.End - w.Start).TotalMinutes,
+            w.IsUp ? "#22c55e" : "#ef4444"
+        )).ToList();
+
+        // Downsample latency: if > 2h window, use 5-min averages
+        if (samples.Count > 0)
+        {
+            var windowHours = 24.0;
+            if (windowHours > 2 && samples.Count > 100)
+            {
+                // Downsample to 5-minute buckets
+                var bucketSize = TimeSpan.FromMinutes(5);
+                var buckets = samples
+                    .Where(s => s.Success && s.LatencyMs.HasValue)
+                    .GroupBy(s => new DateTimeOffset(
+                        s.Timestamp.Year, s.Timestamp.Month, s.Timestamp.Day,
+                        s.Timestamp.Hour, s.Timestamp.Minute / 5 * 5, 0, s.Timestamp.Offset))
+                    .OrderBy(g => g.Key)
+                    .Select(g => new LatencyDataPoint(
+                        g.Key.LocalDateTime,
+                        (decimal)Math.Round((double)g.Average(s => s.LatencyMs!.Value), 1)))
+                    .ToList();
+                _latencyDataPoints = buckets;
+            }
+            else
+            {
+                _latencyDataPoints = samples
+                    .Where(s => s.Success && s.LatencyMs.HasValue)
+                    .Select(s => new LatencyDataPoint(
+                        s.Timestamp.LocalDateTime,
+                        (decimal)s.LatencyMs!.Value))
+                    .ToList();
+            }
+        }
+        else
+        {
+            _latencyDataPoints = new List<LatencyDataPoint>();
+        }
+
+        // Load printer events
+        _printerLog = await PrinterEvents.GetByPrinterAsync(Id, 100);
+        _activeAlerts = await PrinterEvents.GetActiveAlertsByPrinterAsync(Id);
+    }
+
+    static string EventSeverityPill(string? severity) => severity?.ToLowerInvariant() switch
+    {
+        "critical" => "pill-down",
+        "error" => "pill-down",
+        "warning" => "pill-warn",
+        _ => "pill-info",
+    };
+
+    IEnumerable<PrinterEvent> FilteredPrinterLog()
+    {
+        var query = _printerLog.AsEnumerable();
+
+        query = _severityFilter switch
+        {
+        "error" => query.Where(IsErrorEvent),
+            "warning" => query.Where(IsWarningEvent),
+            "info" => query.Where(IsInfoEvent),
+            _ => query,
+        };
+
+        if (_eventTypeFilter != "all")
+        {
+            query = query.Where(e => string.Equals(e.EventType, _eventTypeFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var cutoff = _timeFilter switch
+        {
+            "15m" => DateTimeOffset.UtcNow.AddMinutes(-15),
+            "1h" => DateTimeOffset.UtcNow.AddHours(-1),
+            "24h" => DateTimeOffset.UtcNow.AddHours(-24),
+            _ => DateTimeOffset.MinValue,
+        };
+
+        if (cutoff != DateTimeOffset.MinValue)
+        {
+            query = query.Where(e => e.Timestamp >= cutoff);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_logSearch))
+        {
+            var search = _logSearch.Trim();
+            query = query.Where(e =>
+                e.RawMessage.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (e.FriendlyMessage?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (e.AlertTitle?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (e.AlertDetail?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                e.EventType.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (e.Severity?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        return query;
+    }
+
+    IEnumerable<string> EventTypes() => _printerLog
+        .Select(e => e.EventType)
+        .Where(e => !string.IsNullOrWhiteSpace(e))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(e => e);
+
+    void SetSeverityFilter(string filter) => _severityFilter = filter;
+
+    void ClearLogFilters()
+    {
+        _severityFilter = "all";
+        _eventTypeFilter = "all";
+        _timeFilter = "all";
+        _logSearch = "";
+    }
+
+    bool HasActiveLogFilters() =>
+        _severityFilter != "all" ||
+        _eventTypeFilter != "all" ||
+        _timeFilter != "all" ||
+        !string.IsNullOrWhiteSpace(_logSearch);
+
+    static string DisplayEventMessage(PrinterEvent ev) =>
+        !string.IsNullOrWhiteSpace(ev.FriendlyMessage)
+            ? ev.FriendlyMessage
+            : ev.RawMessage;
+
+    static bool IsErrorEvent(PrinterEvent ev) =>
+        string.Equals(ev.Severity, "Error", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ev.Severity, "Critical", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ev.EventType, "Error", StringComparison.OrdinalIgnoreCase);
+
+    static bool IsWarningEvent(PrinterEvent ev) =>
+        string.Equals(ev.Severity, "Warning", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ev.EventType, "Warning", StringComparison.OrdinalIgnoreCase);
+
+    static bool IsInfoEvent(PrinterEvent ev) =>
+        !IsErrorEvent(ev) && !IsWarningEvent(ev);
+
+    async Task ClearAlert(PrinterAlertState alert)
+    {
+        await PrinterEvents.ClearAlertAsync(alert.PrinterId, alert.AlertKey);
+        await LoadData();
+    }
+
+    public void Dispose()
+    {
+        State.OnChange -= OnThemeChanged;
+        _refreshTimer?.Dispose();
+    }
+}

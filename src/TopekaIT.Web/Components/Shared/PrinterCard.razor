@@ -1,0 +1,42 @@
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Web.Services
+
+@code {
+    [Parameter, EditorRequired] public Printer Model { get; set; } = default!;
+    [Parameter] public EventCallback<Printer> OnClick { get; set; }
+
+    async Task Clicked() => await OnClick.InvokeAsync(Model);
+}
+
+<div class="printer-card @Format.PrinterClass(Model.Status)" @onclick="Clicked">
+    <div class="printer-head">
+        <div>
+            <div class="printer-name">@Model.Name</div>
+            <div class="printer-loc">@Model.Department</div>
+        </div>
+        @if (Model.Status != PrinterStatus.Up)
+        {
+            <Pill Kind="@Format.PrinterPill(Model.Status)" Dot>@Format.PrinterLabel(Model.Status)</Pill>
+        }
+    </div>
+    <div class="printer-meta">
+        <span><b>@Model.Model</b></span>
+        <span><b>Latency</b> @LatencyLabel</span>
+        <span><b>Seen</b> @SeenLabel</span>
+    </div>
+    @if (Model.Status != PrinterStatus.Up)
+    {
+        <div class="printer-card-alert">
+            @Format.PrinterLabel(Model.Status) · @LatencyLabel
+        </div>
+    }
+    <div class="printer-card-foot">
+        <span>Report issue</span>
+        <Icon Name="ArrowOut" Size="12" />
+    </div>
+</div>
+
+@code {
+    string LatencyLabel => Model.LastLatencyMs.HasValue ? $"{Model.LastLatencyMs} ms" : "no ping";
+    string SeenLabel => Model.LastPingAt.HasValue ? Format.RelTime(Model.LastPingAt.Value) : "never";
+}

@@ -1,0 +1,16 @@
+@using TopekaIT.Web.Services
+@implements IDisposable
+@inject AppState State
+
+<div class="toast-wrap">
+    @foreach (var t in State.Toasts)
+    {
+        <div class="toast @t.Tone" @key="t.Id">@t.Message</div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => State.OnChange += Rerender;
+    void Rerender() => InvokeAsync(StateHasChanged);
+    public void Dispose() => State.OnChange -= Rerender;
+}

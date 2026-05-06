@@ -1,0 +1,63 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject ITenantContext TenantContext
+@inject IDivisionRepository DivisionRepo
+@inject NavigationManager Nav
+
+@if (_ready)
+{
+    <div class="app @(State.NavCollapsed ? "nav-collapsed" : "")">
+        <TopBar />
+        <Sidebar />
+        <main class="main">
+            @Body
+        </main>
+        <ToastContainer />
+    </div>
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    bool _ready;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChange += Rerender;
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var divisionId = auth.User.FindFirst("division")?.Value;
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            divisionId = auth.User.FindFirst("active_division")?.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(divisionId))
+        {
+            var division = await DivisionRepo.GetByIdAsync(divisionId);
+            if (division != null)
+            {
+                TenantContext.SetDivision(division.Id, division.ConnectionString);
+            }
+        }
+        else if (auth.User.IsInRole("SuperAdmin"))
+        {
+            var path = new Uri(Nav.Uri).AbsolutePath;
+            if (!path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
+            {
+                Nav.NavigateTo("/admin");
+            }
+        }
+
+        _ready = true;
+    }
+
+    void Rerender() => InvokeAsync(StateHasChanged);
+    public void Dispose() => State.OnChange -= Rerender;
+}

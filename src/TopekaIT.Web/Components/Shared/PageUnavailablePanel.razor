@@ -1,0 +1,52 @@
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Page unavailable</h1>
+            <div class="page-sub">@Subtitle</div>
+        </div>
+        <button class="btn btn-accent" @onclick="GoHome">
+            <Icon Name="@ActionIcon" Size="14" /> @ActionLabel
+        </button>
+    </div>
+
+    <div class="card empty-panel">
+        <Icon Name="Alert" Size="22" />
+        <div>
+            <div class="empty-title">This page is not available for your account.</div>
+            <div class="empty-text">Use the main workspace link to return to a page you can access.</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    string _homeRoute = "/login";
+    string ActionLabel => _homeRoute == "/login" ? "Sign in" : "Go home";
+    string ActionIcon => _homeRoute == "/login" ? "Key" : "Home";
+    string Subtitle => _homeRoute == "/login" ? "Sign in to continue." : "The link may be mistyped or restricted.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+        if (!(user.Identity?.IsAuthenticated ?? false))
+        {
+            _homeRoute = "/login";
+            return;
+        }
+
+        var role = user.FindFirst(ClaimTypes.Role)?.Value;
+        _homeRoute = role switch
+        {
+            "SuperAdmin" => "/admin",
+            "IT" => "/it",
+            "Manager" => "/manager",
+            _ => "/worker",
+        };
+    }
+
+    void GoHome() => Nav.NavigateTo(_homeRoute);
+}

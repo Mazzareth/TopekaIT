@@ -1,0 +1,27 @@
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public bool Wide { get; set; }
+
+    async Task Close() => await OnClose.InvokeAsync();
+}
+
+@if (Open)
+{
+    <div class="modal-backdrop" @onclick="Close">
+        <div class="modal @(Wide ? "wide" : "")" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <div class="modal-title">@Title</div>
+                <button class="iconbtn" @onclick="Close" aria-label="Close"><Icon Name="X" /></button>
+            </div>
+            <div class="modal-body">@ChildContent</div>
+            @if (Footer != null)
+            {
+                <div class="modal-foot">@Footer</div>
+            }
+        </div>
+    </div>
+}

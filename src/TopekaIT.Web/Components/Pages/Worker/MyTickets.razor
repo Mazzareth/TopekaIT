@@ -1,0 +1,86 @@
+@page "/worker/tickets"
+@page "/manager/tickets"
+@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@using System.Security.Claims
+@using TopekaIT.Core.Services
+@inject TicketService TicketService
+@inject UserService UserService
+@inject PrinterService PrinterService
+@inject AssetService AssetService
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>My requests · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>My requests</h1>
+            <div class="page-sub">Everything you've sent to IT, newest first.</div>
+        </div>
+        <button class="btn btn-accent" @onclick="() => _composerOpen = true"><Icon Name="Plus" Size="14" /> New request</button>
+    </div>
+
+    <div class="seg" style="margin-bottom: 14px;">
+        <button class="@(Filter == "open" ? "active" : "")" @onclick='() => Filter = "open"'>Active <span class="count">@_mine.Count(t => t.Status != TicketStatus.Resolved)</span></button>
+        <button class="@(Filter == "resolved" ? "active" : "")" @onclick='() => Filter = "resolved"'>Resolved <span class="count">@_mine.Count(t => t.Status == TicketStatus.Resolved)</span></button>
+        <button class="@(Filter == "all" ? "active" : "")" @onclick='() => Filter = "all"'>All <span class="count">@_mine.Count</span></button>
+    </div>
+
+    @if (Filtered().Count == 0)
+    {
+        <EmptyState IconName="Ticket" Title="Nothing here">No requests match this filter.</EmptyState>
+    }
+    else
+    {
+        <div class="ticket-list">
+            @foreach (var t in Filtered())
+            {
+                <TicketRow Ticket="t" Users="_users" Printers="_printers" AssetList="_assets" OnClick="OpenTicket" />
+            }
+        </div>
+    }
+</div>
+
+<TicketComposer Open="_composerOpen" OnClose="() => _composerOpen = false" OnSubmitted="OnSubmitted" />
+<TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Load" />
+
+@code {
+    string Filter = "open";
+    bool _composerOpen;
+    Ticket? _viewing;
+    List<Ticket> _mine = new();
+    List<User> _users = new();
+    List<Printer> _printers = new();
+    List<Asset> _assets = new();
+    string _userId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        await Load();
+    }
+
+    async Task Load()
+    {
+        var all = await TicketService.GetAllAsync();
+        _mine = all.Where(t => t.ReportedById == _userId).OrderByDescending(t => t.UpdatedAt).ToList();
+        _users = (await UserService.GetAllAsync()).ToList();
+        _printers = (await PrinterService.GetAllAsync()).ToList();
+        _assets = (await AssetService.GetAllAsync()).ToList();
+    }
+
+    List<Ticket> Filtered() => Filter switch
+    {
+        "resolved" => _mine.Where(t => t.Status == TicketStatus.Resolved).ToList(),
+        "all" => _mine,
+        _ => _mine.Where(t => t.Status != TicketStatus.Resolved).ToList(),
+    };
+
+    void OpenTicket(Ticket t) => _viewing = t;
+
+    async Task OnSubmitted(Ticket t)
+    {
+        await Load();
+    }
+}

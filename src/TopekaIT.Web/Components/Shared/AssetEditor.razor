@@ -1,0 +1,250 @@
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@inject AssetService AssetService
+@inject AssetModelService AssetModelService
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    Asset _draft = new();
+    string? _error;
+    bool _saving;
+    List<AssetModel> _models = new();
+    bool _addingNewModel;
+    string _newModelName = "";
+
+    string TagAndSerial
+    {
+        get => _draft.Tag;
+        set
+        {
+            _draft.Tag = value;
+            _draft.Serial = value;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = (await AssetModelService.GetAllAsync()).ToList();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Open && _draft.Id == "")
+        {
+            _draft = new Asset
+            {
+                Id = Guid.NewGuid().ToString("N").Substring(0, 16),
+                Category = AssetCategory.SaeDevice,
+                Type = "sae",
+                Quantity = 1,
+                Status = AssetStatus.In
+            };
+            _error = null;
+            _saving = false;
+        }
+    }
+
+    async Task Save()
+    {
+        if (_draft.Category == AssetCategory.PodTc77 && string.IsNullOrWhiteSpace(_draft.Serial))
+        {
+            _error = "TC77 POD devices require a serial number.";
+            return;
+        }
+
+        if (_draft.Category != AssetCategory.Battery && string.IsNullOrWhiteSpace(_draft.Tag) && string.IsNullOrWhiteSpace(_draft.Serial))
+        {
+            _error = "Tracked devices need an asset tag or serial number.";
+            return;
+        }
+
+        if (_draft.Category == AssetCategory.Battery && _draft.Quantity < 0)
+        {
+            _error = "Battery quantity cannot be negative.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await AssetService.AddAsync(_draft);
+            await OnChanged.InvokeAsync();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to save asset: " + ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    void Close()
+    {
+        _draft = new();
+        OnClose.InvokeAsync();
+    }
+
+    async Task AddNewModel()
+    {
+        if (string.IsNullOrWhiteSpace(_newModelName)) return;
+        var modelName = _newModelName.Trim();
+        await AssetModelService.AddAsync(modelName);
+        _models = (await AssetModelService.GetAllAsync()).ToList();
+        _draft.Model = modelName;
+        _addingNewModel = false;
+        _newModelName = "";
+    }
+
+    void CancelNewModel()
+    {
+        _addingNewModel = false;
+        _newModelName = "";
+    }
+
+    void ModelChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        if (value == "__add_new__")
+        {
+            _draft.Model = "";
+            _addingNewModel = true;
+            return;
+        }
+
+        _draft.Model = value;
+        _addingNewModel = false;
+    }
+
+    void CategoryChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<AssetCategory>(e.Value?.ToString(), out var category))
+        {
+            _draft.Category = category;
+            _draft.Status = category switch
+            {
+                AssetCategory.PodTc77 => AssetStatus.InUse,
+                AssetCategory.Battery => AssetStatus.Spare,
+                _ => AssetStatus.In,
+            };
+            _draft.Quantity = category == AssetCategory.Battery ? Math.Max(_draft.Quantity, 1) : 1;
+        }
+    }
+}
+
+<Modal Open="Open" OnClose="Close">
+    <Title>
+        <span class="modal-title-icon">
+            <Icon Name="Plus" Size="16" /> Add new asset
+        </span>
+    </Title>
+    <ChildContent>
+        <div class="asset-editor">
+            <div class="form-row">
+                <label>Type</label>
+                <select value="@_draft.Category" @onchange="CategoryChanged">
+                    <option value="@AssetCategory.SaeDevice">SAE device</option>
+                    <option value="@AssetCategory.PodTc77">POD TC77</option>
+                    <option value="@AssetCategory.Battery">Battery</option>
+                </select>
+            </div>
+            
+            @if (_draft.Category == AssetCategory.SaeDevice)
+            {
+                <div class="form-row">
+                    <label>S/N / Asset ID</label>
+                    <input @bind="TagAndSerial" placeholder="e.g. 123456789" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Model</label>
+                    @if (_addingNewModel)
+                    {
+                        <div class="inline-action-row">
+                            <input @bind="_newModelName" @bind:event="oninput" placeholder="New model name" autocomplete="off" />
+                            <button type="button" class="btn btn-primary" @onclick="AddNewModel">Add</button>
+                            <button type="button" class="btn btn-ghost" @onclick="CancelNewModel">Cancel</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <select value="@_draft.Model" @onchange="ModelChanged">
+                            <option value="">(Select model)</option>
+                            @foreach (var m in _models)
+                            {
+                                <option value="@m.Name">@m.Name</option>
+                            }
+                            <option value="__add_new__">Add new model…</option>
+                        </select>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="form-row">
+                    <label>Asset Tag <span class="label-note">optional for batteries</span></label>
+                    <input @bind="_draft.Tag" placeholder="e.g. WD-0123 or BAT-CASE-A" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Model <span class="label-note">optional</span></label>
+                    <input @bind="_draft.Model" placeholder="e.g. Zebra WS50, TC77, or battery model" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Serial Number @(_draft.Category == AssetCategory.PodTc77 ? "" : "— optional")</label>
+                    <input @bind="_draft.Serial" placeholder="@(_draft.Category == AssetCategory.PodTc77 ? "Required for TC77" : "Optional serial number")" autocomplete="off" />
+                </div>
+            }
+
+            @if (_draft.Category == AssetCategory.PodTc77)
+            {
+                <div class="form-row">
+                    <label>IMEI <span class="label-note">optional</span></label>
+                    <input @bind="_draft.Imei" placeholder="Optional IMEI" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Status</label>
+                    <select @bind="_draft.Status">
+                        <option value="@AssetStatus.InUse">In Use</option>
+                        <option value="@AssetStatus.InRMA">RMA</option>
+                        <option value="@AssetStatus.Investigating">Investigating</option>
+                        <option value="@AssetStatus.Holding">Holding</option>
+                    </select>
+                </div>
+            }
+            else if (_draft.Category == AssetCategory.Battery)
+            {
+                <div class="form-row">
+                    <label>Quantity</label>
+                    <input type="number" min="0" step="1" @bind="_draft.Quantity" />
+                </div>
+                <div class="form-row">
+                    <label>Status</label>
+                    <select @bind="_draft.Status">
+                        <option value="@AssetStatus.Spare">Spare</option>
+                        <option value="@AssetStatus.Holding">Holding</option>
+                        <option value="@AssetStatus.InUse">In Use</option>
+                    </select>
+                </div>
+            }
+            <div class="form-row">
+                <label>Notes</label>
+                <textarea @bind="_draft.Notes" placeholder="Equipment or Locker notes" style="height: 60px; font-family: inherit; font-size: 13px;"></textarea>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="form-error">@_error</div>
+            }
+        </div>
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-ghost" @onclick="Close" disabled="@_saving">Cancel</button>
+        <button class="btn btn-primary" @onclick="Save" disabled="@_saving">Save asset</button>
+    </Footer>
+</Modal>

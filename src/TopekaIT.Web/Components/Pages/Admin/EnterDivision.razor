@@ -1,0 +1,14 @@
+@page "/admin/enter/{DivisionId}"
+@attribute [Authorize(Roles = "SuperAdmin")]
+@inject NavigationManager Nav
+
+<PageTitle>Entering Division · Topeka IT</PageTitle>
+
+@code {
+    [Parameter] public string DivisionId { get; set; } = "";
+
+    protected override void OnInitialized()
+    {
+        Nav.NavigateTo($"/auth/enter-division/{DivisionId}", forceLoad: true);
+    }
+}

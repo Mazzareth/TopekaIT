@@ -1,0 +1,145 @@
+@page "/manager/loaners"
+@attribute [Authorize(Roles = "Manager,IT,SuperAdmin")]
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@using System.Security.Claims
+@inject AssetService AssetService
+@inject UserService UserService
+@inject AuthenticationStateProvider AuthProvider
+@inject AppState State
+
+<PageTitle>Loaner Console · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Loaners</h1>
+            <div class="page-sub">Spare pool tracking and active sign-outs.</div>
+        </div>
+    </div>
+
+    <section style="margin-top: 24px;">
+        <h3 style="margin-bottom: 12px;">Active Loans</h3>
+        <div class="card" style="padding: 0;">
+            <div class="asset-table-head" style="grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 100px;">
+                <div>Borrower</div>
+                <div>Device</div>
+                <div>Reason</div>
+                <div>Duration</div>
+                <div>Date Loaned</div>
+                <div style="text-align: right;">Action</div>
+            </div>
+            @if (_activeLoans.Count == 0)
+            {
+                <EmptyState IconName="Check" Title="All clear">No active loans.</EmptyState>
+            }
+            else
+            {
+                @foreach (var loan in _activeLoans.OrderByDescending(r => r.DateLoaned))
+                {
+                    var u = _users.FirstOrDefault(x => x.Id == loan.BorrowerId);
+                    var overdue = IsOverdue(loan);
+                    <div class="asset-row @(overdue ? "warn" : "")" style="grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 100px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);">
+                        <div style="font-weight: 500;">
+                            @(u?.Name ?? loan.BorrowerId)
+                            @if (overdue)
+                            {
+                                <span style="margin-left: 6px;"><Pill Kind="pill-danger">Overdue</Pill></span>
+                            }
+                        </div>
+                        <div class="mono">@(loan.Asset?.Tag ?? loan.Asset?.Serial)</div>
+                        <div style="color: var(--text-dim);">@loan.Reason</div>
+                        <div>@loan.Duration.ToString()</div>
+                        <div>@(loan.DateLoaned?.ToString("MMM d") ?? "Unknown")</div>
+                        <div style="text-align: right;">
+                            <button class="btn btn-sm" @onclick="() => ReturnSpare(loan.Id)">Return</button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+
+    <section style="margin-top: 32px;">
+        <h3 style="margin-bottom: 12px;">Spare Pool</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;">
+            @foreach (var spare in _spares)
+            {
+                var loan = _activeLoans.FirstOrDefault(r => r.AssetId == spare.Id);
+                var isAvailable = loan == null;
+                
+                <div class="card" style="padding: 16px; display: flex; flex-direction: column; gap: 12px; @(isAvailable ? "" : "opacity: 0.7;")">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div class="mono" style="font-weight: bold; font-size: 15px;">@(spare.Tag ?? spare.Serial)</div>
+                            <div style="color: var(--text-dim); font-size: 13px; margin-top: 2px;">@spare.Model</div>
+                        </div>
+                        <Pill Kind="pill-info" Dot>@spare.Status.ToString()</Pill>
+                    </div>
+                    
+                    @if (isAvailable)
+                    {
+                        <div style="margin-top: auto;">
+                            <button class="btn btn-primary" style="width: 100%;" @onclick="() => OpenIssuer(spare)">Issue &rarr;</button>
+                        </div>
+                    }
+                    else
+                    {
+                        var u = _users.FirstOrDefault(x => x.Id == loan!.BorrowerId);
+                        <div style="margin-top: auto; padding: 8px; background: var(--bg-sunken); border-radius: 6px; font-size: 12px;">
+                            <div style="color: var(--text-faint); margin-bottom: 2px;">On loan to</div>
+                            <div style="font-weight: 500;">@(u?.Name ?? loan!.BorrowerId)</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+<LoanIssuer Spare="_issuingSpare" OnIssued="Load" OnClose="() => _issuingSpare = null" />
+
+@code {
+    List<LoanRecord> _activeLoans = new();
+    List<Asset> _spares = new();
+    List<User> _users = new();
+    Asset? _issuingSpare;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    async Task Load()
+    {
+        _activeLoans = (await AssetService.GetActiveLoansAsync()).ToList();
+        _spares = (await AssetService.GetSparePoolAsync()).ToList();
+        _users = (await UserService.GetAllAsync()).ToList();
+    }
+
+    void OpenIssuer(Asset a)
+    {
+        _issuingSpare = a;
+    }
+
+    async Task ReturnSpare(string loanId)
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        await AssetService.ReturnSpareAsync(loanId, actor);
+        State.PushToast("Spare marked as returned", "up");
+        await Load();
+    }
+
+    bool IsOverdue(LoanRecord r)
+    {
+        if (!r.DateLoaned.HasValue) return false;
+        var days = (DateTimeOffset.UtcNow - r.DateLoaned.Value).TotalDays;
+        
+        if (r.IsDayLoan && r.DateLoaned.Value.Date < DateTimeOffset.UtcNow.Date) return true;
+        if (r.Duration == LoanDuration.LessThanWeek && days > 7) return true;
+        
+        return false;
+    }
+}

@@ -1,0 +1,137 @@
+@page "/worker"
+@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@using System.Security.Claims
+@using TopekaIT.Core.Services
+@inject TicketService Tickets
+@inject PrinterService Printers
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<PageTitle>Home · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Good @TimeOfDay(), @FirstName</h1>
+            <div class="page-sub">Here's what's happening in your area.</div>
+        </div>
+        <button class="btn btn-accent" @onclick="() => _composerOpen = true">
+            <Icon Name="Plus" Size="14" /> New request
+        </button>
+    </div>
+
+    <div class="stat-grid">
+        <StatCard Label="My open requests" Value="@_myOpen.ToString()" Tone="@(_myOpen > 0 ? "warn" : "")">
+            <Foot><a @onclick="GoMyTickets" style="cursor: pointer;">View all →</a></Foot>
+        </StatCard>
+        <StatCard Label="Printers down" Value="@_down.ToString()" Tone="@(_down > 0 ? "down" : "up")">
+            <Foot>@_total printers tracked</Foot>
+        </StatCard>
+        <StatCard Label="Resolved this week" Value="@_resolvedWeek.ToString()" Tone="up">
+            <Foot>By IT team</Foot>
+        </StatCard>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+        <div class="card-head">
+            <div class="card-title">Quick actions</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 16px;">
+            <button class="action-tile" @onclick="() => _composerOpen = true">
+                <Icon Name="Plus" Size="20" />
+                <div>
+                    <div class="at-title">File a new request</div>
+                    <div class="at-sub">Report an issue to IT</div>
+                </div>
+            </button>
+            <button class="action-tile" @onclick='() => Nav.NavigateTo("/worker/printers")'>
+                <Icon Name="Printer" Size="20" />
+                <div>
+                    <div class="at-title">Printer status</div>
+                    <div class="at-sub">See what's up & down</div>
+                </div>
+            </button>
+            <button class="action-tile" @onclick='() => Nav.NavigateTo("/worker/tickets")'>
+                <Icon Name="Ticket" Size="20" />
+                <div>
+                    <div class="at-title">My requests</div>
+                    <div class="at-sub">Track IT tickets</div>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 18px;">
+        <div class="card-head">
+            <div class="card-title">Your recent requests</div>
+            <a class="card-link" @onclick="GoMyTickets" style="cursor: pointer;">See all →</a>
+        </div>
+        @if (_recent.Count == 0)
+        {
+            <EmptyState IconName="Ticket" Title="No requests yet">
+                You haven't filed anything with IT recently. Press <b>New request</b> to report an issue.
+            </EmptyState>
+        }
+        else
+        {
+            <div class="ticket-list">
+                @foreach (var t in _recent)
+                {
+                    <TicketRow Ticket="t" Compact OnClick="() => OpenTicket(t)" />
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<TicketComposer Open="_composerOpen" OnClose="() => _composerOpen = false" OnSubmitted="OnSubmitted" />
+<TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Refresh" />
+
+@code {
+    bool _composerOpen;
+    Ticket? _viewing;
+    List<Ticket> _recent = new();
+    int _myOpen;
+    int _down;
+    int _total;
+    int _resolvedWeek;
+    string FirstName = "there";
+    string _userId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var name = auth.User.FindFirst("name")?.Value ?? "";
+        FirstName = name.Split(' ').FirstOrDefault() ?? "there";
+        await Refresh();
+    }
+
+    async Task Refresh()
+    {
+        var all = (await Tickets.GetAllAsync()).ToList();
+        var mine = all.Where(t => t.ReportedById == _userId).ToList();
+        _recent = mine.OrderByDescending(t => t.CreatedAt).Take(5).ToList();
+        _myOpen = mine.Count(t => t.Status != TicketStatus.Resolved);
+        var weekAgo = DateTimeOffset.UtcNow.AddDays(-7);
+        _resolvedWeek = all.Count(t => t.Status == TicketStatus.Resolved && t.UpdatedAt >= weekAgo);
+
+        var printers = await Printers.GetAllAsync();
+        _total = printers.Count;
+        _down = printers.Count(p => p.Status == PrinterStatus.Down);
+    }
+
+    async Task OnSubmitted(Ticket t)
+    {
+        await Refresh();
+    }
+
+    void OpenTicket(Ticket t) => _viewing = t;
+    void GoMyTickets() => Nav.NavigateTo("/worker/tickets");
+
+    string TimeOfDay()
+    {
+        var h = DateTime.Now.Hour;
+        return h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+    }
+}

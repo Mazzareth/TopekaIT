@@ -1,0 +1,71 @@
+@page "/it/tickets"
+@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@using TopekaIT.Core.Services
+@inject TicketService TicketService
+@inject UserService UserService
+@inject PrinterService PrinterService
+@inject AssetService AssetService
+
+<PageTitle>Ticket queue · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Ticket queue</h1>
+            <div class="page-sub">Everything reported across the floor.</div>
+        </div>
+        <div class="seg">
+            <button class="@(Filter == "open" ? "active" : "")" @onclick='() => Filter = "open"'>Open <span class="count">@_tickets.Count(t => t.Status != TicketStatus.Resolved)</span></button>
+            <button class="@(Filter == "progress" ? "active" : "")" @onclick='() => Filter = "progress"'>In progress <span class="count">@_tickets.Count(t => t.Status == TicketStatus.InProgress)</span></button>
+            <button class="@(Filter == "hold" ? "active" : "")" @onclick='() => Filter = "hold"'>On hold <span class="count">@_tickets.Count(t => t.Status == TicketStatus.OnHold)</span></button>
+            <button class="@(Filter == "resolved" ? "active" : "")" @onclick='() => Filter = "resolved"'>Resolved <span class="count">@_tickets.Count(t => t.Status == TicketStatus.Resolved)</span></button>
+            <button class="@(Filter == "all" ? "active" : "")" @onclick='() => Filter = "all"'>All <span class="count">@_tickets.Count</span></button>
+        </div>
+    </div>
+
+    @if (Filtered().Count == 0)
+    {
+        <EmptyState IconName="Ticket" Title="Nothing here">No tickets match this filter.</EmptyState>
+    }
+    else
+    {
+        <div class="ticket-list">
+            @foreach (var t in Filtered())
+            {
+                <TicketRow Ticket="t" Users="_users" Printers="_printers" AssetList="_assets" OnClick="OpenTicket" />
+            }
+        </div>
+    }
+</div>
+
+<TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Load" />
+
+@code {
+    string Filter = "open";
+    Ticket? _viewing;
+    List<Ticket> _tickets = new();
+    List<User> _users = new();
+    List<Printer> _printers = new();
+    List<Asset> _assets = new();
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _tickets = (await TicketService.GetAllAsync()).OrderByDescending(t => t.UpdatedAt).ToList();
+        _users = (await UserService.GetAllAsync()).ToList();
+        _printers = (await PrinterService.GetAllAsync()).ToList();
+        _assets = (await AssetService.GetAllAsync()).ToList();
+    }
+
+    List<Ticket> Filtered() => Filter switch
+    {
+        "progress" => _tickets.Where(t => t.Status == TicketStatus.InProgress).ToList(),
+        "hold" => _tickets.Where(t => t.Status == TicketStatus.OnHold).ToList(),
+        "resolved" => _tickets.Where(t => t.Status == TicketStatus.Resolved).ToList(),
+        "all" => _tickets,
+        _ => _tickets.Where(t => t.Status != TicketStatus.Resolved).ToList(),
+    };
+
+    void OpenTicket(Ticket t) => _viewing = t;
+}

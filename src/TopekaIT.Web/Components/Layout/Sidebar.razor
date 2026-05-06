@@ -1,0 +1,187 @@
+@using System.Security.Claims
+@using TopekaIT.Core.Services
+@inject AppState State
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthProvider
+@inject TicketService Tickets
+@inject PrinterService Printers
+@inject ITenantContext TenantContext
+@inject AssetService AssetSvc
+@inject IJSRuntime JS
+@implements IDisposable
+
+<aside class="sidebar">
+    <div class="nav-section">@NavSectionLabel</div>
+    @foreach (var item in _nav)
+    {
+        var active = IsActive(item.Route);
+        var badge = Badge(item.Id);
+        var urgent = item.Id == "printers" && badge > 0;
+        <button class="nav-item @(active ? "active" : "")" @onclick="() => Go(item.Route)">
+            <Icon Name="@item.Icon" Size="16" />
+            <span class="label">@item.Label</span>
+            @if (badge > 0)
+            {
+                <span class="badge @(urgent ? "urgent" : "")">@badge</span>
+            }
+        </button>
+    }
+
+    <div class="sidebar-foot">
+        <div class="theme-toggle">
+            <button class="@(State.Theme == "light" ? "active" : "")" @onclick='() => ApplyTheme("light")' title="Light">
+                <Icon Name="Sun" Size="14" />
+            </button>
+            <button class="@(State.Theme == "dark" ? "active" : "")" @onclick='() => ApplyTheme("dark")' title="Dark">
+                <Icon Name="Moon" Size="14" />
+            </button>
+        </div>
+    </div>
+</aside>
+
+@code {
+    record NavItem(string Id, string Label, string Icon, string Route);
+
+    List<NavItem> _nav = new();
+    string _role = "";
+    int _openTickets, _downPrinters;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += LocationChanged;
+        State.OnChange += Rerender;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _role = auth.User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+        BuildNav();
+        await RefreshBadges();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JS.InvokeVoidAsync("topekaNav.apply");
+        var stored = await JS.InvokeAsync<string?>("topekaTheme.get");
+        if (!string.IsNullOrEmpty(stored))
+        {
+            await JS.InvokeVoidAsync("topekaTheme.set", stored);
+            if (stored != State.Theme) State.SetTheme(stored);
+        }
+    }
+
+    async Task ApplyTheme(string theme)
+    {
+        State.SetTheme(theme);
+        await JS.InvokeVoidAsync("topekaTheme.set", theme);
+    }
+
+    void BuildNav()
+    {
+        _nav = _role switch
+        {
+            "Worker" => new()
+            {
+                new("home",     "Home",        "Home",    "/worker"),
+                new("printers", "Printers",    "Printer", "/worker/printers"),
+                new("tickets",  "My Requests", "Ticket",  "/worker/tickets"),
+            },
+            "Manager" => new()
+            {
+                new("home",     "Home",        "Home",    "/manager"),
+                new("assets",   "Assets",      "Watch",   "/manager/assets"),
+                new("lockers",  "Lockers",     "List",    "/manager/lockers"),
+                new("printers", "Printers",    "Printer", "/manager/printers"),
+                new("tickets",  "My Requests", "Ticket",  "/manager/tickets"),
+                new("users",    "Workers",     "Users",   "/manager/users"),
+            },
+            "IT" => new()
+            {
+                new("home",     "Dashboard", "Home",    "/it"),
+                new("tickets",  "Tickets",   "Ticket",  "/it/tickets"),
+                new("printers", "Printers",  "Printer", "/it/printers"),
+                new("assets",   "Assets",    "Watch",   "/it/assets"),
+                new("users",    "Users",     "Users",   "/it/users"),
+            },
+            "SuperAdmin" => TenantContext.IsResolved
+                ? new()
+                {
+                    new("admin",    "Admin",     "User",    "/admin"),
+                    new("home",     "Dashboard", "Home",    "/it"),
+                    new("tickets",  "Tickets",   "Ticket",  "/it/tickets"),
+                    new("printers", "Printers",  "Printer", "/it/printers"),
+                    new("assets",   "Assets",    "Watch",   "/it/assets"),
+                    new("users",    "Users",     "Users",   "/admin/users"),
+                }
+                : new()
+                {
+                    new("admin",     "Admin",     "User",     "/admin"),
+                    new("divisions", "Divisions", "Activity", "/admin/divisions/new"),
+                    new("users",     "Users",     "Users",  "/admin/users"),
+                },
+            _ => new()
+        };
+    }
+
+    async Task RefreshBadges()
+    {
+        if (!TenantContext.IsResolved)
+        {
+            _openTickets = 0;
+            _downPrinters = 0;
+            return;
+        }
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        var allTickets = await Tickets.GetAllAsync();
+        _openTickets = _role is "IT" or "SuperAdmin"
+            ? allTickets.Count(t => t.Status != TicketStatus.Resolved)
+            : allTickets.Count(t => t.ReportedById == userId && t.Status != TicketStatus.Resolved);
+
+        var allPrinters = await Printers.GetAllAsync();
+        _downPrinters = allPrinters.Count(p => p.Status == PrinterStatus.Down);
+    }
+
+    int Badge(string id) => id switch
+    {
+        "tickets" => _openTickets,
+        "printers" => _downPrinters,
+        _ => 0,
+    };
+
+    string NavSectionLabel => _role switch
+    {
+        "Manager" => "Shift workspace",
+        "Worker" => "My tools",
+        "SuperAdmin" when !TenantContext.IsResolved => "Administration",
+        _ => "Operations",
+    };
+
+    bool IsActive(string route)
+    {
+        var current = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
+        if (current.Length == 0) current = "/";
+        var r = route.TrimEnd('/');
+        if (r.Length == 0) r = "/";
+        if (current == r) return true;
+        var isRoleHome = r is "/worker" or "/manager" or "/it";
+        if (!isRoleHome && current.StartsWith(r)) return true;
+        return false;
+    }
+
+    void Go(string route) => Nav.NavigateTo(route);
+
+    async void LocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await RefreshBadges();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    void Rerender() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= LocationChanged;
+        State.OnChange -= Rerender;
+    }
+}

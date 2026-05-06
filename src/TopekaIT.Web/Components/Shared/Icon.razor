@@ -1,0 +1,135 @@
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public int Size { get; set; } = 16;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+}
+
+<svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+     class="@Class" style="@Style">
+    @switch (Name)
+    {
+        case "Home":
+            <path d="M3 10.5 12 3l9 7.5"/>
+            <path d="M5 9v12h14V9"/>
+            break;
+        case "Printer":
+            <path d="M6 9V3h12v6"/>
+            <rect x="4" y="9" width="16" height="9" rx="1"/>
+            <path d="M6 14h12v7H6z"/>
+            <circle cx="17" cy="12" r="0.8" fill="currentColor"/>
+            break;
+        case "Ticket":
+            <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/>
+            <path d="M13 6v12" stroke-dasharray="2 2"/>
+            break;
+        case "Users":
+            <circle cx="9" cy="8" r="3"/>
+            <path d="M3 20c0-3 3-5 6-5s6 2 6 5"/>
+            <circle cx="17" cy="9" r="2.5"/>
+            <path d="M15 20c0-2 2-4 4-4s2 2 2 4"/>
+            break;
+        case "Activity":
+            <path d="M3 12h4l3-8 4 16 3-8h4"/>
+            break;
+        case "Plus":
+            <path d="M12 5v14M5 12h14"/>
+            break;
+        case "Search":
+            <circle cx="11" cy="11" r="7"/>
+            <path d="m20 20-4.3-4.3"/>
+            break;
+        case "Sun":
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+            break;
+        case "Moon":
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+            break;
+        case "Bell":
+            <path d="M6 8a6 6 0 0 1 12 0v5l2 3H4l2-3z"/>
+            <path d="M10 19a2 2 0 0 0 4 0"/>
+            break;
+        case "ChevronLeft":
+            <path d="m15 18-6-6 6-6"/>
+            break;
+        case "ChevronRight":
+            <path d="m9 18 6-6-6-6"/>
+            break;
+        case "ArrowLeft":
+            <path d="M19 12H5"/>
+            <path d="m12 19-7-7 7-7"/>
+            break;
+        case "X":
+            <path d="M18 6 6 18M6 6l12 12"/>
+            break;
+        case "Check":
+            <path d="M20 6 9 17l-5-5"/>
+            break;
+        case "Edit":
+            <path d="M17 3a2.8 2.8 0 0 1 4 4L8 20l-5 1 1-5z"/>
+            break;
+        case "Eye":
+            <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/>
+            <circle cx="12" cy="12" r="3"/>
+            break;
+        case "Trash":
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6M10 11v6M14 11v6"/>
+            break;
+        case "Scan":
+            <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>
+            break;
+        case "Clock":
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3 2"/>
+            break;
+        case "Alert":
+            <path d="M12 3 2 20h20z"/>
+            <path d="M12 10v5M12 18v.01"/>
+            break;
+        case "ArrowOut":
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+            break;
+        case "ArrowIn":
+            <path d="M19 12H5M11 6l-6 6 6 6"/>
+            break;
+        case "Watch":
+            <rect x="6" y="6" width="12" height="12" rx="2"/>
+            <path d="M9 6V3h6v3M9 18v3h6v-3"/>
+            <circle cx="12" cy="12" r="2"/>
+            break;
+        case "Logout":
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+            break;
+        case "User":
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21c0-4 4-7 8-7s8 3 8 7"/>
+            break;
+        case "Key":
+            <circle cx="8" cy="15" r="4"/>
+            <path d="m10.8 12.2 10-10M18 5l3 3M15 8l3 3"/>
+            break;
+        case "RefreshCw":
+            <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/>
+            <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/>
+            <path d="M21 3v5h-5M3 21v-5h5"/>
+            break;
+        case "Wifi":
+            <path d="M5 13a10 10 0 0 1 14 0"/>
+            <path d="M8.5 16.5a5 5 0 0 1 7 0"/>
+            <path d="M12 20h.01"/>
+            break;
+        case "Play":
+            <path d="M8 5v14l11-7z"/>
+            break;
+        case "Copy":
+            <rect x="9" y="9" width="12" height="12" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            break;
+        default:
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 8v5M12 16v.01"/>
+            break;
+    }
+</svg>

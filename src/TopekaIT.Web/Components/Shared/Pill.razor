@@ -1,0 +1,10 @@
+@code {
+    [Parameter] public string Kind { get; set; } = "pill-dim";
+    [Parameter] public bool Dot { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
+
+<span class="pill @Kind">
+    @if (Dot) { <i class="dot"></i> }
+    @ChildContent
+</span>

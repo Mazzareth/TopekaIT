@@ -1,0 +1,123 @@
+@page "/worker/printers"
+@page "/manager/printers"
+@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@using TopekaIT.Core.Services
+@inject PrinterService PrinterService
+
+<PageTitle>Printers · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Printers</h1>
+            <div class="page-sub">Printer cards show exceptions first. Healthy printers stay quiet.</div>
+        </div>
+        <div class="page-actions">
+            <div class="seg">
+                <button class="@(Filter == "all" ? "active" : "")" @onclick='() => SetFilter("all")'>All <span class="count">@_printers.Count</span></button>
+                <button class="@(Filter == "down" ? "active" : "")" @onclick='() => SetFilter("down")'>Down <span class="count">@_printers.Count(p => p.Status == PrinterStatus.Down)</span></button>
+                <button class="@(Filter == "warn" ? "active" : "")" @onclick='() => SetFilter("warn")'>Warn <span class="count">@_printers.Count(p => p.Status == PrinterStatus.Warn)</span></button>
+            </div>
+            <label class="field">
+                <span class="lbl">Sort</span>
+                <select @bind="Sort">
+                    <option value="attention">Attention</option>
+                    <option value="name">Name</option>
+                    <option value="latency">Latency</option>
+                </select>
+            </label>
+        </div>
+    </div>
+
+    <div class="auto-refresh-line">
+        <span class="dot @(_printers.Any(p => p.Status == PrinterStatus.Down) ? "red" : _printers.Any(p => p.Status == PrinterStatus.Warn) ? "amber" : "")"></span>
+        <span>@RefreshLine</span>
+    </div>
+
+    @if (Filtered().Count == 0)
+    {
+        <EmptyState IconName="Printer" Title="Nothing to show">All printers are online and healthy.</EmptyState>
+    }
+    else
+    {
+        <div class="printer-grid">
+            @foreach (var p in Filtered())
+            {
+                <PrinterCard Model="p" OnClick="(pp) => OpenComposer(pp)" />
+            }
+        </div>
+    }
+</div>
+
+<TicketComposer Open="_composerOpen" OnClose="() => _composerOpen = false" PresetAssetType="@_presetType" PresetAssetId="@_presetId" OnSubmitted="OnSubmitted" />
+
+@code {
+    string Filter = "all";
+    string Sort = "attention";
+    List<Printer> _printers = new();
+    bool _composerOpen;
+    string? _presetType;
+    string? _presetId;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        _printers = (await PrinterService.GetAllAsync()).ToList();
+    }
+
+    string RefreshLine => _printers.Count == 0
+        ? "No printers loaded"
+        : $"Last monitor sample: {LastMonitorSample()}";
+
+    List<Printer> Filtered()
+    {
+        IEnumerable<Printer> query = Filter switch
+        {
+            "down" => _printers.Where(p => p.Status == PrinterStatus.Down),
+            "warn" => _printers.Where(p => p.Status == PrinterStatus.Warn),
+            _ => _printers,
+        };
+
+        query = Sort switch
+        {
+            "latency" => query.OrderByDescending(p => p.LastLatencyMs ?? -1).ThenBy(p => p.Name),
+            "name" => query.OrderBy(p => p.Name),
+            _ => query.OrderByDescending(AttentionRank).ThenBy(p => p.Name),
+        };
+
+        return query.ToList();
+    }
+
+    static int AttentionRank(Printer printer) => printer.Status switch
+    {
+        PrinterStatus.Down => 3,
+        PrinterStatus.Warn => 2,
+        _ => printer.LastLatencyMs >= 600 ? 1 : 0,
+    };
+
+    string LastMonitorSample()
+    {
+        var last = _printers
+            .Where(p => p.LastPingAt.HasValue)
+            .Select(p => p.LastPingAt!.Value)
+            .DefaultIfEmpty()
+            .Max();
+
+        return last == default ? "waiting for ping" : TopekaIT.Web.Services.Format.RelTime(last);
+    }
+
+    void SetFilter(string f) => Filter = f;
+
+    void OpenComposer(Printer p)
+    {
+        _presetType = "printer";
+        _presetId = p.Id;
+        _composerOpen = true;
+    }
+
+    async Task OnSubmitted(Ticket t)
+    {
+        await Load();
+    }
+}

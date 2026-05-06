@@ -1,0 +1,288 @@
+@page "/admin"
+@attribute [Authorize(Roles = "SuperAdmin")]
+@inject DivisionService DivisionService
+@inject PrinterEventService PrinterEvents
+@inject NavigationManager Nav
+@inject AppState State
+
+<PageTitle>Admin · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Admin</h1>
+            <div class="page-sub">@ActiveTabTitle</div>
+        </div>
+        @if (_activeTab == AdminTab.Divisions)
+        {
+            <button class="btn btn-accent" @onclick='() => Nav.NavigateTo("/admin/divisions/new")'>
+                <Icon Name="Plus" Size="14" /> New Division
+            </button>
+        }
+    </div>
+
+    <div class="seg" style="margin-bottom: 16px;">
+        <button class="@(_activeTab == AdminTab.Reports ? "active" : "")" @onclick="() => SetTab(AdminTab.Reports)">Reports</button>
+        <button class="@(_activeTab == AdminTab.Divisions ? "active" : "")" @onclick="() => SetTab(AdminTab.Divisions)">Divisions</button>
+    </div>
+
+    @if (_activeTab == AdminTab.Reports)
+    {
+        <div class="card" style="padding: 16px; margin-bottom: 16px;">
+            <div style="display: grid; grid-template-columns: minmax(180px, 260px) minmax(180px, 260px) auto; gap: 12px; align-items: end;">
+                <label>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Report</div>
+                    <select class="inline-input" @bind="_selectedReportId">
+                        @foreach (var report in _reports)
+                        {
+                            <option value="@report.Id">@report.Name</option>
+                        }
+                    </select>
+                </label>
+                <label>
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Division</div>
+                    <select class="inline-input" @bind="_selectedDivisionId">
+                        <option value="">All divisions</option>
+                        @foreach (var division in _divisions)
+                        {
+                            <option value="@division.Id">@division.Name</option>
+                        }
+                    </select>
+                </label>
+                <button class="btn btn-accent" @onclick="RunSelectedReport" disabled="@_reportLoading">
+                    <Icon Name="RefreshCw" Size="14" /> Run
+                </button>
+            </div>
+        </div>
+
+        @if (SelectedReport?.Id == PrinterErrorsReportId)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-title">@SelectedReport.Name</span>
+                    @if (_printerAlertGroups.Count > 0)
+                    {
+                        <span style="font-size: 12px; color: var(--text-faint);">@_printerAlertGroups.Count groups</span>
+                    }
+                </div>
+
+                @if (_reportLoading)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        Loading report.
+                    </div>
+                }
+                else if (_printerAlertGroups.Count == 0)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        No printer errors match this report.
+                    </div>
+                }
+                else
+                {
+                    <div class="asset-table-head printer-alert-head">
+                        <div>Alert type</div>
+                        <div>Severity</div>
+                        <div>Latest</div>
+                        <div>Events</div>
+                        <div style="text-align: right;">Actions</div>
+                    </div>
+                    @foreach (var group in _printerAlertGroups)
+                    {
+                        <div class="asset-row printer-alert-row">
+                            <div>
+                                <div style="font-weight: 600;">@DisplayAlertTitle(group)</div>
+                                <div class="printer-alert-message">@DisplayAlertMessage(group)</div>
+                            </div>
+                            <div><Pill Kind="@SeverityPill(group.Severity)">@group.Severity</Pill></div>
+                            <div class="mono" style="font-size: 12px;">@group.LatestAt.LocalDateTime.ToString("M/d h:mm tt")</div>
+                            <div>@group.Count</div>
+                            <div style="text-align: right;">
+                                <button class="btn btn-sm" @onclick="() => ToggleGroup(group.AlertKey)">
+                                    <Icon Name="@(_expandedGroups.Contains(group.AlertKey) ? "ChevronLeft" : "ChevronRight")" Size="12" />
+                                </button>
+                            </div>
+                        </div>
+                        @if (_expandedGroups.Contains(group.AlertKey))
+                        {
+                            <div class="printer-alert-occurrences">
+                                @foreach (var ev in group.Occurrences.Take(25))
+                                {
+                                    <details class="printer-alert-occurrence">
+                                        <summary>
+                                            <span style="font-weight: 600;">@ev.PrinterName</span>
+                                            <span>@ev.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</span>
+                                            <span>@ev.DivisionName</span>
+                                            <span>@ev.Department</span>
+                                            <button class="btn btn-sm" @onclick:stopPropagation @onclick="() => ViewOccurrence(ev)">
+                                                <Icon Name="Eye" Size="12" /> View
+                                            </button>
+                                        </summary>
+                                        <div class="raw-message">@ev.RawMessage</div>
+                                    </details>
+                                }
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <div class="card">
+            <div class="asset-table-head" style="grid-template-columns: 1fr 100px 120px 220px;">
+                <div>Name</div>
+                <div>Code</div>
+                <div>ZIP</div>
+                <div style="text-align: right;">Actions</div>
+            </div>
+
+            @if (_divisions.Count == 0)
+            {
+                <EmptyState IconName="Activity" Title="No divisions yet">Create a division to get started.</EmptyState>
+            }
+
+            @foreach (var division in _divisions)
+            {
+                <div class="asset-row" style="grid-template-columns: 1fr 100px 120px 220px; align-items: center;">
+                    <div>
+                        <div style="font-weight: 500;">@division.Name</div>
+                        <div class="mono" style="font-size: 12px; color: var(--text-faint);">@division.Id</div>
+                    </div>
+                    <input class="inline-input mono" style="text-transform: uppercase;" @bind="division.PrinterPasswordCode" @bind:event="oninput" placeholder="6I" />
+                    <input class="inline-input mono" @bind="division.PrinterPasswordZipCode" @bind:event="oninput" placeholder="66618" />
+                    <div style="text-align: right;">
+                        <button class="btn btn-sm" @onclick="() => SaveDivisionPassword(division)">
+                            <Icon Name="Save" Size="12" /> Save
+                        </button>
+                        <button class="btn btn-sm btn-accent" @onclick="() => EnterDivision(division.Id)">
+                            <Icon Name="ArrowIn" Size="12" /> Enter
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    const string PrinterErrorsReportId = "printer-errors";
+
+    List<Division> _divisions = new();
+    List<PrinterAlertGroup> _printerAlertGroups = new();
+    HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
+    List<ReportDefinition> _reports = new()
+    {
+        new(PrinterErrorsReportId, "All Printer Errors"),
+    };
+    AdminTab _activeTab = AdminTab.Reports;
+    string _selectedReportId = PrinterErrorsReportId;
+    string _selectedDivisionId = "";
+    bool _reportLoading;
+
+    string ActiveTabTitle => _activeTab == AdminTab.Reports ? "Reports" : "Divisions";
+    ReportDefinition SelectedReport => _reports.First(r => r.Id == _selectedReportId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _divisions = (await DivisionService.GetAllAsync()).ToList();
+        await RunSelectedReport();
+    }
+
+    void SetTab(AdminTab tab) => _activeTab = tab;
+
+    async Task RunSelectedReport()
+    {
+        _reportLoading = true;
+        try
+        {
+            if (_selectedReportId == PrinterErrorsReportId)
+            {
+                var groups = await PrinterEvents.GetAllDivisionGroupedErrorsAsync();
+                _printerAlertGroups = groups
+                    .Select(g =>
+                    {
+                        g.Occurrences = g.Occurrences
+                            .Where(e => string.IsNullOrWhiteSpace(_selectedDivisionId) || e.DivisionId == _selectedDivisionId)
+                            .ToList();
+                        g.Count = g.Occurrences.Count;
+                        g.LatestAt = g.Occurrences.Count > 0 ? g.Occurrences.Max(e => e.Timestamp) : g.LatestAt;
+                        return g;
+                    })
+                    .Where(g => g.Count > 0)
+                    .OrderByDescending(g => SeverityRank(g.Severity))
+                    .ThenByDescending(g => g.LatestAt)
+                    .ToList();
+            }
+        }
+        finally
+        {
+            _reportLoading = false;
+        }
+    }
+
+    void EnterDivision(string id) => Nav.NavigateTo($"/admin/enter/{id}");
+
+    async Task SaveDivisionPassword(Division division)
+    {
+        division.PrinterPasswordCode = NormalizeNullable(division.PrinterPasswordCode?.ToUpperInvariant());
+        division.PrinterPasswordZipCode = NormalizeNullable(division.PrinterPasswordZipCode);
+        await DivisionService.UpdateAsync(division);
+        State.PushToast($"Updated {division.Name}", "up");
+    }
+
+    void ViewOccurrence(PrinterAlertOccurrence occurrence)
+    {
+        var returnUrl = Uri.EscapeDataString($"/it/printers/{occurrence.PrinterId}");
+        Nav.NavigateTo($"/auth/enter-division/{occurrence.DivisionId}?ReturnUrl={returnUrl}", forceLoad: true);
+    }
+
+    void ToggleGroup(string alertKey)
+    {
+        if (!_expandedGroups.Add(alertKey))
+        {
+            _expandedGroups.Remove(alertKey);
+        }
+    }
+
+    static string DisplayAlertTitle(PrinterAlertGroup group) =>
+        !string.IsNullOrWhiteSpace(group.AlertDetail) ? group.AlertDetail : group.AlertTitle;
+
+    static string DisplayAlertMessage(PrinterAlertGroup group)
+    {
+        var latest = group.Occurrences.FirstOrDefault();
+        return latest?.FriendlyMessage
+            ?? $"{group.AlertTitle}: {group.AlertDetail}".Trim().Trim(':');
+    }
+
+    static string SeverityPill(string? severity) => severity?.ToUpperInvariant() switch
+    {
+        "CRITICAL" => "pill-down",
+        "ERROR" => "pill-down",
+        "WARNING" => "pill-warn",
+        _ => "pill-info",
+    };
+
+    static int SeverityRank(string? severity) => severity?.ToUpperInvariant() switch
+    {
+        "CRITICAL" => 3,
+        "ERROR" => 3,
+        "WARNING" => 2,
+        _ => 1,
+    };
+
+    static string? NormalizeNullable(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
+    enum AdminTab
+    {
+        Reports,
+        Divisions
+    }
+
+    record ReportDefinition(string Id, string Name);
+}

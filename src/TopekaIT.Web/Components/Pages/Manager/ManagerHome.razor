@@ -1,0 +1,304 @@
+@page "/manager"
+@attribute [Authorize(Roles = "Manager,IT,SuperAdmin")]
+@using System.Security.Claims
+@using TopekaIT.Core.Services
+@inject TicketService TicketService
+@inject PrinterService PrinterService
+@inject AssetService AssetService
+@inject UserService UserServiceX
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
+
+<PageTitle>Manager home · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Good @TimeOfDay(), @FirstName</h1>
+            <div class="page-sub">Shift workspace for gear handoff, printer issues, and crew requests.</div>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 24px; position: relative;">
+        <div style="position: relative; max-width: 400px;">
+            <Icon Name="Search" Size="16" style="position: absolute; left: 12px; top: 12px; color: var(--text-faint);" />
+            <input @bind="_lookupQuery" @bind:event="oninput" @onkeydown="HandleLookupKey" placeholder="Search employee by name..." style="width: 100%; padding-left: 36px; padding-right: 12px; height: 40px; font-size: 15px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg);" autocomplete="off" />
+        </div>
+        
+        @if (!string.IsNullOrWhiteSpace(_lookupQuery) && _lookupResults.Any())
+        {
+            <div style="position: absolute; top: 100%; left: 0; right: 0; max-width: 600px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 100; margin-top: 8px; max-height: 400px; overflow-y: auto;">
+                @foreach (var u in _lookupResults)
+                {
+                    var a = _holderLookup.GetValueOrDefault(u.Id);
+                    <div style="padding: 16px; border-bottom: 1px solid var(--border-subtle); display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 16px;">
+                        <div>
+                            <div style="font-weight: 500; font-size: 14px;">@u.Name</div>
+                            <div style="color: var(--text-dim); font-size: 12px; margin-top: 2px;">@(string.IsNullOrEmpty(u.Position) ? "Employee" : u.Position)</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px;">Locker</div>
+                            <div style="font-size: 13px;">
+                                @if (string.IsNullOrEmpty(u.LockerNumber))
+                                {
+                                    <span style="color: var(--text-faint);">None</span>
+                                }
+                                else
+                                {
+                                    <div><b>#@u.LockerNumber</b></div>
+                                    <div style="margin-top: 2px; display: flex; gap: 6px; align-items: center;">
+                                        @if (_revealedCombos.Contains(u.Id))
+                                        {
+                                            <span class="mono">@u.LockerCombo</span>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm" style="padding: 2px 6px; font-size: 11px; height: auto;" @onclick="() => _revealedCombos.Add(u.Id)">Reveal</button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px;">Device</div>
+                            <div style="font-size: 13px;">
+                                @if (a == null)
+                                {
+                                    <span style="color: var(--text-faint);">None assigned</span>
+                                }
+                                else
+                                {
+                                    <div class="mono" style="margin-bottom: 4px;">@(a.Tag ?? a.Serial)</div>
+                                    <Pill Kind="pill-info" Dot>@a.Status.ToString()</Pill>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_lookupQuery))
+        {
+            <div style="position: absolute; top: 100%; left: 0; right: 0; max-width: 400px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 100; margin-top: 8px; padding: 16px; color: var(--text-dim); font-size: 13px; text-align: center;">
+                No employees found matching "@_lookupQuery"
+            </div>
+        }
+    </div>
+
+    <div class="manager-action-grid">
+        <button class="manager-action" @onclick='() => Nav.NavigateTo("/manager/lockers")'>
+            <Icon Name="List" Size="18" />
+            <span>
+                <strong>Locker console</strong>
+                <small>@_availableLockers available</small>
+            </span>
+        </button>
+        <button class="manager-action" @onclick='() => Nav.NavigateTo("/manager/loaners")'>
+            <Icon Name="Watch" Size="18" />
+            <span>
+                <strong>Loaner console</strong>
+                <small>@_activeLoansCount active loans</small>
+            </span>
+        </button>
+        <button class="manager-action" @onclick='() => Nav.NavigateTo("/manager/assets")'>
+            <Icon Name="Scan" Size="18" />
+            <span>
+                <strong>Open asset console</strong>
+                <small>@_out out · @_available available</small>
+            </span>
+        </button>
+        <button class="manager-action" @onclick='() => Nav.NavigateTo("/manager/printers")'>
+            <Icon Name="Printer" Size="18" />
+            <span>
+                <strong>Check printers</strong>
+                <small>@_printerAttention need attention · @_totalP total</small>
+            </span>
+        </button>
+        <button class="manager-action @(_open > 5 ? "warn" : "")" @onclick='() => Nav.NavigateTo("/manager/tickets")'>
+            <Icon Name="Ticket" Size="18" />
+            <span>
+                <strong>Review crew requests</strong>
+                <small>@_open open · @_resolved resolved this week</small>
+            </span>
+        </button>
+        <button class="manager-action" @onclick="() => _composerOpen = true">
+            <Icon Name="Plus" Size="18" />
+            <span>
+                <strong>New request</strong>
+                <small>@_batteryQty batteries tracked across @_batteryRows rows</small>
+            </span>
+        </button>
+    </div>
+
+    <div class="manager-grid">
+        <div class="card">
+            <div class="card-head">
+                <div class="card-title">Outstanding devices</div>
+                <a class="card-link" @onclick='() => Nav.NavigateTo("/manager/assets")' style="cursor: pointer;">Console -></a>
+            </div>
+            @if (_checkedOut.Count == 0)
+            {
+                <EmptyState IconName="Watch" Title="Cabinet full">No assets are currently checked out.</EmptyState>
+            }
+            else
+            {
+                <div style="padding: 0 16px 16px;">
+                    @foreach (var a in _checkedOut.Take(6))
+                    {
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px;">
+                            <div>
+                                <div style="font-weight: 500;">@a.Tag <span style="color: var(--text-faint); font-weight: 400;">· @a.Model</span></div>
+                                <div style="color: var(--text-dim); font-size: 12px;">@HolderName(a) · @Format.RelTime(a.CheckedOutAt ?? DateTimeOffset.UtcNow)</div>
+                            </div>
+                            <Pill Kind="pill-info" Dot>out</Pill>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="card">
+            <div class="card-head">
+                <div class="card-title">Recent crew requests</div>
+                <a class="card-link" @onclick='() => Nav.NavigateTo("/manager/tickets")' style="cursor: pointer;">All -></a>
+            </div>
+            @if (_recent.Count == 0)
+            {
+                <EmptyState IconName="Ticket" Title="Nothing new">No recent requests from the crew.</EmptyState>
+            }
+            else
+            {
+                <div class="ticket-list" style="border-top: 1px solid var(--border);">
+                    @foreach (var t in _recent)
+                    {
+                        <TicketRow Ticket="t" Compact OnClick="OpenTicket" />
+                    }
+                </div>
+            }
+        </div>
+        <div class="card">
+            <div class="card-head">
+                <div class="card-title">Devices needing attention</div>
+                <a class="card-link" @onclick='() => Nav.NavigateTo("/manager/assets")' style="cursor: pointer;">View all -></a>
+            </div>
+            @if (_attentionAssets.Count == 0)
+            {
+                <EmptyState IconName="Check" Title="All clear">All devices healthy.</EmptyState>
+            }
+            else
+            {
+                <div style="padding: 0 16px 16px;">
+                    @foreach (var a in _attentionAssets.Take(6))
+                    {
+                        var u = _users.FirstOrDefault(x => x.Id == a.HolderId);
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13px;">
+                            <div>
+                                <div style="font-weight: 500;">@(a.Tag ?? a.Serial) <span style="color: var(--text-faint); font-weight: 400;">· @(string.IsNullOrEmpty(a.Model) ? "Device" : a.Model)</span></div>
+                                <div style="color: var(--text-dim); font-size: 12px;">@(u?.Name ?? "Unassigned") · since @Format.RelTime(a.StatusChangedAt ?? a.CheckedOutAt ?? DateTimeOffset.UtcNow)</div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <Pill Kind="pill-warn" Dot>@a.Status.ToString()</Pill>
+                                <button class="btn btn-sm" @onclick="() => OpenIssueSpare(a.HolderId)">Issue spare &rarr;</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<TicketComposer Open="_composerOpen" OnClose="() => _composerOpen = false" OnSubmitted="OnSubmitted" />
+<TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Refresh" />
+
+@code {
+    bool _composerOpen;
+    Ticket? _viewing;
+    string FirstName = "there";
+    string _userId = "";
+    string _lookupQuery = "";
+    HashSet<string> _revealedCombos = new();
+    int _out, _available, _downP, _printerAttention, _totalP, _batteryQty, _batteryRows, _open, _resolved, _availableLockers, _activeLoansCount;
+    List<Asset> _checkedOut = new();
+    List<Asset> _attentionAssets = new();
+    List<Ticket> _recent = new();
+    List<User> _users = new();
+    Dictionary<string, Asset> _holderLookup = new();
+
+    IEnumerable<User> _lookupResults => string.IsNullOrWhiteSpace(_lookupQuery) ? Array.Empty<User>() : _users.Where(u => u.Name.Contains(_lookupQuery, StringComparison.OrdinalIgnoreCase)).Take(10);
+
+    void HandleLookupKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _lookupQuery = "";
+            _revealedCombos.Clear();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var name = auth.User.FindFirst("name")?.Value ?? "";
+        FirstName = name.Split(' ').FirstOrDefault() ?? "there";
+        await Refresh();
+    }
+
+    async Task Refresh()
+    {
+        var assets = await AssetService.GetAllAsync();
+        _batteryRows = assets.Count(a => a.Category == AssetCategory.Battery);
+        _batteryQty = assets.Where(a => a.Category == AssetCategory.Battery).Sum(a => Math.Max(a.Quantity, 0));
+        _checkedOut = assets.Where(a => a.Category != AssetCategory.Battery && a.Status == AssetStatus.Out).OrderByDescending(a => a.CheckedOutAt).ToList();
+        _out = _checkedOut.Count;
+        _available = assets.Count(a => a.Status is AssetStatus.In or AssetStatus.Spare);
+        _attentionAssets = assets.Where(a => a.Status is AssetStatus.InRMA or AssetStatus.MIA or AssetStatus.Repair or AssetStatus.Investigating or AssetStatus.Holding).OrderByDescending(a => a.StatusChangedAt ?? a.CheckedOutAt ?? DateTimeOffset.UtcNow).ToList();
+
+        _holderLookup = assets.Where(a => !string.IsNullOrEmpty(a.HolderId)).GroupBy(a => a.HolderId!).ToDictionary(g => g.Key, g => g.First());
+
+        var printers = await PrinterService.GetAllAsync();
+        _totalP = printers.Count;
+        _downP = printers.Count(p => p.Status == PrinterStatus.Down);
+        _printerAttention = printers.Count(p => p.Status != PrinterStatus.Up);
+
+        var tickets = await TicketService.GetAllAsync();
+        _open = tickets.Count(t => t.Status != TicketStatus.Resolved);
+        var weekAgo = DateTimeOffset.UtcNow.AddDays(-7);
+        _resolved = tickets.Count(t => t.Status == TicketStatus.Resolved && t.UpdatedAt >= weekAgo);
+        _recent = tickets.OrderByDescending(t => t.UpdatedAt).Take(5).ToList();
+
+        _users = (await UserServiceX.GetAllAsync()).ToList();
+        
+        var takenLockers = _users.Count(u => !string.IsNullOrWhiteSpace(u.LockerNumber));
+        _availableLockers = 96 - takenLockers;
+        
+        var activeLoans = await AssetService.GetActiveLoansAsync();
+        _activeLoansCount = activeLoans.Count();
+    }
+
+    async Task OnSubmitted(Ticket t) => await Refresh();
+    void OpenTicket(Ticket t) => _viewing = t;
+
+    string HolderName(Asset a)
+    {
+        var u = _users.FirstOrDefault(u => u.Id == a.HolderId);
+        return u?.Name ?? "-";
+    }
+
+    string TimeOfDay()
+    {
+        var h = DateTime.Now.Hour;
+        return h < 12 ? "morning" : h < 18 ? "afternoon" : "evening";
+    }
+
+    bool _issueSpareOpen;
+    string? _issueSpareUserId;
+    
+    void OpenIssueSpare(string? holderId)
+    {
+        _issueSpareUserId = holderId;
+        _issueSpareOpen = true;
+    }
+}
+
+<LoanIssuer IsOpen="_issueSpareOpen" PreSelectedUserId="@_issueSpareUserId" OnIssued="Refresh" OnClose="() => _issueSpareOpen = false" />
