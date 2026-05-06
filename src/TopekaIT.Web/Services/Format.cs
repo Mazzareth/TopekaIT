@@ -4,6 +4,65 @@ namespace TopekaIT.Web.Services;
 
 public static class Format
 {
+    // ---- StatusFlags helpers ----
+
+    public static string SimpleState(StatusFlags f)
+    {
+        if (f.HasFlag(StatusFlags.Missing))            return "Missing";
+        if (f.HasFlag(StatusFlags.InRMA))              return "RMA";
+        if (f.HasFlag(StatusFlags.InRepair))           return "Repair";
+        if (f.HasFlag(StatusFlags.OnHold))             return "On Hold";
+        if (f.HasFlag(StatusFlags.UnderInvestigation)) return "Investigation";
+        if (f.HasFlag(StatusFlags.OnLoan))             return f.HasFlag(StatusFlags.DayLoan) ? "Day Loan" : "Loaned";
+        if (f.HasFlag(StatusFlags.WithHolder))         return "In Use";
+        if (f.HasFlag(StatusFlags.Spare))              return "Spare";
+        return "Available";
+    }
+
+    public static string SimpleStateCss(StatusFlags f)
+    {
+        if (f.HasFlag(StatusFlags.Missing))            return "state-pill state-missing";
+        if (f.HasFlag(StatusFlags.InRMA) || f.HasFlag(StatusFlags.InRepair) ||
+            f.HasFlag(StatusFlags.OnHold) || f.HasFlag(StatusFlags.UnderInvestigation))
+                                                       return "state-pill state-attention";
+        if (f.HasFlag(StatusFlags.OnLoan))             return "state-pill state-loaned";
+        if (f.HasFlag(StatusFlags.WithHolder))         return "state-pill state-inuse";
+        return "state-pill state-available";
+    }
+
+    public static bool IsAttentionFlags(StatusFlags f) =>
+        f.HasFlag(StatusFlags.InRMA) || f.HasFlag(StatusFlags.InRepair) ||
+        f.HasFlag(StatusFlags.Missing) || f.HasFlag(StatusFlags.OnHold) ||
+        f.HasFlag(StatusFlags.UnderInvestigation);
+
+    public static string FlagRowCss(StatusFlags f)
+    {
+        if (IsAttentionFlags(f)) return "warn";
+        if (f.HasFlag(StatusFlags.WithHolder) || f.HasFlag(StatusFlags.OnLoan)) return "info";
+        return "";
+    }
+
+    public static string CategoryLabel(AssetCategory c) => c switch
+    {
+        AssetCategory.PodTc77  => "TC77",
+        AssetCategory.Battery  => "Battery",
+        AssetCategory.Scanner  => "Scanner",
+        _                      => "SAE",
+    };
+
+    public static string ScannerKindLabel(ScannerKind? k) => k switch
+    {
+        ScannerKind.TwoD  => "2D",
+        ScannerKind.OneD  => "1D",
+        ScannerKind.Ring  => "Ring",
+        ScannerKind.Other => "Scanner",
+        _                 => "Scanner",
+    };
+
+    public static string HealthScoreCss(int score) =>
+        score >= 75 ? "hs-good" : score >= 50 ? "hs-warn" : "hs-bad";
+
+
     public static string RelTime(DateTimeOffset ts)
     {
         var diff = DateTimeOffset.UtcNow - ts;

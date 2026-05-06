@@ -1,17 +1,21 @@
-@page "/manager/assets"
 @page "/it/assets"
-@attribute [Authorize(Roles = "Manager,IT,SuperAdmin")]
+@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
 @using TopekaIT.Core.Services
+@using TopekaIT.Web.Services
 @inject AssetService AssetService
 @inject UserService UserService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
 
-<PageTitle>Asset console · Topeka IT</PageTitle>
+<PageTitle>Asset Console · Topeka IT</PageTitle>
 
-<div class="page">
+<div class="page" style="max-width:none;">
     <div class="page-head">
         <div>
-            <h1>Assets</h1>
-            <div class="page-sub">Capacity, holders, and exceptions for SAE devices, TC77s, and batteries.</div>
+            <h1>Asset Console</h1>
+            <div class="page-sub">Full asset inventory with raw flag control and inspector.</div>
         </div>
         <div class="page-actions">
             <button class="btn" @onclick="() => _createOpen = true">
@@ -23,239 +27,418 @@
         </div>
     </div>
 
-    <section class="capacity-panel">
-        <div class="capacity-head">
+    @* 6-KPI strip *@
+    <div class="asset-kpi-strip">
+        <div class="asset-kpi">
+            <div class="kpi-n">Total SAE</div>
+            <div class="kpi-v">@_assets.Count(a => a.Category == AssetCategory.SaeDevice)</div>
+        </div>
+        <div class="asset-kpi">
+            <div class="kpi-n">TC77 PODs</div>
+            <div class="kpi-v">@_assets.Count(a => a.Category == AssetCategory.PodTc77)</div>
+        </div>
+        <div class="asset-kpi kpi-info">
+            <div class="kpi-n">With Holder</div>
+            <div class="kpi-v">@_assets.Count(a => a.Flags.HasFlag(StatusFlags.WithHolder))</div>
+            <div class="kpi-sub">+ @_assets.Count(a => a.Flags.HasFlag(StatusFlags.OnLoan)) loaned</div>
+        </div>
+        <div class="asset-kpi @(_attentionCount > 0 ? "kpi-warn" : "")">
+            <div class="kpi-n">Attention</div>
+            <div class="kpi-v">@_attentionCount</div>
+            <div class="kpi-sub">RMA · Repair · Hold</div>
+        </div>
+        <div class="asset-kpi @(_assets.Any(a => a.Flags.HasFlag(StatusFlags.InRMA)) ? "kpi-down" : "")">
+            <div class="kpi-n">In RMA</div>
+            <div class="kpi-v">@_assets.Count(a => a.Flags.HasFlag(StatusFlags.InRMA))</div>
+        </div>
+        <div class="asset-kpi @(_assets.Any(a => a.Flags.HasFlag(StatusFlags.Missing)) ? "kpi-down" : "")">
+            <div class="kpi-n">Missing</div>
+            <div class="kpi-v">@_assets.Count(a => a.Flags.HasFlag(StatusFlags.Missing))</div>
+        </div>
+    </div>
+
+    @* 3-pane workspace *@
+    <div class="asset-workspace @(_selected != null ? "with-inspector" : "")">
+
+        @* Left: filter rail *@
+        <div class="asset-filter-rail">
+            @* Search *@
             <div>
-                <strong>Tracked capacity</strong>
-                <span>@_assets.Count rows · @BatteryQuantity() batteries counted by quantity</span>
+                <div class="filter-rail-label">Search</div>
+                <label class="field" style="width:100%;height:auto;padding:6px 8px;">
+                    <Icon Name="Search" Size="13" />
+                    <input @bind="_search" @bind:event="oninput" placeholder="Tag, S/N, holder…" style="width:100%;" />
+                </label>
             </div>
-            <div class="mono">@OutCount() out / @AvailableCount() available</div>
-        </div>
-        <div class="capacity-bar" title="Out / attention / repair / available">
-            <span class="out" style="width: @CapacityWidth(OutCount())%"></span>
-            <span class="attention" style="width: @CapacityWidth(AttentionCount())%"></span>
-            <span class="repair" style="width: @CapacityWidth(RepairCount())%"></span>
-            <span class="available" style="width: @CapacityWidth(AvailableCount())%"></span>
-        </div>
-        <div class="capacity-legend">
-            <span><i class="out"></i>@OutCount() out</span>
-            <span><i class="attention"></i>@AttentionCount() attention</span>
-            <span><i class="repair"></i>@RepairCount() repair/RMA</span>
-            <span><i class="available"></i>@AvailableCount() available</span>
-        </div>
-    </section>
 
-    <div class="tab-row" style="margin-top: 16px;">
-        <button class="tab @(CategoryFilter == "all" ? "active" : "")" @onclick='() => CategoryFilter = "all"'>All</button>
-        <button class="tab @(CategoryFilter == "sae" ? "active" : "")" @onclick='() => CategoryFilter = "sae"'>SAE Devices</button>
-        <button class="tab @(CategoryFilter == "tc77" ? "active" : "")" @onclick='() => CategoryFilter = "tc77"'>TC77 PODs</button>
-        <button class="tab @(CategoryFilter == "battery" ? "active" : "")" @onclick='() => CategoryFilter = "battery"'>Batteries</button>
-    </div>
+            @* Category *@
+            <div>
+                <div class="filter-rail-label">Category</div>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showSae" /> SAE Devices
+                </label>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showTc77" /> TC77 PODs
+                </label>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showScanner" /> Scanners
+                </label>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showBattery" /> Batteries
+                </label>
+            </div>
 
-    <div class="toolbar">
-        <div class="seg">
-            <button class="@(StatusFilter == "all" ? "active" : "")" @onclick='() => StatusFilter = "all"'>All <span class="count">@ByCategory().Count</span></button>
-            <button class="@(StatusFilter == "available" ? "active" : "")" @onclick='() => StatusFilter = "available"'>Available <span class="count">@ByCategory().Count(a => a.Status is AssetStatus.In or AssetStatus.Spare)</span></button>
-            <button class="@(StatusFilter == "out" ? "active" : "")" @onclick='() => StatusFilter = "out"'>Out / In Use <span class="count">@ByCategory().Count(a => a.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned)</span></button>
-            <button class="@(StatusFilter == "attention" ? "active" : "")" @onclick='() => StatusFilter = "attention"'>Attention <span class="count">@ByCategory().Count(a => IsAttention(a.Status))</span></button>
-        </div>
-        <label class="field">
-            <Icon Name="Search" Size="13" />
-            <input @bind="_search" @bind:event="oninput" placeholder="Search tag, serial, holder" />
-        </label>
-    </div>
+            @* State *@
+            <div>
+                <div class="filter-rail-label">State</div>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showAvailable" /> Available
+                </label>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showInUse" /> In Use / Loaned
+                </label>
+                <label class="filter-check">
+                    <input type="checkbox" @bind="_showAttention" /> Attention
+                </label>
+            </div>
 
-    <div class="card" style="margin-top: 2px;">
-        <div class="asset-table-head" style="grid-template-columns: 120px 105px 1fr 180px 110px 110px;">
-            <div>Tag</div>
-            <div>Type</div>
-            <div>Model / identifiers</div>
-            <div>Holder · since</div>
-            <div>Status</div>
-            <div style="text-align: right;">Action</div>
+            @* Quick counts *@
+            <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);">
+                <div class="filter-rail-label">Showing</div>
+                <div style="font-size:13px;font-variant-numeric:tabular-nums;">
+                    @Filtered().Count <span style="color:var(--text-faint)">/ @_assets.Count</span>
+                </div>
+            </div>
         </div>
-        @if (Filtered().Count == 0)
-        {
-            <EmptyState IconName="Watch" Title="Nothing to show">No assets match this view.</EmptyState>
-        }
-        else
-        {
-            @foreach (var a in Filtered())
+
+        @* Centre: table *@
+        <div class="asset-table-body">
+            <div class="asset-table-head" style="grid-template-columns:120px 70px 1fr 160px 110px 80px;">
+                <div>Tag / S/N</div>
+                <div>Cat</div>
+                <div>Model</div>
+                <div>Holder</div>
+                <div>State</div>
+                <div>Health</div>
+            </div>
+            @if (!Filtered().Any())
             {
-                var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                <div class="asset-row asset-signal-row @AssetRowClass(a)" style="grid-template-columns: 120px 105px 1fr 180px 110px 110px;" @onclick="() => Open(a, null)">
-                    <div class="mono">@PrimaryTag(a)</div>
-                    <div>@CategoryLabel(a.Category)</div>
-                    <div>
-                        <div>@ModelLine(a)</div>
-                        <span style="color: var(--text-faint); font-size: 11px;">@IdentifierLine(a)</span>
+                <EmptyState IconName="Watch" Title="No results">Adjust the filters to find assets.</EmptyState>
+            }
+            else
+            {
+                @foreach (var a in Filtered())
+                {
+                    var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
+                    var isSelected = _selected?.Id == a.Id;
+                    <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags) @(isSelected ? "active" : "")"
+                         style="grid-template-columns:120px 70px 1fr 160px 110px 80px;"
+                         @onclick="() => Select(a)">
+                        <div class="mono">@PrimaryTag(a)</div>
+                        <div style="color:var(--text-faint);font-size:12px;">@Format.CategoryLabel(a.Category)</div>
+                        <div>
+                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
+                            @if (!string.IsNullOrWhiteSpace(a.Serial) && a.Serial != PrimaryTag(a))
+                            {
+                                <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
+                            }
+                        </div>
+                        <div>
+                            <div>@(holder?.Name ?? "—")</div>
+                            @if (a.CheckedOutAt.HasValue)
+                            {
+                                <span style="color:var(--text-faint);font-size:11px;">@Format.RelTime(a.CheckedOutAt.Value)</span>
+                            }
+                        </div>
+                        <div>
+                            <span class="@Format.SimpleStateCss(a.Flags)">
+                                <span class="dot"></span>@Format.SimpleState(a.Flags)
+                            </span>
+                        </div>
+                        <div>
+                            <span class="mono @Format.HealthScoreCss(a.HealthScore)" style="font-size:13px;font-weight:600;">
+                                @a.HealthScore
+                            </span>
+                        </div>
                     </div>
-                    <div>
-                        <div>@HolderLine(a, holder)</div>
-                        <span style="color: var(--text-faint); font-size: 11px;">@SinceLine(a)</span>
+                }
+            }
+        </div>
+
+        @* Right: inspector *@
+        @if (_selected != null)
+        {
+            var sel = _selected;
+            var selHolder = _users.FirstOrDefault(u => u.Id == sel.HolderId);
+            var pairedSae = sel.PairedAssetId != null ? _assets.FirstOrDefault(a => a.Id == sel.PairedAssetId) : null;
+            <div class="asset-inspector">
+                <div class="inspector-head">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div class="inspector-id">@PrimaryTag(sel)</div>
+                        <span class="@Format.SimpleStateCss(sel.Flags)" style="font-size:10px;padding:1px 6px;">
+                            @Format.SimpleState(sel.Flags)
+                        </span>
                     </div>
-                    <div>@StatusText(a.Status)</div>
-                    <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;" @onclick:stopPropagation="true">
-                        @if (a.Category == AssetCategory.SaeDevice)
+                    <div class="inspector-meta">@Format.CategoryLabel(sel.Category) · @(string.IsNullOrWhiteSpace(sel.Model) ? "No model" : sel.Model)</div>
+                    <button class="iconbtn" style="position:absolute;top:10px;right:10px;" @onclick="() => _selected = null">
+                        <Icon Name="X" Size="14" />
+                    </button>
+                </div>
+
+                @* Health *@
+                <div class="inspector-section">
+                    <div class="inspector-label">Health Score</div>
+                    <div class="health-ring-row">
+                        <div class="health-score-num @Format.HealthScoreCss(sel.HealthScore)">@sel.HealthScore</div>
+                        <div style="font-size:12px;color:var(--text-dim);">/ 100</div>
+                    </div>
+                </div>
+
+                @* Status flags — raw toggle UI *@
+                <div class="inspector-section">
+                    <div class="inspector-label">Status Flags</div>
+                    <div>
+                        @foreach (var (flag, label, dotClass) in FlagDefs())
                         {
-                            <button class="btn btn-sm btn-primary" @onclick='() => Open(a, "assign")'>Assign</button>
-                        }
-                        else if (a.Category != AssetCategory.Battery && a.Status == AssetStatus.In)
-                        {
-                            <button class="btn btn-sm btn-primary" @onclick='() => Open(a, "out")'><Icon Name="ArrowOut" Size="12" /> Check out</button>
-                        }
-                        else if (a.Status == AssetStatus.Out)
-                        {
-                            <button class="btn btn-sm" @onclick='() => Open(a, "in")'><Icon Name="ArrowIn" Size="12" /> Check in</button>
-                        }
-                        else
-                        {
-                            <button class="btn btn-sm" @onclick='() => Open(a, null)'>Details</button>
+                            var isSet = sel.Flags.HasFlag(flag);
+                            <div class="flag-toggle-row" @onclick="() => ToggleFlag(sel, flag)">
+                                <span class="flag-dot @(isSet ? dotClass : "")"></span>
+                                <span class="flag-label" style="@(isSet ? "color:var(--text);font-weight:500;" : "")">@label</span>
+                                @if (isSet)
+                                {
+                                    <Icon Name="Check" Size="12" Style="color:var(--up);" />
+                                }
+                            </div>
                         }
                     </div>
                 </div>
-            }
+
+                @* Active issue tags *@
+                @if (sel.IssueTags.Any(t => t.ResolvedAt == null))
+                {
+                    <div class="inspector-section">
+                        <div class="inspector-label">Open Issues</div>
+                        <div style="display:flex;flex-wrap:wrap;">
+                            @foreach (var tag in sel.IssueTags.Where(t => t.ResolvedAt == null))
+                            {
+                                var sev = tag.Definition?.Severity ?? IssueSeverity.Info;
+                                var chipClass = sev switch
+                                {
+                                    IssueSeverity.Critical => "issue-tag-chip sev-critical",
+                                    IssueSeverity.Warning  => "issue-tag-chip sev-warning",
+                                    _                      => "issue-tag-chip sev-info",
+                                };
+                                <span class="@chipClass">@(tag.Definition?.Label ?? tag.DefinitionCode)</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @* Holder / assignment *@
+                <div class="inspector-section">
+                    <div class="inspector-label">Holder</div>
+                    @if (selHolder != null)
+                    {
+                        <div style="font-weight:500;">@selHolder.Name</div>
+                        @if (sel.CheckedOutAt.HasValue)
+                        {
+                            <div style="font-size:12px;color:var(--text-dim);">Since @Format.RelTime(sel.CheckedOutAt.Value)</div>
+                        }
+                    }
+                    else
+                    {
+                        <div style="color:var(--text-faint);font-size:12px;">Unassigned</div>
+                    }
+                </div>
+
+                @* Scanner pairing (for SAE) *@
+                @if (sel.Category == AssetCategory.SaeDevice)
+                {
+                    var paired = _assets.FirstOrDefault(a => a.PairedAssetId == sel.Id && a.Category == AssetCategory.Scanner);
+                    <div class="inspector-section">
+                        <div class="inspector-label">Paired Scanner</div>
+                        @if (paired != null)
+                        {
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <Icon Name="Scanner" Size="13" />
+                                <span class="mono" style="font-size:12px;">@PrimaryTag(paired)</span>
+                                <span style="color:var(--text-faint);font-size:11px;">@Format.ScannerKindLabel(paired.ScannerKind)</span>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="color:var(--text-faint);font-size:12px;">No scanner paired</div>
+                        }
+                    </div>
+                }
+
+                @* Notes *@
+                @if (!string.IsNullOrWhiteSpace(sel.Notes))
+                {
+                    <div class="inspector-section">
+                        <div class="inspector-label">Notes</div>
+                        <div style="font-size:12px;color:var(--text-dim);white-space:pre-wrap;">@sel.Notes</div>
+                    </div>
+                }
+
+                @* Quick actions *@
+                <div class="inspector-section" style="display:flex;flex-direction:column;gap:6px;">
+                    <div class="inspector-label">Actions</div>
+                    <button class="btn btn-sm" @onclick="() => OpenDetail(sel, null)">
+                        <Icon Name="Eye" Size="12" /> Full detail
+                    </button>
+                    @if (!sel.Flags.HasFlag(StatusFlags.WithHolder))
+                    {
+                        <button class="btn btn-sm btn-primary" @onclick='() => OpenDetail(sel, "assign")'>
+                            <Icon Name="User" Size="12" /> Assign holder
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm" @onclick='() => OpenDetail(sel, "in")'>
+                            <Icon Name="ArrowIn" Size="12" /> Check in
+                        </button>
+                    }
+                </div>
+            </div>
         }
     </div>
 </div>
 
 <ScanModal Open="_scanOpen" OnClose="() => _scanOpen = false" OnMatch="OnScanMatch" />
-<AssetDetail Asset="_viewing" Action="@_action" Users="_users" OnClose="() => _viewing = null" OnChanged="Load" />
+<AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="CloseDetail" OnChanged="Load" />
 <AssetEditor Open="_createOpen" OnClose="() => _createOpen = false" OnChanged="Load" />
 
 @code {
-    string CategoryFilter = "all";
-    string StatusFilter = "all";
-    string _search = "";
     bool _scanOpen;
     bool _createOpen;
+    bool _showSae      = true;
+    bool _showTc77     = true;
+    bool _showScanner  = true;
+    bool _showBattery  = false;  // batteries less relevant in IT device view
+    bool _showAvailable = true;
+    bool _showInUse     = true;
+    bool _showAttention = true;
+    string _search = "";
+
+    Asset? _selected;
     Asset? _viewing;
-    string? _action;
+    string? _viewAction;
+
     List<Asset> _assets = new();
-    List<User> _users = new();
+    List<User>  _users  = new();
+
+    int _attentionCount => _assets.Count(a => Format.IsAttentionFlags(a.Flags));
 
     protected override async Task OnInitializedAsync() => await Load();
 
     async Task Load()
     {
-        _assets = (await AssetService.GetAllAsync()).OrderBy(a => a.Tag).ToList();
-        _users = (await UserService.GetAllAsync()).ToList();
+        _assets = (await AssetService.GetAllAsync()).ToList();
+        _users  = (await UserService.GetAllAsync()).ToList();
+
+        if (_selected != null)
+            _selected = _assets.FirstOrDefault(a => a.Id == _selected.Id);
     }
-
-    int BatteryQuantity() => _assets.Where(a => a.Category == AssetCategory.Battery).Sum(a => Math.Max(a.Quantity, 0));
-    int AvailableCount() => _assets.Count(a => a.Status is AssetStatus.In or AssetStatus.Spare);
-    int OutCount() => _assets.Count(a => a.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned);
-    int AttentionCount() => _assets.Count(a => IsAttention(a.Status));
-    int RepairCount() => _assets.Count(a => a.Status is AssetStatus.Repair or AssetStatus.InRMA);
-    int CapacityWidth(int value) => _assets.Count == 0 ? 0 : Math.Max(value == 0 ? 0 : 4, (int)Math.Round(value * 100.0 / _assets.Count));
-
-    List<Asset> ByCategory() => CategoryFilter switch
-    {
-        "sae" => _assets.Where(a => a.Category == AssetCategory.SaeDevice).ToList(),
-        "tc77" => _assets.Where(a => a.Category == AssetCategory.PodTc77).ToList(),
-        "battery" => _assets.Where(a => a.Category == AssetCategory.Battery).ToList(),
-        _ => _assets,
-    };
 
     List<Asset> Filtered()
     {
-        IEnumerable<Asset> query = StatusFilter switch
-        {
-            "available" => ByCategory().Where(a => a.Status is AssetStatus.In or AssetStatus.Spare),
-            "out" => ByCategory().Where(a => a.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned),
-            "attention" => ByCategory().Where(a => IsAttention(a.Status)),
-            _ => ByCategory(),
-        };
+        IEnumerable<Asset> q = _assets;
 
+        // Category filter
+        q = q.Where(a => a.Category switch
+        {
+            AssetCategory.SaeDevice => _showSae,
+            AssetCategory.PodTc77   => _showTc77,
+            AssetCategory.Scanner   => _showScanner,
+            AssetCategory.Battery   => _showBattery,
+            _                       => true,
+        });
+
+        // State filter
+        q = q.Where(a =>
+        {
+            var isAttention  = Format.IsAttentionFlags(a.Flags);
+            var isInUse      = a.Flags.HasFlag(StatusFlags.WithHolder) || a.Flags.HasFlag(StatusFlags.OnLoan);
+            var isAvailable  = !isInUse && !isAttention;
+            return (isAttention && _showAttention) || (isInUse && _showInUse) || (isAvailable && _showAvailable);
+        });
+
+        // Search
         if (!string.IsNullOrWhiteSpace(_search))
         {
-            query = query.Where(MatchesSearch);
+            var s = _search.Trim();
+            q = q.Where(a =>
+            {
+                var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
+                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+            });
         }
 
-        return query
-            .OrderByDescending(a => IsAttention(a.Status))
-            .ThenBy(a => a.Category)
+        return q
+            .OrderByDescending(a => Format.IsAttentionFlags(a.Flags))
+            .ThenByDescending(a => a.Flags.HasFlag(StatusFlags.WithHolder))
             .ThenBy(a => PrimaryTag(a))
             .ToList();
     }
 
-    bool MatchesSearch(Asset asset)
+    void Select(Asset a)
     {
-        var value = _search.Trim();
-        var holder = _users.FirstOrDefault(u => u.Id == asset.HolderId);
-        return Contains(asset.Tag, value)
-            || Contains(asset.Serial, value)
-            || Contains(asset.Imei, value)
-            || Contains(asset.Model, value)
-            || Contains(holder?.Name, value);
+        _selected = _selected?.Id == a.Id ? null : a;
     }
 
-    static bool Contains(string? source, string value)
-        => !string.IsNullOrWhiteSpace(source) && source.Contains(value, StringComparison.OrdinalIgnoreCase);
-
-    void Open(Asset a, string? action)
+    void OpenDetail(Asset a, string? action)
     {
-        _viewing = a;
-        _action = action;
+        _viewing    = a;
+        _viewAction = action;
+    }
+
+    void CloseDetail()
+    {
+        _viewing    = null;
+        _viewAction = null;
     }
 
     async Task OnScanMatch(Asset a)
     {
         _scanOpen = false;
-        _viewing = a;
-        _action = a.Category == AssetCategory.Battery ? null : a.Status == AssetStatus.Out ? "in" : "out";
+        _selected = a;
         await Task.CompletedTask;
     }
 
-    static string CategoryLabel(AssetCategory category) => category switch
+    async Task ToggleFlag(Asset a, StatusFlags flag)
     {
-        AssetCategory.PodTc77 => "TC77",
-        AssetCategory.Battery => "Battery",
-        _ => "SAE",
-    };
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actorId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "it";
+        var actorName = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "IT";
 
-    static string PrimaryTag(Asset a)
-        => !string.IsNullOrWhiteSpace(a.Tag) ? a.Tag : !string.IsNullOrWhiteSpace(a.Serial) ? a.Serial : a.Id;
+        var toSet   = a.Flags.HasFlag(flag) ? StatusFlags.None : flag;
+        var toClear = a.Flags.HasFlag(flag) ? flag : StatusFlags.None;
 
-    static string ModelLine(Asset a)
-        => a.Category == AssetCategory.Battery && a.Quantity > 0
-            ? $"{(string.IsNullOrWhiteSpace(a.Model) ? "Battery" : a.Model)} x{a.Quantity}"
-            : string.IsNullOrWhiteSpace(a.Model) ? CategoryLabel(a.Category) : a.Model;
-
-    static string IdentifierLine(Asset a)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(a.Serial)) parts.Add($"S/N {a.Serial}");
-        if (!string.IsNullOrWhiteSpace(a.Imei)) parts.Add($"IMEI {a.Imei}");
-        return string.Join(" · ", parts);
+        await AssetService.SetFlagsAsync(a.Id, toSet, toClear, actorName);
+        await Load();
+        State.PushToast($"Flag updated", "");
     }
 
-    static string HolderLine(Asset asset, User? holder)
-        => asset.Category == AssetCategory.Battery
-            ? "Inventory"
-            : holder?.Name ?? "Unassigned";
+    static IEnumerable<(StatusFlags Flag, string Label, string DotClass)> FlagDefs() =>
+    [
+        (StatusFlags.InLocker,           "In Locker",           "f-active"),
+        (StatusFlags.InCC,               "In CC / IT",          "f-active"),
+        (StatusFlags.WithHolder,         "With Holder",         "f-info"),
+        (StatusFlags.OnLoan,             "On Loan",             "f-info"),
+        (StatusFlags.Spare,              "Spare Pool",          "f-active"),
+        (StatusFlags.InRepair,           "In Repair",           "f-warn"),
+        (StatusFlags.InRMA,              "In RMA",              "f-down"),
+        (StatusFlags.Missing,            "Missing",             "f-down"),
+        (StatusFlags.OnHold,             "On Hold",             "f-warn"),
+        (StatusFlags.DayLoan,            "Day Loan",            "f-info"),
+        (StatusFlags.UnderInvestigation, "Under Investigation", "f-warn"),
+    ];
 
-    static string SinceLine(Asset asset)
-        => asset.CheckedOutAt.HasValue ? Format.RelTime(asset.CheckedOutAt.Value) : "not checked out";
+    static string PrimaryTag(Asset a) =>
+        !string.IsNullOrWhiteSpace(a.Tag) ? a.Tag :
+        !string.IsNullOrWhiteSpace(a.Serial) ? a.Serial : a.Id;
 
-    static bool IsAttention(AssetStatus status)
-        => status is AssetStatus.Repair or AssetStatus.InRMA or AssetStatus.Investigating or AssetStatus.Holding or AssetStatus.MIA;
-
-    static string AssetRowClass(Asset asset)
-        => IsAttention(asset.Status) ? "warn" : asset.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned ? "info" : "";
-
-    static string StatusText(AssetStatus status) => status switch
-    {
-        AssetStatus.In => "",
-        AssetStatus.Spare => "",
-        AssetStatus.Out => "Out",
-        AssetStatus.InUse => "In Use",
-        AssetStatus.Loaned => "Loaned",
-        AssetStatus.Repair => "Repair",
-        AssetStatus.InRMA => "RMA",
-        AssetStatus.Investigating => "Investigating",
-        AssetStatus.Holding => "Holding",
-        AssetStatus.MIA => "MIA",
-        _ => status.ToString(),
-    };
+    static bool Contains(string? s, string v) =>
+        !string.IsNullOrWhiteSpace(s) && s.Contains(v, StringComparison.OrdinalIgnoreCase);
 }

@@ -79,5 +79,47 @@ public static class DataSeeder
             });
             await db.SaveChangesAsync(ct);
         }
+
+        await SeedIssueTagDefinitionsAsync(db, ct);
+    }
+
+    private static async Task SeedIssueTagDefinitionsAsync(TopekaDbContext db, CancellationToken ct)
+    {
+        if (await db.IssueTagDefinitions.AnyAsync(ct)) return;
+
+        var definitions = new[]
+        {
+            // SAE / general device issues
+            new IssueTagDefinition { Code = "RightPortBroken",       Label = "Right port broken",        Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice",          SortOrder = 10 },
+            new IssueTagDefinition { Code = "LeftPortBroken",        Label = "Left port broken",         Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice",          SortOrder = 11 },
+            new IssueTagDefinition { Code = "ScreenCracked",         Label = "Screen cracked",           Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 20 },
+            new IssueTagDefinition { Code = "ScreenBlackout",        Label = "Screen blackout",          Severity = IssueSeverity.Critical, ApplicableCategories = null,                  SortOrder = 21, Description = "Screen goes fully black during use" },
+            new IssueTagDefinition { Code = "RebootLoop",            Label = "Reboot loop",              Severity = IssueSeverity.Critical, ApplicableCategories = null,                  SortOrder = 30, Description = "Device continuously restarts" },
+            new IssueTagDefinition { Code = "WontCharge",            Label = "Won't charge",             Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice,PodTc77",   SortOrder = 40 },
+            new IssueTagDefinition { Code = "ChargesDraining",       Label = "Battery drains quickly",   Severity = IssueSeverity.Warning,  ApplicableCategories = "SaeDevice,PodTc77",   SortOrder = 41 },
+            new IssueTagDefinition { Code = "WiFiDropping",          Label = "Wi-Fi dropping",           Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 50, Description = "Intermittent loss of wireless connection" },
+            new IssueTagDefinition { Code = "PhysicalDamage",        Label = "Physical damage",          Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 60, Description = "Visible cracks, dents, or broken housing" },
+            new IssueTagDefinition { Code = "ButtonStuck",           Label = "Button stuck / unresponsive", Severity = IssueSeverity.Warning, ApplicableCategories = null,              SortOrder = 70 },
+            new IssueTagDefinition { Code = "SlowPerformance",       Label = "Slow / freezing",          Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 80 },
+            new IssueTagDefinition { Code = "AppCrashing",           Label = "App crashing",             Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 90 },
+
+            // Scanner-specific
+            new IssueTagDefinition { Code = "TriggerStuck",          Label = "Trigger stuck",            Severity = IssueSeverity.Critical, ApplicableCategories = "Scanner",             SortOrder = 110 },
+            new IssueTagDefinition { Code = "ScannerNotReading",     Label = "Scanner not reading",      Severity = IssueSeverity.Critical, ApplicableCategories = "Scanner",             SortOrder = 111 },
+            new IssueTagDefinition { Code = "ScannerMisreading",     Label = "Frequent scan errors",     Severity = IssueSeverity.Warning,  ApplicableCategories = "Scanner",             SortOrder = 112 },
+            new IssueTagDefinition { Code = "PairingIssue",          Label = "Pairing issue",            Severity = IssueSeverity.Warning,  ApplicableCategories = "Scanner",             SortOrder = 113, Description = "Won't stay connected to SAE device" },
+
+            // Battery / container
+            new IssueTagDefinition { Code = "BatteryWontHoldCharge", Label = "Won't hold charge",        Severity = IssueSeverity.Critical, ApplicableCategories = "Battery",             SortOrder = 120 },
+            new IssueTagDefinition { Code = "BatterySwollen",        Label = "Swollen battery",          Severity = IssueSeverity.Critical, ApplicableCategories = "Battery",             SortOrder = 121, Description = "Physically swollen — remove from service immediately" },
+
+            // General
+            new IssueTagDefinition { Code = "LostAccessory",         Label = "Missing accessory",        Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 200, Description = "Missing strap, case, or other accessory" },
+            new IssueTagDefinition { Code = "NeedsClean",            Label = "Needs cleaning",           Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 210 },
+            new IssueTagDefinition { Code = "Other",                 Label = "Other issue",              Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 999 },
+        };
+
+        db.IssueTagDefinitions.AddRange(definitions);
+        await db.SaveChangesAsync(ct);
     }
 }

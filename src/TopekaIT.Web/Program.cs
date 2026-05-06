@@ -61,6 +61,7 @@ public class Program
         builder.Services.AddScoped<PrinterModelService>();
         builder.Services.AddScoped<AssetService>();
         builder.Services.AddScoped<AssetModelService>();
+        builder.Services.AddScoped<LockerService>();
         builder.Services.AddScoped<TicketService>();
         builder.Services.AddScoped<ActivityService>();
         builder.Services.AddScoped<PingHistoryService>();

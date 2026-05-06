@@ -6,12 +6,14 @@
 
 @code {
     [Parameter] public bool Open { get; set; }
+    [Parameter] public string? PrefillSerial { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     Asset _draft = new();
     string? _error;
     bool _saving;
+    bool _wasOpen;
     List<AssetModel> _models = new();
     bool _addingNewModel;
     string _newModelName = "";
@@ -33,19 +35,22 @@
 
     protected override void OnParametersSet()
     {
-        if (Open && _draft.Id == "")
+        if (Open && !_wasOpen)
         {
             _draft = new Asset
             {
-                Id = Guid.NewGuid().ToString("N").Substring(0, 16),
+                Id       = Guid.NewGuid().ToString("N")[..16],
                 Category = AssetCategory.SaeDevice,
-                Type = "sae",
+                Type     = "sae",
                 Quantity = 1,
-                Status = AssetStatus.In
+                Status   = AssetStatus.In,
+                Tag      = PrefillSerial ?? "",
+                Serial   = PrefillSerial ?? "",
             };
-            _error = null;
+            _error  = null;
             _saving = false;
         }
+        _wasOpen = Open;
     }
 
     async Task Save()
@@ -88,7 +93,8 @@
 
     void Close()
     {
-        _draft = new();
+        _draft    = new();
+        _wasOpen  = false;
         OnClose.InvokeAsync();
     }
 
@@ -127,12 +133,14 @@
     {
         if (Enum.TryParse<AssetCategory>(e.Value?.ToString(), out var category))
         {
-            _draft.Category = category;
-            _draft.Status = category switch
+            _draft.Category    = category;
+            _draft.ScannerKind = category == AssetCategory.Scanner ? ScannerKind.TwoD : null;
+            _draft.Status      = category switch
             {
-                AssetCategory.PodTc77 => AssetStatus.InUse,
-                AssetCategory.Battery => AssetStatus.Spare,
-                _ => AssetStatus.In,
+                AssetCategory.PodTc77  => AssetStatus.InUse,
+                AssetCategory.Battery  => AssetStatus.Spare,
+                AssetCategory.Scanner  => AssetStatus.In,
+                _                      => AssetStatus.In,
             };
             _draft.Quantity = category == AssetCategory.Battery ? Math.Max(_draft.Quantity, 1) : 1;
         }
@@ -151,7 +159,8 @@
                 <label>Type</label>
                 <select value="@_draft.Category" @onchange="CategoryChanged">
                     <option value="@AssetCategory.SaeDevice">SAE device</option>
-                    <option value="@AssetCategory.PodTc77">POD TC77</option>
+                    <option value="@AssetCategory.PodTc77">TC77 POD</option>
+                    <option value="@AssetCategory.Scanner">Scanner</option>
                     <option value="@AssetCategory.Battery">Battery</option>
                 </select>
             </div>
@@ -183,6 +192,30 @@
                             <option value="__add_new__">Add new model…</option>
                         </select>
                     }
+                </div>
+            }
+            else if (_draft.Category == AssetCategory.Scanner)
+            {
+                <div class="form-row">
+                    <label>Serial Number</label>
+                    <input @bind="_draft.Serial" placeholder="e.g. S23A00123" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Asset Tag <span class="label-note">optional</span></label>
+                    <input @bind="_draft.Tag" placeholder="e.g. SCN-0042" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>Scanner kind</label>
+                    <select @bind="_draft.ScannerKind">
+                        <option value="@ScannerKind.TwoD">2D (area imager)</option>
+                        <option value="@ScannerKind.OneD">1D (laser)</option>
+                        <option value="@ScannerKind.Ring">Ring scanner</option>
+                        <option value="@ScannerKind.Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>Model <span class="label-note">optional</span></label>
+                    <input @bind="_draft.Model" placeholder="e.g. RS5100, RS6100" autocomplete="off" />
                 </div>
             }
             else

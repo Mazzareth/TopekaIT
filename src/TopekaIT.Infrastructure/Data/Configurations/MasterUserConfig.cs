@@ -19,10 +19,12 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
         b.Property(x => x.Role).HasConversion<string>().HasMaxLength(32);
         b.Property(x => x.Avatar).HasMaxLength(8);
         b.Property(x => x.Position).HasMaxLength(64);
+        // Locker fields kept for backward-compat read; data migrated to Locker entity
         b.Property(x => x.LockerNumber).HasMaxLength(16);
         b.Property(x => x.LockerCombo).HasMaxLength(32);
         b.Property(x => x.LockSerialNumber).HasMaxLength(64);
         b.Property(x => x.DivisionId).HasMaxLength(64);
         b.Property(x => x.LastActiveAt).HasColumnType("datetimeoffset");
+        b.Property(x => x.OnLOAReason).HasMaxLength(512);
     }
 }

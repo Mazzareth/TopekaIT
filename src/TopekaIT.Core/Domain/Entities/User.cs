@@ -20,4 +20,9 @@ public class User
     public bool Audit { get; set; }
     public string? DivisionId { get; set; }
     public DateTimeOffset? LastActiveAt { get; set; }
+
+    // Leave of Absence
+    public bool IsOnLOA { get; set; }
+    public DateTimeOffset? OnLOASince { get; set; }
+    public string? OnLOAReason { get; set; }
 }

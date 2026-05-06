@@ -9,6 +9,14 @@ public class AssetService
     private readonly IAssetRepository _repo;
     private readonly ActivityService _activity;
 
+    // Flags that are mutually exclusive as "primary location/state"
+    private static readonly StatusFlags[] PrimaryFlags =
+    [
+        StatusFlags.InLocker, StatusFlags.InCC, StatusFlags.WithHolder,
+        StatusFlags.OnLoan, StatusFlags.InRepair, StatusFlags.InRMA,
+        StatusFlags.Missing, StatusFlags.OnHold, StatusFlags.Spare,
+    ];
+
     public AssetService(IAssetRepository repo, ActivityService activity)
     {
         _repo = repo;
@@ -47,6 +55,9 @@ public class AssetService
         a.HolderId = holderId;
         a.CheckedOutAt = DateTimeOffset.UtcNow;
         a.DueAt = DateTimeOffset.UtcNow.AddDays(dueDays);
+
+        SetPrimaryFlag(a, StatusFlags.WithHolder);
+
         await _repo.UpdateAsync(a, ct);
         return a;
     }
@@ -55,14 +66,16 @@ public class AssetService
     {
         var a = await _repo.GetByIdAsync(assetId, ct);
         if (a == null) return null;
-        
+
         var newStatus = condition == "repair" ? AssetStatus.Repair : AssetStatus.In;
         if (a.Status != newStatus)
         {
             a.StatusChangedAt = DateTimeOffset.UtcNow;
         }
         a.Status = newStatus;
-        
+
+        SetPrimaryFlag(a, condition == "repair" ? StatusFlags.InRepair : StatusFlags.InCC);
+
         a.HolderId = null;
         a.CheckedOutAt = null;
         a.DueAt = null;
@@ -79,16 +92,40 @@ public class AssetService
     {
         var a = await _repo.GetByIdAsync(assetId, ct);
         if (a == null) return;
-        
+
         var oldStatus = a.Status;
         if (oldStatus != newStatus)
         {
             a.Status = newStatus;
             a.StatusChangedAt = DateTimeOffset.UtcNow;
             await _repo.UpdateAsync(a, ct);
-            
+
             await _activity.PushAsync("status_change", $"{a.Tag ?? a.Serial} status changed to {newStatus} by {actorName}", ct);
         }
+    }
+
+    /// <summary>Set a StatusFlags primary flag, clearing conflicting primary flags first.</summary>
+    public async Task SetFlagsAsync(string assetId, StatusFlags flagsToSet, StatusFlags flagsToClear, string actorName, CancellationToken ct = default)
+    {
+        var a = await _repo.GetByIdAsync(assetId, ct);
+        if (a == null) return;
+
+        // If setting a primary flag, clear all other primaries
+        foreach (var primary in PrimaryFlags)
+        {
+            if (flagsToSet.HasFlag(primary))
+            {
+                foreach (var other in PrimaryFlags)
+                    if (other != primary) a.Flags &= ~other;
+            }
+        }
+
+        a.Flags |= flagsToSet;
+        a.Flags &= ~flagsToClear;
+        a.StatusChangedAt = DateTimeOffset.UtcNow;
+
+        await _repo.UpdateAsync(a, ct);
+        await _activity.PushAsync("flags_change", $"{a.Tag ?? a.Serial} flags updated by {actorName}", ct);
     }
 
     public async Task AssignHolderAsync(string assetId, string userId, string actorName, CancellationToken ct = default)
@@ -101,16 +138,30 @@ public class AssetService
         if (!isUnassign)
         {
             a.CheckedOutAt = DateTimeOffset.UtcNow;
+            SetPrimaryFlag(a, StatusFlags.WithHolder);
         }
         else
         {
             a.CheckedOutAt = null;
+            SetPrimaryFlag(a, StatusFlags.InCC);
         }
-        
+
         await _repo.UpdateAsync(a, ct);
-        
+
         var msg = isUnassign ? "unassigned" : $"assigned to {userId}";
         await _activity.PushAsync("assignment", $"{a.Tag ?? a.Serial} {msg} by {actorName}", ct);
+    }
+
+    public async Task PairScannerAsync(string scannerAssetId, string? saeAssetId, string actorName, CancellationToken ct = default)
+    {
+        var scanner = await _repo.GetByIdAsync(scannerAssetId, ct);
+        if (scanner == null || scanner.Category != AssetCategory.Scanner) return;
+
+        scanner.PairedAssetId = string.IsNullOrWhiteSpace(saeAssetId) ? null : saeAssetId;
+        await _repo.UpdateAsync(scanner, ct);
+
+        var pairedTo = saeAssetId ?? "none";
+        await _activity.PushAsync("scanner_pair", $"Scanner {scanner.Serial} paired to SAE {pairedTo} by {actorName}", ct);
     }
 
     public async Task IssueSpareAsync(string spareAssetId, string borrowerId, string reason, LoanDuration duration, string comments, string actorName, CancellationToken ct = default)
@@ -120,7 +171,11 @@ public class AssetService
 
         if (a.Status != AssetStatus.Loaned) a.StatusChangedAt = DateTimeOffset.UtcNow;
         a.Status = AssetStatus.Loaned;
-        
+
+        var newFlags = StatusFlags.OnLoan;
+        if (duration == LoanDuration.DayLoan) newFlags |= StatusFlags.DayLoan;
+        SetPrimaryFlag(a, newFlags);
+
         var loan = new LoanRecord
         {
             AssetId = a.Id,
@@ -151,16 +206,49 @@ public class AssetService
         {
             recordToUpdate.DateReturned = DateTimeOffset.UtcNow;
         }
-        
+
         if (a.Status != AssetStatus.Spare) a.StatusChangedAt = DateTimeOffset.UtcNow;
         a.Status = AssetStatus.Spare;
-        
+        SetPrimaryFlag(a, StatusFlags.Spare);
+        a.Flags &= ~StatusFlags.DayLoan;
+
         await _repo.UpdateAsync(a, ct);
         await _activity.PushAsync("loan_in", $"Spare {a.Tag ?? a.Serial} returned by {loan.BorrowerId} (via {actorName})", ct);
     }
 
     public Task<IEnumerable<Asset>> GetSparePoolAsync(CancellationToken ct = default) => _repo.GetSparePoolAsync(ct);
     public Task<IEnumerable<LoanRecord>> GetActiveLoansAsync(CancellationToken ct = default) => _repo.GetActiveLoansAsync(ct);
+
+    /// <summary>
+    /// Derives a simple three-state label from StatusFlags for the Manager view.
+    /// Returns: "Available", "In Use", "Loaned", or "Attention".
+    /// </summary>
+    public static string GetSimpleState(StatusFlags flags)
+    {
+        if (flags.HasFlag(StatusFlags.InRMA) ||
+            flags.HasFlag(StatusFlags.InRepair) ||
+            flags.HasFlag(StatusFlags.Missing) ||
+            flags.HasFlag(StatusFlags.OnHold) ||
+            flags.HasFlag(StatusFlags.UnderInvestigation))
+            return "Attention";
+
+        if (flags.HasFlag(StatusFlags.OnLoan))
+            return "Loaned";
+
+        if (flags.HasFlag(StatusFlags.WithHolder))
+            return "In Use";
+
+        return "Available";
+    }
+
+    // -- helpers --
+
+    private static void SetPrimaryFlag(Asset a, StatusFlags newPrimary)
+    {
+        foreach (var primary in PrimaryFlags)
+            a.Flags &= ~primary;
+        a.Flags |= newPrimary;
+    }
 
     private static void Normalize(Asset asset)
     {
@@ -175,26 +263,24 @@ public class AssetService
         {
             AssetCategory.Battery => "battery",
             AssetCategory.PodTc77 => "pod-tc77",
-            _ => "sae",
+            AssetCategory.Scanner  => "scanner",
+            _                      => "sae",
         };
     }
 
     private static void Validate(Asset asset)
     {
         if (asset.Category == AssetCategory.PodTc77 && string.IsNullOrWhiteSpace(asset.Serial))
-        {
             throw new InvalidOperationException("TC77 POD devices require a serial number.");
-        }
+
+        if (asset.Category == AssetCategory.Scanner && string.IsNullOrWhiteSpace(asset.Serial))
+            throw new InvalidOperationException("Scanners require a serial number.");
 
         if (asset.Category == AssetCategory.Battery && asset.Quantity < 0)
-        {
             throw new InvalidOperationException("Battery quantity cannot be negative.");
-        }
 
         if (asset.Category != AssetCategory.Battery && string.IsNullOrWhiteSpace(asset.Tag) && string.IsNullOrWhiteSpace(asset.Serial))
-        {
             throw new InvalidOperationException("Tracked devices need an asset tag or serial number.");
-        }
     }
 
     private static bool ScanEquals(string? value, string normalizedScan)

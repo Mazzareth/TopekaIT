@@ -19,6 +19,17 @@ public class TopekaDbContext : DbContext
     public DbSet<PrinterEvent> PrinterEvents => Set<PrinterEvent>();
     public DbSet<PrinterAlertState> PrinterAlertStates => Set<PrinterAlertState>();
 
+    // Asset redesign entities
+    public DbSet<Locker> Lockers => Set<Locker>();
+    public DbSet<LockerOccupant> LockerOccupants => Set<LockerOccupant>();
+    public DbSet<IssueTagDefinition> IssueTagDefinitions => Set<IssueTagDefinition>();
+    public DbSet<AssetIssueTag> AssetIssueTags => Set<AssetIssueTag>();
+    public DbSet<BatteryContainer> BatteryContainers => Set<BatteryContainer>();
+    public DbSet<AuditSession> AuditSessions => Set<AuditSession>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<SavedView> SavedViews => Set<SavedView>();
+    public DbSet<StatusFlagHistory> StatusFlagHistory => Set<StatusFlagHistory>();
+
     protected override void OnModelCreating(ModelBuilder mb)
     {
         mb.ApplyConfigurationsFromAssembly(

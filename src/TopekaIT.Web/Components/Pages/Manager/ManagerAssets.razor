@@ -1,0 +1,620 @@
+@page "/manager/assets"
+@attribute [Authorize(Roles = "Manager,SuperAdmin")]
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@using TopekaIT.Web.Services
+@inject AssetService AssetService
+@inject LockerService LockerService
+@inject UserService UserService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Assets · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>Assets</h1>
+            <div class="page-sub">Lockers, SAE devices, scanners, and batteries.</div>
+        </div>
+        <div class="page-actions">
+            <button class="btn" @onclick="() => _createOpen = true">
+                <Icon Name="Plus" Size="14" /> Add Asset
+            </button>
+            <button class="btn btn-primary" @onclick="FocusScanDock">
+                <Icon Name="Scan" Size="14" /> Scan
+            </button>
+        </div>
+    </div>
+
+    @* Scan dock — universal S/N lookup *@
+    <div class="scan-dock">
+        <span class="scan-dock-label">Scan / S/N</span>
+        <input @ref="_scanInput" @bind="_scanValue" @bind:event="oninput"
+               @onkeydown="OnScanKey"
+               placeholder="Scan barcode or type serial number…"
+               autocomplete="off" spellcheck="false" />
+        @if (_scanResult != null)
+        {
+            <span class="scan-result">
+                Found: <strong>@PrimaryTag(_scanResult)</strong> — @Format.CategoryLabel(_scanResult.Category)
+            </span>
+            <button class="btn btn-sm btn-primary" @onclick="OpenScanResult">Open</button>
+            <button class="btn btn-sm btn-ghost" @onclick="ClearScan"><Icon Name="X" Size="12" /></button>
+        }
+        else if (_scanNotFound)
+        {
+            <span class="scan-result" style="color:var(--warn)">Not found — <button class="btn btn-sm" @onclick="OpenRegister">Register</button></span>
+        }
+    </div>
+
+    @* Tab row *@
+    <div class="tab-row">
+        <button class="tab @(_tab == "lockers" ? "active" : "")" @onclick='() => _tab = "lockers"'>
+            <Icon Name="Locker" Size="13" /> Lockers
+        </button>
+        <button class="tab @(_tab == "sae" ? "active" : "")" @onclick='() => _tab = "sae"'>SAE Devices</button>
+        <button class="tab @(_tab == "tc77" ? "active" : "")" @onclick='() => _tab = "tc77"'>TC77 PODs</button>
+        <button class="tab @(_tab == "scanner" ? "active" : "")" @onclick='() => _tab = "scanner"'>
+            <Icon Name="Scanner" Size="13" /> Scanners
+        </button>
+        <button class="tab @(_tab == "battery" ? "active" : "")" @onclick='() => _tab = "battery"'>Batteries</button>
+    </div>
+
+    @if (_tab == "lockers")
+    {
+        <div class="toolbar" style="padding-bottom: 8px;">
+            <div class="seg">
+                <button class="@(_lockerFilter == "all" ? "active" : "")" @onclick='() => _lockerFilter = "all"'>
+                    All <span class="count">@_lockers.Count</span>
+                </button>
+                <button class="@(_lockerFilter == "attention" ? "active" : "")" @onclick='() => _lockerFilter = "attention"'>
+                    Attention <span class="count">@_lockers.Count(l => LockerHasAttention(l))</span>
+                </button>
+                <button class="@(_lockerFilter == "empty" ? "active" : "")" @onclick='() => _lockerFilter = "empty"'>
+                    Empty <span class="count">@_lockers.Count(l => ActiveOccupant(l) == null)</span>
+                </button>
+            </div>
+            <div class="spacer"></div>
+            <label class="field">
+                <Icon Name="Search" Size="13" />
+                <input @bind="_lockerSearch" @bind:event="oninput" placeholder="Search locker or person" />
+            </label>
+        </div>
+
+        @if (!FilteredLockers().Any())
+        {
+            <EmptyState IconName="Locker" Title="No lockers">
+                @if (_lockers.Count == 0)
+                {
+                    <span>No lockers have been set up yet.</span>
+                }
+                else
+                {
+                    <span>No lockers match the current filter.</span>
+                }
+            </EmptyState>
+        }
+        else
+        {
+            <div class="locker-grid">
+                @foreach (var locker in FilteredLockers())
+                {
+                    var occupantUser = ActiveOccupantUser(locker);
+                    var lockerAssets = AssetsInLocker(locker.Id);
+                    var cardClass = LockerCardClass(lockerAssets);
+                    var isHighlighted = _highlightedLockerId == locker.Id;
+                    <div class="locker-card @cardClass @(isHighlighted ? "highlighted" : "")"
+                         @onclick="() => _highlightedLockerId = null">
+                        <div class="locker-head">
+                            <span class="locker-num">#@locker.Number</span>
+                            @if (!string.IsNullOrWhiteSpace(locker.Section))
+                            {
+                                <span class="locker-section-tag">@locker.Section</span>
+                            }
+                            @if (locker.IsShared)
+                            {
+                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Shared</span>
+                            }
+                        </div>
+
+                        <div class="locker-body">
+                            @* Occupant *@
+                            <div class="locker-occupant">
+                                @if (occupantUser != null)
+                                {
+                                    <span class="locker-occupant-name">@occupantUser.Name</span>
+                                    @if (occupantUser.IsOnLOA)
+                                    {
+                                        <span class="loa-badge">LOA</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="locker-unassigned">Unassigned</span>
+                                }
+                            </div>
+
+                            @* Devices in this locker *@
+                            <div class="locker-device-list">
+                                @{
+                                    var saes     = lockerAssets.Where(a => a.Category == AssetCategory.SaeDevice).ToList();
+                                    var scanners = lockerAssets.Where(a => a.Category == AssetCategory.Scanner).ToList();
+                                    var others   = lockerAssets.Where(a => a.Category is not AssetCategory.SaeDevice and not AssetCategory.Scanner).ToList();
+                                }
+                                @foreach (var sae in saes)
+                                {
+                                    var paired = scanners.FirstOrDefault(s => s.PairedAssetId == sae.Id);
+                                    <div class="locker-device-row">
+                                        <span class="device-tag">@PrimaryTag(sae)</span>
+                                        <span class="@Format.SimpleStateCss(sae.Flags)">
+                                            <span class="dot"></span>@Format.SimpleState(sae.Flags)
+                                        </span>
+                                        @if (paired != null)
+                                        {
+                                            <span class="scanner-chip">
+                                                <Icon Name="Scanner" Size="10" />@Format.ScannerKindLabel(paired.ScannerKind)
+                                            </span>
+                                        }
+                                        <button class="btn btn-sm btn-ghost" style="padding:2px 5px;" @onclick="() => Open(sae, null)">
+                                            <Icon Name="Eye" Size="12" />
+                                        </button>
+                                    </div>
+                                }
+                                @foreach (var other in others)
+                                {
+                                    <div class="locker-device-row">
+                                        <span class="device-tag">@Format.CategoryLabel(other.Category) @PrimaryTag(other)</span>
+                                        <span class="@Format.SimpleStateCss(other.Flags)">
+                                            <span class="dot"></span>@Format.SimpleState(other.Flags)
+                                        </span>
+                                    </div>
+                                }
+                                @if (!lockerAssets.Any())
+                                {
+                                    <div class="locker-empty-devices">No devices assigned</div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="locker-foot">
+                            <span class="locker-audit-ts">
+                                @if (locker.LastAuditedAt.HasValue)
+                                {
+                                    <span>Audited @Format.RelTime(locker.LastAuditedAt.Value)</span>
+                                }
+                                else
+                                {
+                                    <span>Never audited</span>
+                                }
+                            </span>
+                            <button class="btn btn-sm btn-ghost" @onclick="() => OpenLocker(locker)">
+                                <Icon Name="Edit" Size="12" /> Edit
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        @* Table view for non-locker tabs *@
+        <div class="toolbar">
+            <div class="seg">
+                <button class="@(_statusFilter == "all" ? "active" : "")" @onclick='() => _statusFilter = "all"'>
+                    All <span class="count">@TabAssets().Count</span>
+                </button>
+                <button class="@(_statusFilter == "available" ? "active" : "")" @onclick='() => _statusFilter = "available"'>
+                    Available <span class="count">@TabAssets().Count(a => Format.SimpleState(a.Flags) == "Available" || Format.SimpleState(a.Flags) == "Spare")</span>
+                </button>
+                <button class="@(_statusFilter == "inuse" ? "active" : "")" @onclick='() => _statusFilter = "inuse"'>
+                    In Use <span class="count">@TabAssets().Count(a => a.Flags.HasFlag(StatusFlags.WithHolder) || a.Flags.HasFlag(StatusFlags.OnLoan))</span>
+                </button>
+                <button class="@(_statusFilter == "attention" ? "active" : "")" @onclick='() => _statusFilter = "attention"'>
+                    Attention <span class="count">@TabAssets().Count(a => Format.IsAttentionFlags(a.Flags))</span>
+                </button>
+            </div>
+            <div class="spacer"></div>
+            <label class="field">
+                <Icon Name="Search" Size="13" />
+                <input @bind="_tableSearch" @bind:event="oninput" placeholder="Search tag, serial, holder" />
+            </label>
+        </div>
+
+        <div class="card" style="margin-top:2px;">
+            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 160px 110px 100px;">
+                <div>Tag / S/N</div>
+                <div>Type</div>
+                <div>Model</div>
+                <div>Holder</div>
+                <div>State</div>
+                <div style="text-align:right;">Action</div>
+            </div>
+            @{
+                var filtered = FilteredTabAssets();
+            }
+            @if (filtered.Count == 0)
+            {
+                <EmptyState IconName="Watch" Title="Nothing here">No assets match this view.</EmptyState>
+            }
+            else
+            {
+                @foreach (var a in filtered)
+                {
+                    var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
+                    <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags)"
+                         style="grid-template-columns:120px 90px 1fr 160px 110px 100px;"
+                         @onclick="() => Open(a, null)">
+                        <div class="mono">@PrimaryTag(a)</div>
+                        <div>@Format.CategoryLabel(a.Category)</div>
+                        <div>
+                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
+                            @if (!string.IsNullOrWhiteSpace(a.Serial))
+                            {
+                                <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
+                            }
+                        </div>
+                        <div>
+                            <div>@(holder?.Name ?? "Unassigned")</div>
+                            @if (a.CheckedOutAt.HasValue)
+                            {
+                                <span style="color:var(--text-faint);font-size:11px;">@Format.RelTime(a.CheckedOutAt.Value)</span>
+                            }
+                        </div>
+                        <div>
+                            <span class="@Format.SimpleStateCss(a.Flags)">
+                                <span class="dot"></span>@Format.SimpleState(a.Flags)
+                            </span>
+                        </div>
+                        <div style="text-align:right;display:flex;gap:5px;justify-content:flex-end;" @onclick:stopPropagation="true">
+                            @if (a.Category == AssetCategory.Scanner)
+                            {
+                                <button class="btn btn-sm" @onclick="() => OpenPairScanner(a)">
+                                    <Icon Name="Link" Size="12" /> Pair
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm" @onclick="() => Open(a, null)">
+                                    <Icon Name="Eye" Size="12" />
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    }
+</div>
+
+@* Modals *@
+<AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="() => _viewing = null" OnChanged="Load" />
+<AssetEditor Open="_createOpen" PrefillSerial="_prefillSerial" OnClose="CloseEditor" OnChanged="Load" />
+<ScanModal Open="_camScanOpen" OnClose="() => _camScanOpen = false" OnMatch="OnCamScanMatch" />
+
+@* Scanner pairing modal *@
+@if (_pairingScanner != null)
+{
+    <div class="modal-backdrop" @onclick="() => _pairingScanner = null">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <Icon Name="Scanner" Size="16" />
+                <span class="modal-title">Pair Scanner</span>
+                <button class="iconbtn" @onclick="() => _pairingScanner = null"><Icon Name="X" Size="16" /></button>
+            </div>
+            <div class="modal-body">
+                <p style="color:var(--text-dim);font-size:13px;margin:0 0 14px;">
+                    Scanner <strong class="mono">@PrimaryTag(_pairingScanner)</strong> — scan or type the SAE device S/N to pair it.
+                </p>
+                <label class="form-row">
+                    <span>SAE serial / tag</span>
+                    <input @bind="_pairTarget" @bind:event="oninput" placeholder="Scan SAE barcode or type serial…"
+                           autocomplete="off" spellcheck="false" />
+                </label>
+                @if (_pairError != null)
+                {
+                    <div class="form-error">@_pairError</div>
+                }
+            </div>
+            <div class="modal-foot">
+                <button class="btn" @onclick="() => _pairingScanner = null">Cancel</button>
+                <button class="btn btn-primary" @onclick="CommitPair" disabled="@string.IsNullOrWhiteSpace(_pairTarget)">
+                    Pair Scanner
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@* Locker editor modal *@
+@if (_editingLocker != null)
+{
+    <div class="modal-backdrop" @onclick="() => _editingLocker = null">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <Icon Name="Locker" Size="16" />
+                <span class="modal-title">Locker #@_editingLocker.Number</span>
+                <button class="iconbtn" @onclick="() => _editingLocker = null"><Icon Name="X" Size="16" /></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>Combo</label>
+                        <input @bind="_editingLocker.LockCombo" placeholder="e.g. 12-34-56" />
+                    </div>
+                    <div class="form-row">
+                        <label>Lock serial</label>
+                        <input @bind="_editingLocker.LockSerial" placeholder="Serial number" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Notes</label>
+                    <textarea @bind="_editingLocker.Notes" rows="2"></textarea>
+                </div>
+                <div class="form-row">
+                    <label class="checkbox">
+                        <input type="checkbox" @bind="_editingLocker.IsShared" />
+                        Shared locker (multiple occupants)
+                    </label>
+                </div>
+            </div>
+            <div class="modal-foot">
+                <button class="btn" @onclick="() => _editingLocker = null">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveLocker">Save</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    string _tab = "lockers";
+    string _lockerFilter = "all";
+    string _statusFilter = "all";
+    string _lockerSearch = "";
+    string _tableSearch = "";
+    string _scanValue = "";
+    bool _scanNotFound;
+    bool _camScanOpen;
+    bool _createOpen;
+
+    Asset? _viewing;
+    string? _viewAction;
+    Asset? _pairingScanner;
+    string _pairTarget = "";
+    string? _pairError;
+    Locker? _editingLocker;
+    Asset? _scanResult;
+    string? _highlightedLockerId;
+    string _prefillSerial = "";
+
+    List<Asset>  _assets  = new();
+    List<Locker> _lockers = new();
+    List<User>   _users   = new();
+
+    ElementReference _scanInput;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    async Task Load()
+    {
+        var assetsTask  = AssetService.GetAllAsync();
+        var lockersTask = LockerService.GetAllAsync();
+        var usersTask   = UserService.GetAllAsync();
+        await Task.WhenAll(assetsTask, lockersTask, usersTask);
+        _assets  = (await assetsTask).OrderBy(a => a.Tag).ToList();
+        _lockers = (await lockersTask).Where(l => l.IsActive).OrderBy(l => l.Number).ToList();
+        _users   = (await usersTask).ToList();
+    }
+
+    async Task FocusScanDock()
+    {
+        try { await _scanInput.FocusAsync(); } catch { /* JS not yet ready */ }
+    }
+
+    async Task OnScanKey(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        var val = _scanValue.Trim();
+        if (string.IsNullOrWhiteSpace(val)) return;
+
+        // Locker QR format: "LCK-{number}" or "locker:{number}"
+        var lockerNum = ExtractLockerNumber(val);
+        if (lockerNum != null)
+        {
+            var matched = _lockers.FirstOrDefault(l =>
+                l.Number.Equals(lockerNum, StringComparison.OrdinalIgnoreCase));
+            if (matched != null)
+            {
+                _tab              = "lockers";
+                _lockerFilter     = "all";
+                _lockerSearch     = "";
+                _highlightedLockerId = matched.Id;
+                ClearScan();
+                return;
+            }
+        }
+
+        _scanResult   = await AssetService.FindByScanAsync(val);
+        _scanNotFound = _scanResult == null;
+        StateHasChanged();
+    }
+
+    static string? ExtractLockerNumber(string scan)
+    {
+        if (scan.StartsWith("LCK-", StringComparison.OrdinalIgnoreCase))
+            return scan[4..].Trim();
+        if (scan.StartsWith("locker:", StringComparison.OrdinalIgnoreCase))
+            return scan[7..].Trim();
+        return null;
+    }
+
+    void OpenScanResult()
+    {
+        if (_scanResult == null) return;
+        Open(_scanResult, null);
+        ClearScan();
+    }
+
+    void ClearScan()
+    {
+        _scanResult          = null;
+        _scanValue           = "";
+        _scanNotFound        = false;
+        _highlightedLockerId = null;
+        _prefillSerial       = "";
+    }
+
+    void OpenRegister()
+    {
+        _prefillSerial = _scanValue;
+        _createOpen    = true;
+        _scanNotFound  = false;
+    }
+
+    void CloseEditor()
+    {
+        _createOpen    = false;
+        _prefillSerial = "";
+    }
+
+    async Task OnCamScanMatch(Asset a)
+    {
+        _camScanOpen = false;
+        await Task.Yield();
+        Open(a, null);
+    }
+
+    void Open(Asset a, string? action)
+    {
+        _viewing    = a;
+        _viewAction = action;
+    }
+
+    void OpenLocker(Locker locker) => _editingLocker = locker;
+
+    async Task SaveLocker()
+    {
+        if (_editingLocker == null) return;
+        await LockerService.UpdateAsync(_editingLocker);
+        State.PushToast("Locker updated", "up");
+        _editingLocker = null;
+        await Load();
+    }
+
+    void OpenPairScanner(Asset scanner)
+    {
+        _pairingScanner = scanner;
+        _pairTarget     = "";
+        _pairError      = null;
+    }
+
+    async Task CommitPair()
+    {
+        if (_pairingScanner == null) return;
+        _pairError = null;
+
+        var sae = await AssetService.FindByScanAsync(_pairTarget);
+        if (sae == null || sae.Category != AssetCategory.SaeDevice)
+        {
+            _pairError = "SAE device not found for that serial / tag.";
+            return;
+        }
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actorId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        await AssetService.PairScannerAsync(_pairingScanner.Id, sae.Id, actorId);
+        State.PushToast($"Scanner paired to {PrimaryTag(sae)}", "up");
+        _pairingScanner = null;
+        await Load();
+    }
+
+    // -- Locker helpers --
+
+    List<Locker> FilteredLockers()
+    {
+        IEnumerable<Locker> q = _lockers;
+        if (_lockerFilter == "attention") q = q.Where(LockerHasAttention);
+        if (_lockerFilter == "empty")     q = q.Where(l => ActiveOccupant(l) == null);
+        if (!string.IsNullOrWhiteSpace(_lockerSearch))
+        {
+            var s = _lockerSearch.Trim();
+            q = q.Where(l =>
+                l.Number.Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                (l.Section ?? "").Contains(s, StringComparison.OrdinalIgnoreCase) ||
+                ActiveOccupantUser(l)?.Name.Contains(s, StringComparison.OrdinalIgnoreCase) == true);
+        }
+        return q.ToList();
+    }
+
+    List<Asset> AssetsInLocker(string lockerId) =>
+        _assets.Where(a => a.LockerId == lockerId).ToList();
+
+    LockerOccupant? ActiveOccupant(Locker locker) =>
+        locker.Occupants.FirstOrDefault(o => o.UnassignedAt == null);
+
+    User? ActiveOccupantUser(Locker locker)
+    {
+        var occupant = ActiveOccupant(locker);
+        if (occupant == null) return null;
+        return _users.FirstOrDefault(u => u.Id == occupant.UserId);
+    }
+
+    bool LockerHasAttention(Locker locker) =>
+        AssetsInLocker(locker.Id).Any(a => Format.IsAttentionFlags(a.Flags));
+
+    string LockerCardClass(List<Asset> assets)
+    {
+        if (assets.Any(a => a.Flags.HasFlag(StatusFlags.Missing))) return "has-missing";
+        if (assets.Any(a => Format.IsAttentionFlags(a.Flags)))     return "has-attention";
+        if (assets.Any(a => a.Flags.HasFlag(StatusFlags.WithHolder) || a.Flags.HasFlag(StatusFlags.OnLoan))) return "has-inuse";
+        if (assets.Any())                                          return "all-available";
+        return "";
+    }
+
+    // -- Table helpers --
+
+    List<Asset> TabAssets() => _tab switch
+    {
+        "sae"     => _assets.Where(a => a.Category == AssetCategory.SaeDevice).ToList(),
+        "tc77"    => _assets.Where(a => a.Category == AssetCategory.PodTc77).ToList(),
+        "scanner" => _assets.Where(a => a.Category == AssetCategory.Scanner).ToList(),
+        "battery" => _assets.Where(a => a.Category == AssetCategory.Battery).ToList(),
+        _         => _assets,
+    };
+
+    List<Asset> FilteredTabAssets()
+    {
+        IEnumerable<Asset> q = _statusFilter switch
+        {
+            "available" => TabAssets().Where(a => !a.Flags.HasFlag(StatusFlags.WithHolder) && !a.Flags.HasFlag(StatusFlags.OnLoan) && !Format.IsAttentionFlags(a.Flags)),
+            "inuse"     => TabAssets().Where(a => a.Flags.HasFlag(StatusFlags.WithHolder) || a.Flags.HasFlag(StatusFlags.OnLoan)),
+            "attention" => TabAssets().Where(a => Format.IsAttentionFlags(a.Flags)),
+            _           => TabAssets(),
+        };
+
+        if (!string.IsNullOrWhiteSpace(_tableSearch))
+        {
+            var s = _tableSearch.Trim();
+            q = q.Where(a =>
+            {
+                var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
+                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+            });
+        }
+
+        return q
+            .OrderByDescending(a => Format.IsAttentionFlags(a.Flags))
+            .ThenBy(a => PrimaryTag(a))
+            .ToList();
+    }
+
+    static string PrimaryTag(Asset a) =>
+        !string.IsNullOrWhiteSpace(a.Tag) ? a.Tag :
+        !string.IsNullOrWhiteSpace(a.Serial) ? a.Serial : a.Id;
+
+    static bool Contains(string? s, string v) =>
+        !string.IsNullOrWhiteSpace(s) && s.Contains(v, StringComparison.OrdinalIgnoreCase);
+}
