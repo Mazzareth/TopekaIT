@@ -34,8 +34,11 @@ public class TopekaDbContext : DbContext
     {
         mb.ApplyConfigurationsFromAssembly(
             typeof(TopekaDbContext).Assembly,
-            type => type != typeof(Configurations.MasterUserConfig)
-                && type != typeof(Configurations.DivisionConfig));
+                type => type != typeof(Configurations.MasterUserConfig)
+                && type != typeof(Configurations.DivisionConfig)
+                && type != typeof(Configurations.UserPermissionOverrideConfig)
+                && type != typeof(Configurations.LantronixDeviceConfig)
+                && type != typeof(Configurations.LantronixPollSampleConfig));
         base.OnModelCreating(mb);
     }
 }

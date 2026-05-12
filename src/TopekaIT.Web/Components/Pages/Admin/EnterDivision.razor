@@ -1,5 +1,5 @@
 @page "/admin/enter/{DivisionId}"
-@attribute [Authorize(Roles = "SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.AdminEnterDivisions)]
 @inject NavigationManager Nav
 
 <PageTitle>Entering Division · Topeka IT</PageTitle>

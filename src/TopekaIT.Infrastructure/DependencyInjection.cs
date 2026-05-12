@@ -16,7 +16,9 @@ public static class DependencyInjection
                 sql => sql.CommandTimeout(120)));
 
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserPermissionOverrideRepository, UserPermissionOverrideRepository>();
         services.AddScoped<IDivisionRepository, DivisionRepository>();
+        services.AddScoped<ILantronixDeviceRepository, LantronixDeviceRepository>();
 
         return services;
     }

@@ -14,6 +14,7 @@ public static class DataSeeder
     private const string SuperAdminUsername = "bwilliams";
     private const string AdminPassword = "temp_password";
     private const string TopekaDivisionId = "6I-A";
+    private const string FuelControllerDeviceId = "lan-6i-fuel";
 
     public static async Task SeedMasterAsync(MasterDbContext db, string topekaConnectionString, CancellationToken ct = default)
     {
@@ -27,7 +28,7 @@ public static class DataSeeder
                 Id = SuperAdminId,
                 Name = "Brad Williams",
                 Username = SuperAdminUsername,
-                Role = UserRole.SuperAdmin,
+                Role = AccessTier.SuperAdmin,
                 Avatar = "BW",
                 PasswordHash = hash,
                 PasswordSalt = salt,
@@ -53,6 +54,81 @@ public static class DataSeeder
                 CreatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync(ct);
+        }
+
+        var fuelController = await db.LantronixDevices.FirstOrDefaultAsync(d => d.Id == FuelControllerDeviceId, ct);
+        if (fuelController == null)
+        {
+            db.LantronixDevices.Add(new LantronixDevice
+            {
+                Id = FuelControllerDeviceId,
+                Name = "6I Fuel Controller",
+                DivisionId = TopekaDivisionId,
+                Hostname = "tankcontroller6i.main.usfood.com",
+                IpAddress = "10.36.152.222",
+                Port = 10001,
+                PollCommand = LantronixDeviceDefaults.InventoryCommand,
+                DeviceType = "Lantronix XPort",
+                SerialSettings = "RS232, 9600, 8, None, 1, Hardware",
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            var changed = false;
+            if (string.IsNullOrWhiteSpace(fuelController.Name))
+            {
+                fuelController.Name = "6I Fuel Controller";
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.DivisionId))
+            {
+                fuelController.DivisionId = TopekaDivisionId;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.Hostname))
+            {
+                fuelController.Hostname = "tankcontroller6i.main.usfood.com";
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.IpAddress))
+            {
+                fuelController.IpAddress = "10.36.152.222";
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.PollCommand))
+            {
+                fuelController.PollCommand = LantronixDeviceDefaults.InventoryCommand;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.DeviceType))
+            {
+                fuelController.DeviceType = "Lantronix XPort";
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(fuelController.SerialSettings))
+            {
+                fuelController.SerialSettings = "RS232, 9600, 8, None, 1, Hardware";
+                changed = true;
+            }
+
+            if (fuelController.Port <= 0)
+            {
+                fuelController.Port = 10001;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await db.SaveChangesAsync(ct);
+            }
         }
     }
 
@@ -122,4 +198,5 @@ public static class DataSeeder
         db.IssueTagDefinitions.AddRange(definitions);
         await db.SaveChangesAsync(ct);
     }
+
 }

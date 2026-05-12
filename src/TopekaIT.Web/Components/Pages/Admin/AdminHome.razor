@@ -1,9 +1,11 @@
 @page "/admin"
-@attribute [Authorize(Roles = "SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.AdminView)]
 @inject DivisionService DivisionService
 @inject PrinterEventService PrinterEvents
 @inject NavigationManager Nav
 @inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>Admin · Topeka IT</PageTitle>
 
@@ -13,7 +15,7 @@
             <h1>Admin</h1>
             <div class="page-sub">@ActiveTabTitle</div>
         </div>
-        @if (_activeTab == AdminTab.Divisions)
+        @if (_activeTab == AdminTab.Divisions && _canCreateDivisions)
         {
             <button class="btn btn-accent" @onclick='() => Nav.NavigateTo("/admin/divisions/new")'>
                 <Icon Name="Plus" Size="14" /> New Division
@@ -29,7 +31,7 @@
     @if (_activeTab == AdminTab.Reports)
     {
         <div class="card" style="padding: 16px; margin-bottom: 16px;">
-            <div style="display: grid; grid-template-columns: minmax(180px, 260px) minmax(180px, 260px) auto; gap: 12px; align-items: end;">
+            <div class="admin-report-controls">
                 <label>
                     <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Report</div>
                     <select class="inline-input" @bind="_selectedReportId">
@@ -49,20 +51,249 @@
                         }
                     </select>
                 </label>
-                <button class="btn btn-accent" @onclick="RunSelectedReport" disabled="@_reportLoading">
+                <button class="btn btn-accent" @onclick="RunSelectedReport" disabled="@(_reportLoading || !_canRunReports)">
                     <Icon Name="RefreshCw" Size="14" /> Run
                 </button>
             </div>
+            <div class="report-caption">@SelectedReport.Description</div>
         </div>
 
-        @if (SelectedReport?.Id == PrinterErrorsReportId)
+        @if (SelectedReport.Id == ActiveIncidentsReportId)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-title">@SelectedReport.Name</span>
+                    @if (_activeIncidents.Count > 0)
+                    {
+                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_activeIncidents.Count, "incident", "incidents")</span>
+                    }
+                </div>
+
+                @if (_reportLoading)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        Loading report.
+                    </div>
+                }
+                else if (_activeIncidents.Count == 0)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        No active printer incidents match this report.
+                    </div>
+                }
+                else
+                {
+                    <div class="asset-table-head printer-incident-head">
+                        <div>Incident</div>
+                        <div>Division</div>
+                        <div>Printer</div>
+                        <div>Latest</div>
+                        <div>Events</div>
+                        <div style="text-align: right;">Actions</div>
+                    </div>
+                    @foreach (var incident in _activeIncidents)
+                    {
+                        <div class="asset-row printer-incident-row">
+                            <div>
+                                <div class="printer-alert-title">
+                                    <span>@DisplayIncidentTitle(incident)</span>
+                                    <Pill Kind="@SeverityPill(incident.Severity)">@incident.Severity</Pill>
+                                </div>
+                                <div class="printer-alert-message">@DisplayIncidentMessage(incident)</div>
+                                <div class="printer-report-meta">
+                                    <span>@incident.AlertCategory</span>
+                                    @if (incident.TrainingLevel.HasValue)
+                                    {
+                                        <span>Training @incident.TrainingLevel.Value</span>
+                                    }
+                                    <span>First @FormatLocal(incident.FirstSeenAt)</span>
+                                </div>
+                            </div>
+                            <div>@incident.DivisionName</div>
+                            <div>
+                                <div style="font-weight: 600;">@incident.PrinterName</div>
+                                <div class="printer-alert-message">@incident.Department · @incident.IpAddress</div>
+                            </div>
+                            <div class="mono" style="font-size: 12px;">@FormatLocal(incident.LastSeenAt)</div>
+                            <div>@incident.OccurrenceCount</div>
+                            <div style="text-align: right;">
+                                <button class="btn btn-sm" @onclick="() => ViewIncident(incident)">
+                                    <Icon Name="Eye" Size="12" /> View
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else if (SelectedReport.Id == AuthMonitoringReportId)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-title">@SelectedReport.Name</span>
+                    @if (_authIssueRows.Count > 0)
+                    {
+                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_authIssueRows.Count, "burst", "bursts")</span>
+                    }
+                </div>
+
+                @if (_reportLoading)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        Loading report.
+                    </div>
+                }
+                else if (_authIssueRows.Count == 0)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        No SNMP authentication or monitoring issues match this report.
+                    </div>
+                }
+                else
+                {
+                    <div class="asset-table-head printer-auth-head">
+                        <div>Issue</div>
+                        <div>Window</div>
+                        <div>Scope</div>
+                        <div>Events</div>
+                        <div>Latest</div>
+                        <div style="text-align: right;">Actions</div>
+                    </div>
+                    @foreach (var issue in _authIssueRows)
+                    {
+                        <div class="asset-row printer-auth-row">
+                            <div>
+                                <div style="font-weight: 600;">@issue.Summary</div>
+                                <div class="printer-alert-message">@issue.PrinterSummary</div>
+                            </div>
+                            <div class="mono" style="font-size: 12px;">@FormatWindow(issue.FirstSeenAt, issue.LastSeenAt)</div>
+                            <div>
+                                <div>@CountLabel(issue.PrinterCount, "printer", "printers")</div>
+                                <div class="printer-alert-message">@issue.DivisionSummary</div>
+                            </div>
+                            <div>@issue.EventCount</div>
+                            <div class="mono" style="font-size: 12px;">@FormatLocal(issue.LastSeenAt)</div>
+                            <div style="text-align: right;">
+                                <button class="btn btn-sm" @onclick="() => ToggleGroup(issue.GroupKey)">
+                                    <Icon Name="@(_expandedGroups.Contains(issue.GroupKey) ? "ChevronLeft" : "ChevronRight")" Size="12" />
+                                </button>
+                            </div>
+                        </div>
+                        @if (_expandedGroups.Contains(issue.GroupKey))
+                        {
+                            <div class="printer-alert-occurrences">
+                                @foreach (var ev in issue.Events.Take(25))
+                                {
+                                    <details class="printer-alert-occurrence">
+                                        <summary>
+                                            <span style="font-weight: 600;">@ev.PrinterName</span>
+                                            <span>@FormatLocal(ev.Timestamp)</span>
+                                            <span>@ev.DivisionName</span>
+                                            <span>@ev.IpAddress</span>
+                                            <button class="btn btn-sm" @onclick:stopPropagation @onclick="() => ViewEvent(ev)">
+                                                <Icon Name="Eye" Size="12" /> View
+                                            </button>
+                                        </summary>
+                                        <div class="raw-message">@ev.RawMessage</div>
+                                    </details>
+                                }
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        }
+        else if (SelectedReport.Id == FaultTrendsReportId)
+        {
+            <div class="card">
+                <div class="card-head">
+                    <span class="card-title">@SelectedReport.Name</span>
+                    @if (_faultTrendRows.Count > 0)
+                    {
+                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_faultTrendRows.Count, "component", "components")</span>
+                    }
+                </div>
+
+                @if (_reportLoading)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        Loading report.
+                    </div>
+                }
+                else if (_faultTrendRows.Count == 0)
+                {
+                    <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                        No printer fault trends match this report.
+                    </div>
+                }
+                else
+                {
+                    <div class="asset-table-head printer-trend-head">
+                        <div>Component</div>
+                        <div>Top alert</div>
+                        <div>Scope</div>
+                        <div>Events</div>
+                        <div>Latest</div>
+                        <div style="text-align: right;">Actions</div>
+                    </div>
+                    @foreach (var trend in _faultTrendRows)
+                    {
+                        <div class="asset-row printer-trend-row">
+                            <div>
+                                <div class="printer-alert-title">
+                                    <span>@trend.Category</span>
+                                    <Pill Kind="@SeverityPill(trend.Severity)">@trend.Severity</Pill>
+                                </div>
+                                <div class="printer-alert-message">@trend.TopPrintersSummary</div>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600;">@trend.TopAlert</div>
+                                <div class="printer-alert-message">First @FormatLocal(trend.FirstSeenAt)</div>
+                            </div>
+                            <div>
+                                <div>@CountLabel(trend.PrinterCount, "printer", "printers")</div>
+                                <div class="printer-alert-message">@CountLabel(trend.DivisionCount, "division", "divisions")</div>
+                            </div>
+                            <div>@trend.EventCount</div>
+                            <div class="mono" style="font-size: 12px;">@FormatLocal(trend.LastSeenAt)</div>
+                            <div style="text-align: right;">
+                                <button class="btn btn-sm" @onclick="() => ToggleGroup(trend.GroupKey)">
+                                    <Icon Name="@(_expandedGroups.Contains(trend.GroupKey) ? "ChevronLeft" : "ChevronRight")" Size="12" />
+                                </button>
+                            </div>
+                        </div>
+                        @if (_expandedGroups.Contains(trend.GroupKey))
+                        {
+                            <div class="printer-alert-occurrences">
+                                @foreach (var ev in trend.Events.Take(25))
+                                {
+                                    <details class="printer-alert-occurrence">
+                                        <summary>
+                                            <span style="font-weight: 600;">@ev.PrinterName</span>
+                                            <span>@FormatLocal(ev.Timestamp)</span>
+                                            <span>@ev.DivisionName</span>
+                                            <span>@ev.Department</span>
+                                            <button class="btn btn-sm" @onclick:stopPropagation @onclick="() => ViewEvent(ev)">
+                                                <Icon Name="Eye" Size="12" /> View
+                                            </button>
+                                        </summary>
+                                        <div class="raw-message">@ev.RawMessage</div>
+                                    </details>
+                                }
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        }
+        else if (SelectedReport.Id == PrinterErrorsReportId)
         {
             <div class="card">
                 <div class="card-head">
                     <span class="card-title">@SelectedReport.Name</span>
                     @if (_printerAlertGroups.Count > 0)
                     {
-                        <span style="font-size: 12px; color: var(--text-faint);">@_printerAlertGroups.Count groups</span>
+                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_printerAlertGroups.Count, "group", "groups")</span>
                     }
                 </div>
 
@@ -153,12 +384,18 @@
                     <input class="inline-input mono" style="text-transform: uppercase;" @bind="division.PrinterPasswordCode" @bind:event="oninput" placeholder="6I" />
                     <input class="inline-input mono" @bind="division.PrinterPasswordZipCode" @bind:event="oninput" placeholder="66618" />
                     <div style="text-align: right;">
-                        <button class="btn btn-sm" @onclick="() => SaveDivisionPassword(division)">
-                            <Icon Name="Save" Size="12" /> Save
-                        </button>
-                        <button class="btn btn-sm btn-accent" @onclick="() => EnterDivision(division.Id)">
-                            <Icon Name="ArrowIn" Size="12" /> Enter
-                        </button>
+                        @if (_canUpdateDivisionSettings)
+                        {
+                            <button class="btn btn-sm" @onclick="() => SaveDivisionPassword(division)">
+                                <Icon Name="Save" Size="12" /> Save
+                            </button>
+                        }
+                        @if (_canEnterDivisions)
+                        {
+                            <button class="btn btn-sm btn-accent" @onclick="() => EnterDivision(division.Id)">
+                                <Icon Name="ArrowIn" Size="12" /> Enter
+                            </button>
+                        }
                     </div>
                 </div>
             }
@@ -167,44 +404,94 @@
 </div>
 
 @code {
+    const string ActiveIncidentsReportId = "active-printer-incidents";
+    const string AuthMonitoringReportId = "snmp-auth-monitoring";
+    const string FaultTrendsReportId = "printer-fault-trends";
     const string PrinterErrorsReportId = "printer-errors";
+    const int AuthBurstMinutes = 15;
 
     List<Division> _divisions = new();
+    List<PrinterActiveIncidentReportRow> _activeIncidents = new();
+    List<AuthIssueReportRow> _authIssueRows = new();
+    List<FaultTrendReportRow> _faultTrendRows = new();
     List<PrinterAlertGroup> _printerAlertGroups = new();
     HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     List<ReportDefinition> _reports = new()
     {
-        new(PrinterErrorsReportId, "All Printer Errors"),
+        new(ActiveIncidentsReportId, "Active Printer Incidents", "Current unresolved SNMP alert states, grouped by printer and fault."),
+        new(AuthMonitoringReportId, "SNMP Auth & Monitoring", "Authentication-failure traps grouped into time bursts so monitoring/config issues do not look like device faults."),
+        new(FaultTrendsReportId, "Printer Fault Trends", "Trap history grouped by component or alert family to show the highest-volume printer faults."),
+        new(PrinterErrorsReportId, "All Printer Errors", "Raw grouped printer-event history for drill-down and troubleshooting."),
     };
     AdminTab _activeTab = AdminTab.Reports;
-    string _selectedReportId = PrinterErrorsReportId;
+    string _selectedReportId = ActiveIncidentsReportId;
     string _selectedDivisionId = "";
     bool _reportLoading;
+    bool _canRunReports;
+    bool _canEnterDivisions;
+    bool _canUpdateDivisionSettings;
+    bool _canCreateDivisions;
 
     string ActiveTabTitle => _activeTab == AdminTab.Reports ? "Reports" : "Divisions";
     ReportDefinition SelectedReport => _reports.First(r => r.Id == _selectedReportId);
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canRunReports = access?.Has(AccessPermissionKeys.AdminRunReports) == true;
+        _canEnterDivisions = access?.Has(AccessPermissionKeys.AdminEnterDivisions) == true;
+        _canUpdateDivisionSettings = access?.Has(AccessPermissionKeys.AdminUpdateDivisionSettings) == true;
+        _canCreateDivisions = access?.Has(AccessPermissionKeys.AdminCreateDivisions) == true;
         _divisions = (await DivisionService.GetAllAsync()).ToList();
-        await RunSelectedReport();
+        if (_canRunReports)
+        {
+            await RunSelectedReport();
+        }
     }
 
     void SetTab(AdminTab tab) => _activeTab = tab;
 
     async Task RunSelectedReport()
     {
+        if (!_canRunReports) return;
         _reportLoading = true;
         try
         {
-            if (_selectedReportId == PrinterErrorsReportId)
+            _expandedGroups.Clear();
+            _activeIncidents.Clear();
+            _authIssueRows.Clear();
+            _faultTrendRows.Clear();
+            _printerAlertGroups.Clear();
+
+            if (_selectedReportId == ActiveIncidentsReportId)
+            {
+                var incidents = await PrinterEvents.GetAllDivisionActiveIncidentsAsync();
+                _activeIncidents = incidents
+                    .Where(i => MatchesSelectedDivision(i.DivisionId))
+                    .OrderByDescending(i => SeverityRank(i.Severity))
+                    .ThenByDescending(i => i.LastSeenAt)
+                    .ToList();
+            }
+            else if (_selectedReportId == AuthMonitoringReportId)
+            {
+                var entries = await GetSelectedErrorEntries();
+                _authIssueRows = BuildAuthIssueRows(entries);
+            }
+            else if (_selectedReportId == FaultTrendsReportId)
+            {
+                var entries = await GetSelectedErrorEntries();
+                _faultTrendRows = BuildFaultTrendRows(entries);
+            }
+            else if (_selectedReportId == PrinterErrorsReportId)
             {
                 var groups = await PrinterEvents.GetAllDivisionGroupedErrorsAsync();
                 _printerAlertGroups = groups
                     .Select(g =>
                     {
                         g.Occurrences = g.Occurrences
-                            .Where(e => string.IsNullOrWhiteSpace(_selectedDivisionId) || e.DivisionId == _selectedDivisionId)
+                            .Where(e => MatchesSelectedDivision(e.DivisionId))
                             .ToList();
                         g.Count = g.Occurrences.Count;
                         g.LatestAt = g.Occurrences.Count > 0 ? g.Occurrences.Max(e => e.Timestamp) : g.LatestAt;
@@ -222,20 +509,51 @@
         }
     }
 
-    void EnterDivision(string id) => Nav.NavigateTo($"/admin/enter/{id}");
+    async Task<List<PrinterErrorLogEntry>> GetSelectedErrorEntries()
+    {
+        var entries = await PrinterEvents.GetAllDivisionErrorsAsync();
+        return entries
+            .Where(e => MatchesSelectedDivision(e.DivisionId))
+            .ToList();
+    }
+
+    bool MatchesSelectedDivision(string divisionId) =>
+        string.IsNullOrWhiteSpace(_selectedDivisionId) ||
+        string.Equals(divisionId, _selectedDivisionId, StringComparison.OrdinalIgnoreCase);
+
+    void EnterDivision(string id)
+    {
+        if (_canEnterDivisions) Nav.NavigateTo($"/admin/enter/{id}");
+    }
 
     async Task SaveDivisionPassword(Division division)
     {
+        if (!_canUpdateDivisionSettings) return;
         division.PrinterPasswordCode = NormalizeNullable(division.PrinterPasswordCode?.ToUpperInvariant());
         division.PrinterPasswordZipCode = NormalizeNullable(division.PrinterPasswordZipCode);
         await DivisionService.UpdateAsync(division);
         State.PushToast($"Updated {division.Name}", "up");
     }
 
+    void ViewIncident(PrinterActiveIncidentReportRow incident)
+    {
+        if (!_canEnterDivisions) return;
+        var returnUrl = Uri.EscapeDataString($"/it/printers/{incident.PrinterId}");
+        Nav.NavigateTo($"/auth/enter-division/{incident.DivisionId}?ReturnUrl={returnUrl}", forceLoad: true);
+    }
+
     void ViewOccurrence(PrinterAlertOccurrence occurrence)
     {
+        if (!_canEnterDivisions) return;
         var returnUrl = Uri.EscapeDataString($"/it/printers/{occurrence.PrinterId}");
         Nav.NavigateTo($"/auth/enter-division/{occurrence.DivisionId}?ReturnUrl={returnUrl}", forceLoad: true);
+    }
+
+    void ViewEvent(PrinterErrorLogEntry entry)
+    {
+        if (!_canEnterDivisions) return;
+        var returnUrl = Uri.EscapeDataString($"/it/printers/{entry.PrinterId}");
+        Nav.NavigateTo($"/auth/enter-division/{entry.DivisionId}?ReturnUrl={returnUrl}", forceLoad: true);
     }
 
     void ToggleGroup(string alertKey)
@@ -249,12 +567,188 @@
     static string DisplayAlertTitle(PrinterAlertGroup group) =>
         !string.IsNullOrWhiteSpace(group.AlertDetail) ? group.AlertDetail : group.AlertTitle;
 
+    static string DisplayIncidentTitle(PrinterActiveIncidentReportRow incident) =>
+        !string.IsNullOrWhiteSpace(incident.AlertDetail) ? incident.AlertDetail : incident.AlertTitle;
+
+    static string DisplayIncidentMessage(PrinterActiveIncidentReportRow incident) =>
+        incident.FriendlyMessage
+        ?? $"{incident.AlertTitle}: {incident.AlertDetail}".Trim().Trim(':');
+
     static string DisplayAlertMessage(PrinterAlertGroup group)
     {
         var latest = group.Occurrences.FirstOrDefault();
         return latest?.FriendlyMessage
             ?? $"{group.AlertTitle}: {group.AlertDetail}".Trim().Trim(':');
     }
+
+    static List<AuthIssueReportRow> BuildAuthIssueRows(IEnumerable<PrinterErrorLogEntry> entries)
+    {
+        return entries
+            .Where(IsAuthFailure)
+            .GroupBy(e => GetTimeBucketTicks(e.Timestamp, AuthBurstMinutes))
+            .Select(g =>
+            {
+                var ordered = g.OrderByDescending(e => e.Timestamp).ToList();
+                var latest = ordered[0];
+                var firstSeen = ordered.Min(e => e.Timestamp);
+                var lastSeen = ordered.Max(e => e.Timestamp);
+                var printerCount = ordered.Select(e => e.PrinterId).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+                var divisionCount = ordered.Select(e => e.DivisionId).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+                var summary = printerCount > 1
+                    ? $"SNMP authentication failures across {printerCount} printers"
+                    : $"SNMP authentication failures from {PrinterLabel(latest)}";
+
+                return new AuthIssueReportRow(
+                    $"auth:{g.Key}",
+                    firstSeen,
+                    lastSeen,
+                    ordered.Count,
+                    printerCount,
+                    divisionCount,
+                    summary,
+                    JoinTop(ordered.Select(PrinterLabel), 4),
+                    JoinTop(ordered.Select(e => e.DivisionName), 3),
+                    ordered);
+            })
+            .OrderByDescending(r => r.LastSeenAt)
+            .ThenByDescending(r => r.EventCount)
+            .ToList();
+    }
+
+    static List<FaultTrendReportRow> BuildFaultTrendRows(IEnumerable<PrinterErrorLogEntry> entries)
+    {
+        return entries
+            .Where(e => !IsAuthFailure(e))
+            .GroupBy(TrendCategory, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var ordered = g.OrderByDescending(e => e.Timestamp).ToList();
+                var topAlert = ordered
+                    .GroupBy(TrendAlertLabel, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(a => a.Count())
+                    .ThenBy(a => a.Key)
+                    .First();
+
+                return new FaultTrendReportRow(
+                    $"trend:{BuildStableKey(g.Key)}",
+                    g.Key,
+                    topAlert.Key,
+                    HighestSeverity(ordered.Select(e => e.Severity)),
+                    ordered.Count,
+                    ordered.Select(e => e.PrinterId).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    ordered.Select(e => e.DivisionId).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+                    ordered.Min(e => e.Timestamp),
+                    ordered.Max(e => e.Timestamp),
+                    JoinTop(ordered.Select(PrinterLabel), 4),
+                    ordered);
+            })
+            .OrderByDescending(r => SeverityRank(r.Severity))
+            .ThenByDescending(r => r.EventCount)
+            .ThenByDescending(r => r.LastSeenAt)
+            .ToList();
+    }
+
+    static bool IsAuthFailure(PrinterErrorLogEntry entry)
+    {
+        var source = $"{entry.AlertKey} {entry.AlertTitle} {entry.AlertDetail} {entry.FriendlyMessage} {entry.RawMessage}";
+        return ContainsIgnoreCase(source, "authenticationfail") ||
+            ContainsIgnoreCase(source, "authentication failure") ||
+            ContainsIgnoreCase(source, "auth failure") ||
+            ContainsIgnoreCase(source, "generic=authent") ||
+            ContainsIgnoreCase(source, "generic=authentication");
+    }
+
+    static string TrendCategory(PrinterErrorLogEntry entry)
+    {
+        var category = entry.AlertCategory?.Trim();
+        if (!string.IsNullOrWhiteSpace(category) &&
+            !category.Equals("Printer Alert", StringComparison.OrdinalIgnoreCase) &&
+            !category.Equals("Error", StringComparison.OrdinalIgnoreCase) &&
+            !category.Equals("Warning", StringComparison.OrdinalIgnoreCase))
+        {
+            return category;
+        }
+
+        var source = $"{entry.AlertDetail} {entry.AlertTitle} {entry.FriendlyMessage} {entry.RawMessage}".ToUpperInvariant();
+        if (source.Contains("CUTTER")) return "Cutter";
+        if (source.Contains("OUTPUT")) return "Output Tray";
+        if (source.Contains("INPUT")) return "Input Tray";
+        if (source.Contains("RIBBON")) return "Ribbon";
+        if (source.Contains("PRINTHEAD") || source.Contains("PRINT HEAD")) return "Printhead";
+        if (source.Contains("GAP")) return "Gap Detection";
+        if (source.Contains("JAM")) return "Jam";
+        if (source.Contains("MEDIA") || source.Contains("PAPER")) return "Media";
+        if (source.Contains("COVER") || source.Contains("DOOR")) return "Cover";
+        if (source.Contains("OFFLINE") || source.Contains("NETWORK")) return "Connectivity";
+
+        return string.IsNullOrWhiteSpace(category) ? "Printer Alert" : category;
+    }
+
+    static string TrendAlertLabel(PrinterErrorLogEntry entry)
+    {
+        var value = FirstNonEmpty(entry.AlertDetail, entry.AlertTitle, entry.FriendlyMessage, entry.RawMessage);
+        return value.Length > 120 ? value[..120].Trim() : value;
+    }
+
+    static string FirstNonEmpty(params string?[] values) =>
+        values.Select(v => v?.Trim()).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "Unknown alert";
+
+    static string PrinterLabel(PrinterErrorLogEntry entry)
+    {
+        var name = FirstNonEmpty(entry.PrinterName, entry.IpAddress, entry.PrinterId);
+        return !string.IsNullOrWhiteSpace(entry.IpAddress) &&
+            !name.Contains(entry.IpAddress, StringComparison.OrdinalIgnoreCase)
+            ? $"{name} ({entry.IpAddress})"
+            : name;
+    }
+
+    static string JoinTop(IEnumerable<string> values, int count)
+    {
+        var clean = values
+            .Select(v => v.Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (clean.Count == 0) return "No detail";
+        if (clean.Count <= count) return string.Join(", ", clean);
+        return $"{string.Join(", ", clean.Take(count))}, +{clean.Count - count} more";
+    }
+
+    static long GetTimeBucketTicks(DateTimeOffset timestamp, int minutes)
+    {
+        var intervalTicks = TimeSpan.FromMinutes(minutes).Ticks;
+        return timestamp.UtcDateTime.Ticks / intervalTicks * intervalTicks;
+    }
+
+    static string BuildStableKey(string value)
+    {
+        var chars = value.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray();
+        return chars.Length == 0 ? "UNKNOWN" : new string(chars);
+    }
+
+    static string HighestSeverity(IEnumerable<string?> severities) =>
+        severities
+            .OrderByDescending(SeverityRank)
+            .FirstOrDefault() ?? "Info";
+
+    static string FormatLocal(DateTimeOffset timestamp) =>
+        timestamp.LocalDateTime.ToString("M/d h:mm tt");
+
+    static string FormatWindow(DateTimeOffset first, DateTimeOffset last)
+    {
+        var firstLocal = first.LocalDateTime;
+        var lastLocal = last.LocalDateTime;
+        return firstLocal.Date == lastLocal.Date
+            ? $"{firstLocal:M/d h:mm tt} - {lastLocal:h:mm tt}"
+            : $"{firstLocal:M/d h:mm tt} - {lastLocal:M/d h:mm tt}";
+    }
+
+    static bool ContainsIgnoreCase(string source, string value) =>
+        source.Contains(value, StringComparison.OrdinalIgnoreCase);
+
+    static string CountLabel(int count, string singular, string plural) =>
+        $"{count} {(count == 1 ? singular : plural)}";
 
     static string SeverityPill(string? severity) => severity?.ToUpperInvariant() switch
     {
@@ -284,5 +778,30 @@
         Divisions
     }
 
-    record ReportDefinition(string Id, string Name);
+    record ReportDefinition(string Id, string Name, string Description);
+
+    record AuthIssueReportRow(
+        string GroupKey,
+        DateTimeOffset FirstSeenAt,
+        DateTimeOffset LastSeenAt,
+        int EventCount,
+        int PrinterCount,
+        int DivisionCount,
+        string Summary,
+        string PrinterSummary,
+        string DivisionSummary,
+        List<PrinterErrorLogEntry> Events);
+
+    record FaultTrendReportRow(
+        string GroupKey,
+        string Category,
+        string TopAlert,
+        string Severity,
+        int EventCount,
+        int PrinterCount,
+        int DivisionCount,
+        DateTimeOffset FirstSeenAt,
+        DateTimeOffset LastSeenAt,
+        string TopPrintersSummary,
+        List<PrinterErrorLogEntry> Events);
 }

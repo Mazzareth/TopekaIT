@@ -38,12 +38,12 @@
             return;
         }
 
-        var role = user.FindFirst(ClaimTypes.Role)?.Value;
-        _homeRoute = role switch
+        var tier = AccessTierExtensions.ParseTierOrWorker(user.FindFirst(ClaimTypes.Role)?.Value);
+        _homeRoute = tier switch
         {
-            "SuperAdmin" => "/admin",
-            "IT" => "/it",
-            "Manager" => "/manager",
+            AccessTier.SuperAdmin => "/admin",
+            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Supervisor => "/manager",
             _ => "/worker",
         };
     }

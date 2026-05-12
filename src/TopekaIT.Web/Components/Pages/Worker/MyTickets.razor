@@ -1,6 +1,6 @@
 @page "/worker/tickets"
 @page "/manager/tickets"
-@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.TicketsViewOwn)]
 @using System.Security.Claims
 @using TopekaIT.Core.Services
 @inject TicketService TicketService
@@ -8,6 +8,7 @@
 @inject PrinterService PrinterService
 @inject AssetService AssetService
 @inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>My requests · Topeka IT</PageTitle>
 
@@ -17,7 +18,10 @@
             <h1>My requests</h1>
             <div class="page-sub">Everything you've sent to IT, newest first.</div>
         </div>
-        <button class="btn btn-accent" @onclick="() => _composerOpen = true"><Icon Name="Plus" Size="14" /> New request</button>
+        @if (_canCreateTickets)
+        {
+            <button class="btn btn-accent" @onclick="() => _composerOpen = true"><Icon Name="Plus" Size="14" /> New request</button>
+        }
     </div>
 
     <div class="seg" style="margin-bottom: 14px;">
@@ -53,11 +57,13 @@
     List<Printer> _printers = new();
     List<Asset> _assets = new();
     string _userId = "";
+    bool _canCreateTickets;
 
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        _canCreateTickets = await Access.HasPermissionAsync(_userId, AccessPermissionKeys.TicketsCreate);
         await Load();
     }
 

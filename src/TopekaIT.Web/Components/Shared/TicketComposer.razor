@@ -5,6 +5,7 @@
 @inject AppState State
 @inject PrinterService PrinterService
 @inject AssetService AssetService
+@inject AccessControlService Access
 
 @code {
     [Parameter] public bool Open { get; set; }
@@ -22,6 +23,7 @@
     List<Printer> _printers = new();
     List<Asset> _assets = new();
     bool _loaded;
+    bool _canCreate;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -32,6 +34,8 @@
             _assets = (await AssetService.GetAllAsync()).ToList();
             var auth = await AuthProvider.GetAuthenticationStateAsync();
             _reporterName = auth.User.FindFirst("name")?.Value ?? auth.User.Identity?.Name;
+            var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            _canCreate = await Access.HasPermissionAsync(userId, AccessPermissionKeys.TicketsCreate);
         }
         if (Open)
         {
@@ -48,6 +52,11 @@
     async Task Submit()
     {
         if (string.IsNullOrWhiteSpace(_title)) return;
+        if (!_canCreate)
+        {
+            State.PushToast("You do not have access to create tickets.", "down");
+            return;
+        }
         AssetKind? kind = null;
         string? id = null;
         if (!string.IsNullOrEmpty(_assetRef))
@@ -135,7 +144,7 @@
     </ChildContent>
     <Footer>
         <button class="btn btn-ghost" @onclick="Close">Cancel</button>
-        <button class="btn btn-accent" @onclick="Submit" disabled="@string.IsNullOrWhiteSpace(_title)">
+        <button class="btn btn-accent" @onclick="Submit" disabled="@(string.IsNullOrWhiteSpace(_title) || !_canCreate)">
             <Icon Name="Plus" Size="14" /> Submit request
         </button>
     </Footer>

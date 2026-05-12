@@ -1,0 +1,61 @@
+@inject ITenantContext TenantContext
+@inject PrinterService Printers
+@inject TicketService Tickets
+@inject AssetService AssetSvc
+
+<div class="fleet-pulse" title="@PulseTitle">
+    @if (!TenantContext.IsResolved)
+    {
+        <span class="pulse__group"><span class="dot dot--mute"></span> No active division</span>
+    }
+    else
+    {
+        <span class="pulse__group"><span class="dot dot--ok"></span> <b>@_onlinePrinters</b> online</span>
+        <span class="pulse__group"><span class="dot dot--warn"></span> <b>@_warnPrinters</b> warning</span>
+        <span class="pulse__group"><span class="dot dot--crit"></span> <b>@_downPrinters</b> down</span>
+        <span class="pulse__divider"></span>
+        <span class="pulse__group"><b>@_openTickets</b> open tickets · <b>@_urgentTickets</b> urgent</span>
+        <span class="pulse__divider"></span>
+        <span class="pulse__group"><b>@_assetsOut</b> assets out · <b>@_overdueAssets</b> overdue</span>
+        <span class="pulse__group pulse__group--right">last sync · <span class="mono">@_lastSync.ToString("h:mm tt")</span></span>
+    }
+</div>
+
+@code {
+    int _onlinePrinters;
+    int _warnPrinters;
+    int _downPrinters;
+    int _openTickets;
+    int _urgentTickets;
+    int _assetsOut;
+    int _overdueAssets;
+    DateTimeOffset _lastSync = DateTimeOffset.Now;
+
+    string PulseTitle => TenantContext.IsResolved
+        ? $"{_downPrinters} down printers, {_warnPrinters} warnings, {_openTickets} open tickets"
+        : "Select a division to see live operational pulse";
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    async Task Refresh()
+    {
+        _lastSync = DateTimeOffset.Now;
+        if (!TenantContext.IsResolved)
+        {
+            return;
+        }
+
+        var printers = await Printers.GetAllAsync();
+        _downPrinters = printers.Count(p => p.Status == PrinterStatus.Down);
+        _warnPrinters = printers.Count(p => p.Status == PrinterStatus.Warn);
+        _onlinePrinters = printers.Count - _downPrinters - _warnPrinters;
+
+        var tickets = await Tickets.GetAllAsync();
+        _openTickets = tickets.Count(t => t.Status != TicketStatus.Resolved);
+        _urgentTickets = tickets.Count(t => t.Status != TicketStatus.Resolved && t.Priority == TicketPriority.Urgent);
+
+        var assets = await AssetSvc.GetAllAsync();
+        _assetsOut = assets.Count(a => a.Status is AssetStatus.Out or AssetStatus.InUse or AssetStatus.Loaned);
+        _overdueAssets = assets.Count(a => a.DueAt.HasValue && a.DueAt.Value < DateTimeOffset.UtcNow);
+    }
+}

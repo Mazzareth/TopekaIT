@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TopekaIT.Core.Access;
 using TopekaIT.Core.Domain.Enums;
 using TopekaIT.Core.Services;
 
@@ -23,12 +24,12 @@ public class AccountController : Controller
     public IActionResult Root()
     {
         if (!(User.Identity?.IsAuthenticated ?? false)) return Redirect("/login");
-        var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
-        return Redirect(role switch
+        var tier = AccessTierExtensions.ParseTierOrWorker(User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value);
+        return Redirect(tier switch
         {
-            "SuperAdmin" => "/admin",
-            "IT" => "/it",
-            "Manager" => "/manager",
+            AccessTier.SuperAdmin => "/admin",
+            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Supervisor => "/manager",
             _ => "/worker",
         });
     }
@@ -65,15 +66,15 @@ public class AccountController : Controller
         }
         return Redirect(user.Role switch
         {
-            UserRole.SuperAdmin => "/admin",
-            UserRole.IT => "/it",
-            UserRole.Manager => "/manager",
+            AccessTier.SuperAdmin => "/admin",
+            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Supervisor => "/manager",
             _ => "/worker",
         });
     }
 
     [HttpGet("/auth/enter-division/{divisionId}")]
-    [Authorize(Roles = "SuperAdmin")]
+    [Authorize(Policy = AccessPermissionKeys.AdminEnterDivisions)]
     public async Task<IActionResult> EnterDivision(string divisionId, [FromQuery] string? ReturnUrl = null)
     {
         var division = await _divisions.GetByIdAsync(divisionId);

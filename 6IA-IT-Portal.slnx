@@ -6,5 +6,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TopekaIT.Core.Tests/TopekaIT.Core.Tests.csproj" />
+    <Project Path="tests/TopekaIT.Infrastructure.Tests/TopekaIT.Infrastructure.Tests.csproj" />
+    <Project Path="tests/TopekaIT.Web.Tests/TopekaIT.Web.Tests.csproj" />
   </Folder>
 </Solution>

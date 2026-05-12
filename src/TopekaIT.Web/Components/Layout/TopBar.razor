@@ -1,56 +1,50 @@
 @using System.Security.Claims
-@using TopekaIT.Core.Services
 @inject AppState State
 @inject IJSRuntime JS
 @inject ITenantContext TenantContext
-@inject TicketService Tickets
-@inject PrinterService Printers
+@inject DivisionService Divisions
 
-<div class="topbar">
-    <div class="brand">
-        <button class="iconbtn" @onclick="ToggleNav" title="Toggle nav">
-            @if (State.NavCollapsed)
-            {
-                <Icon Name="ChevronRight" />
-            }
-            else
-            {
-                <Icon Name="ChevronLeft" />
-            }
-        </button>
-        <div class="brand-mark">L</div>
-        <div class="brand-text">Local IT</div>
-    </div>
-    <div class="topbar-search">
-        <Icon Name="Search" Size="14" />
-        <input placeholder="Search printers, assets, tickets…" />
-        <span class="kbd">⌘K</span>
-    </div>
-    <div class="topbar-spacer"></div>
-    <div class="topbar-right">
-        <div class="system-pulse @PulseClass" title="@PulseTitle">
-            <span class="dot"></span>
-            <span>@PulseText</span>
-            @if (TenantContext.IsResolved)
-            {
-                <span class="mono">@_openTickets/@_problemPrinters</span>
-            }
+<header class="topbar app__top">
+    <div class="app__workspace" title="@WorkspaceTitle">
+        <div class="ws-mark">L</div>
+        <div>
+            <div class="workspace-name">Local IT</div>
+            <div class="workspace-sub">@WorkspaceSubtitle</div>
         </div>
-        <button class="iconbtn" title="Notifications"><Icon Name="Bell" /></button>
+    </div>
+
+    <button type="button" class="search-inline topbar-search" @onclick="OpenCommandPalette">
+        <Icon Name="Search" Size="14" />
+        <span>Search printers, assets, tickets, people...</span>
+        <kbd>Ctrl K</kbd>
+    </button>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="topbar-right">
+        <div class="theme-toggle" role="tablist" aria-label="Theme">
+            <button type="button" class="@(State.Theme == "light" ? "active is-active" : "")" @onclick='() => ApplyTheme("light")' title="Light theme">
+                <Icon Name="Sun" Size="14" />
+            </button>
+            <button type="button" class="@(State.Theme == "dark" ? "active is-active" : "")" @onclick='() => ApplyTheme("dark")' title="Dark theme">
+                <Icon Name="Moon" Size="14" />
+            </button>
+        </div>
+
         <AuthorizeView>
             <Authorized>
-                <div class="user-chip" title="@($"Signed in as {Name(context.User)}")" @onclick="ToggleProfileMenu">
+                <button type="button" class="user-chip" title="@($"Signed in as {Name(context.User)}")" @onclick="ToggleProfileMenu">
                     <div class="avatar">@Avatar(context.User)</div>
                     <div>
                         <div class="u-name">@Name(context.User)</div>
                         <div class="u-role">@Role(context.User)</div>
                     </div>
-                </div>
-                @if (showProfileMenu)
+                </button>
+                @if (_showProfileMenu)
                 {
                     <div class="profile-dropdown">
                         <a href="/change-password" class="menu-item" @onclick="CloseProfileMenu">
-                            <Icon Name="Key" /> Change my Password
+                            <Icon Name="Key" /> Change my password
                         </a>
                     </div>
                 }
@@ -58,53 +52,55 @@
             </Authorized>
         </AuthorizeView>
     </div>
-</div>
+</header>
 
 @code {
-    bool showProfileMenu = false;
-    int _openTickets;
-    int _problemPrinters;
+    bool _showProfileMenu;
+    string? _divisionName;
+
+    string WorkspaceTitle => TenantContext.IsResolved
+        ? $"Local IT - {_divisionName ?? TenantContext.DivisionId}"
+        : "Local IT - no active division";
+
+    string WorkspaceSubtitle => TenantContext.IsResolved
+        ? $"{_divisionName ?? TenantContext.DivisionId} - {TenantContext.DivisionId}"
+        : "Select a division";
 
     protected override async Task OnInitializedAsync()
     {
-        if (!TenantContext.IsResolved)
+        if (TenantContext.IsResolved && !string.IsNullOrWhiteSpace(TenantContext.DivisionId))
         {
-            return;
+            var division = await Divisions.GetByIdAsync(TenantContext.DivisionId);
+            _divisionName = division?.Name;
         }
-
-        var tickets = await Tickets.GetAllAsync();
-        _openTickets = tickets.Count(t => t.Status != TicketStatus.Resolved);
-
-        var printers = await Printers.GetAllAsync();
-        _problemPrinters = printers.Count(p => p.Status is PrinterStatus.Down or PrinterStatus.Warn);
     }
 
-    void ToggleProfileMenu() => showProfileMenu = !showProfileMenu;
-    void CloseProfileMenu() => showProfileMenu = false;
-
-    string PulseClass => !TenantContext.IsResolved
-        ? ""
-        : _problemPrinters > 0 ? "down"
-        : _openTickets > 8 ? "warn"
-        : "";
-
-    string PulseText => !TenantContext.IsResolved
-        ? "No division"
-        : _problemPrinters > 0 ? "Attention"
-        : _openTickets > 8 ? "Busy"
-        : "Systems normal";
-
-    string PulseTitle => TenantContext.IsResolved
-        ? $"{_openTickets} open tickets, {_problemPrinters} printers need attention"
-        : "Select a division to see live system pulse";
-
-    string Name(ClaimsPrincipal u) => u.FindFirst("name")?.Value ?? u.Identity?.Name ?? "";
-    string Avatar(ClaimsPrincipal u) => u.FindFirst("avatar")?.Value ?? "?";
-    string Role(ClaimsPrincipal u) => u.FindFirst(ClaimTypes.Role)?.Value ?? "";
-
-    async Task ToggleNav()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        State.ToggleNav();
-        await JS.InvokeVoidAsync("topekaNav.toggle");
+        if (!firstRender) return;
+
+        var stored = await JS.InvokeAsync<string?>("topekaTheme.get");
+        if (!string.IsNullOrEmpty(stored))
+        {
+            await JS.InvokeVoidAsync("topekaTheme.set", stored);
+            if (stored != State.Theme)
+            {
+                State.SetTheme(stored);
+            }
+        }
     }
+
+    void OpenCommandPalette() => State.OpenCommandPalette();
+    void ToggleProfileMenu() => _showProfileMenu = !_showProfileMenu;
+    void CloseProfileMenu() => _showProfileMenu = false;
+
+    async Task ApplyTheme(string theme)
+    {
+        State.SetTheme(theme);
+        await JS.InvokeVoidAsync("topekaTheme.set", theme);
+    }
+
+    static string Name(ClaimsPrincipal user) => user.FindFirst("name")?.Value ?? user.Identity?.Name ?? "";
+    static string Avatar(ClaimsPrincipal user) => user.FindFirst("avatar")?.Value ?? "?";
+    static string Role(ClaimsPrincipal user) => AccessTierExtensions.ParseTierOrWorker(user.FindFirst(ClaimTypes.Role)?.Value).DisplayName();
 }

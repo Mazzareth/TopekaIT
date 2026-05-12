@@ -1,0 +1,27 @@
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    async Task Close() => await OnClose.InvokeAsync();
+}
+
+@if (Open)
+{
+    <div class="drawer-backdrop" @onclick="Close">
+        <aside class="detail-drawer @Class" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <div class="detail-drawer__head">
+                <div class="detail-drawer__title">@Title</div>
+                <button class="iconbtn" type="button" @onclick="Close" aria-label="Close"><Icon Name="X" /></button>
+            </div>
+            <div class="detail-drawer__body">@ChildContent</div>
+            @if (Footer != null)
+            {
+                <div class="detail-drawer__foot">@Footer</div>
+            }
+        </aside>
+    </div>
+}

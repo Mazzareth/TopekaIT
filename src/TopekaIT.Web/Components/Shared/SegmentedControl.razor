@@ -1,0 +1,36 @@
+@code {
+    [Parameter] public IReadOnlyList<SegmentedControlOption> Options { get; set; } = [];
+    [Parameter] public string? Selected { get; set; }
+    [Parameter] public EventCallback<string> SelectedChanged { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    async Task Select(SegmentedControlOption option)
+    {
+        if (option.Disabled || option.Id == Selected)
+        {
+            return;
+        }
+
+        Selected = option.Id;
+        await SelectedChanged.InvokeAsync(option.Id);
+    }
+}
+
+<div class="segmented @Class" role="tablist" aria-label="@AriaLabel">
+    @foreach (var option in Options)
+    {
+        <button type="button"
+                role="tab"
+                class="@(option.Id == Selected ? "is-active" : "")"
+                aria-selected="@(option.Id == Selected)"
+                disabled="@option.Disabled"
+                @onclick="() => Select(option)">
+            <span>@option.Label</span>
+            @if (!string.IsNullOrWhiteSpace(option.Count))
+            {
+                <span class="count">@option.Count</span>
+            }
+        </button>
+    }
+</div>

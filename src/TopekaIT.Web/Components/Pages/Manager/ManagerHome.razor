@@ -1,5 +1,5 @@
 @page "/manager"
-@attribute [Authorize(Roles = "Manager,IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.SupervisorHome)]
 @using System.Security.Claims
 @using TopekaIT.Core.Services
 @inject TicketService TicketService
@@ -8,8 +8,9 @@
 @inject UserService UserServiceX
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
+@inject AccessControlService Access
 
-<PageTitle>Manager home · Topeka IT</PageTitle>
+<PageTitle>Supervisor home · Topeka IT</PageTitle>
 
 <div class="page">
     <div class="page-head">
@@ -121,13 +122,16 @@
                 <small>@_open open · @_resolved resolved this week</small>
             </span>
         </button>
-        <button class="manager-action" @onclick="() => _composerOpen = true">
-            <Icon Name="Plus" Size="18" />
-            <span>
-                <strong>New request</strong>
-                <small>@_batteryQty batteries tracked across @_batteryRows rows</small>
-            </span>
-        </button>
+        @if (_canCreateTickets)
+        {
+            <button class="manager-action" @onclick="() => _composerOpen = true">
+                <Icon Name="Plus" Size="18" />
+                <span>
+                    <strong>New request</strong>
+                    <small>@_batteryQty batteries tracked across @_batteryRows rows</small>
+                </span>
+            </button>
+        }
     </div>
 
     <div class="manager-grid">
@@ -197,7 +201,10 @@
                             </div>
                             <div style="display: flex; gap: 8px; align-items: center;">
                                 <Pill Kind="pill-warn" Dot>@a.Status.ToString()</Pill>
-                                <button class="btn btn-sm" @onclick="() => OpenIssueSpare(a.HolderId)">Issue spare &rarr;</button>
+                                @if (_canIssueSpares)
+                                {
+                                    <button class="btn btn-sm" @onclick="() => OpenIssueSpare(a.HolderId)">Issue spare &rarr;</button>
+                                }
                             </div>
                         </div>
                     }
@@ -223,6 +230,8 @@
     List<Ticket> _recent = new();
     List<User> _users = new();
     Dictionary<string, Asset> _holderLookup = new();
+    bool _canCreateTickets;
+    bool _canIssueSpares;
 
     IEnumerable<User> _lookupResults => string.IsNullOrWhiteSpace(_lookupQuery) ? Array.Empty<User>() : _users.Where(u => u.Name.Contains(_lookupQuery, StringComparison.OrdinalIgnoreCase)).Take(10);
 
@@ -241,6 +250,9 @@
         _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         var name = auth.User.FindFirst("name")?.Value ?? "";
         FirstName = name.Split(' ').FirstOrDefault() ?? "there";
+        var access = await Access.GetUserAccessAsync(_userId);
+        _canCreateTickets = access?.Has(AccessPermissionKeys.TicketsCreate) == true;
+        _canIssueSpares = access?.Has(AccessPermissionKeys.AssetsIssueSpareLoans) == true;
         await Refresh();
     }
 
@@ -296,6 +308,7 @@
     
     void OpenIssueSpare(string? holderId)
     {
+        if (!_canIssueSpares) return;
         _issueSpareUserId = holderId;
         _issueSpareOpen = true;
     }

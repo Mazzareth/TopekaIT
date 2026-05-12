@@ -1,5 +1,5 @@
 @page "/it/assets"
-@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewItConsole)]
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Domain.Enums
 @using TopekaIT.Core.Services
@@ -8,6 +8,7 @@
 @inject UserService UserService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>Asset Console · Topeka IT</PageTitle>
 
@@ -18,12 +19,18 @@
             <div class="page-sub">Full asset inventory with raw flag control and inspector.</div>
         </div>
         <div class="page-actions">
-            <button class="btn" @onclick="() => _createOpen = true">
-                <Icon Name="Plus" Size="14" /> Add Asset
-            </button>
-            <button class="btn btn-primary" @onclick="() => _scanOpen = true">
-                <Icon Name="Scan" Size="14" /> Scan
-            </button>
+            @if (_canCreateAssets)
+            {
+                <button class="btn" @onclick="() => _createOpen = true">
+                    <Icon Name="Plus" Size="14" /> Add Asset
+                </button>
+            }
+            @if (_canScanAssets)
+            {
+                <button class="btn btn-primary" @onclick="() => _scanOpen = true">
+                    <Icon Name="Scan" Size="14" /> Scan
+                </button>
+            }
         </div>
     </div>
 
@@ -312,6 +319,9 @@
 @code {
     bool _scanOpen;
     bool _createOpen;
+    bool _canCreateAssets;
+    bool _canScanAssets;
+    bool _canUpdateFlags;
     bool _showSae      = true;
     bool _showTc77     = true;
     bool _showScanner  = true;
@@ -330,7 +340,16 @@
 
     int _attentionCount => _assets.Count(a => Format.IsAttentionFlags(a.Flags));
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canCreateAssets = access?.Has(AccessPermissionKeys.AssetsCreate) == true;
+        _canScanAssets = access?.Has(AccessPermissionKeys.AssetsScanSearch) == true;
+        _canUpdateFlags = access?.Has(AccessPermissionKeys.AssetsUpdateFlags) == true;
+        await Load();
+    }
 
     async Task Load()
     {
@@ -409,6 +428,7 @@
     async Task ToggleFlag(Asset a, StatusFlags flag)
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
+        if (!_canUpdateFlags) return;
         var actorId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "it";
         var actorName = auth.User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "IT";
 

@@ -35,7 +35,7 @@ public class UserService
         await _repo.UpdateAsync(user, ct);
     }
 
-    public async Task<User> CreateAsync(string name, string username, string password, UserRole role, string? divisionId = null, CancellationToken ct = default)
+    public async Task<User> CreateAsync(string name, string username, string password, AccessTier role, string? divisionId = null, CancellationToken ct = default)
     {
         var all = await _repo.GetAllAsync(ct);
         var maxNum = all

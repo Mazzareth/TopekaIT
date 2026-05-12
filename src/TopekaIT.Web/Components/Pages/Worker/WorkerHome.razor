@@ -1,11 +1,12 @@
 @page "/worker"
-@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.WorkerHome)]
 @using System.Security.Claims
 @using TopekaIT.Core.Services
 @inject TicketService Tickets
 @inject PrinterService Printers
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
+@inject AccessControlService Access
 
 <PageTitle>Home · Topeka IT</PageTitle>
 
@@ -15,9 +16,12 @@
             <h1>Good @TimeOfDay(), @FirstName</h1>
             <div class="page-sub">Here's what's happening in your area.</div>
         </div>
-        <button class="btn btn-accent" @onclick="() => _composerOpen = true">
-            <Icon Name="Plus" Size="14" /> New request
-        </button>
+        @if (_canCreateTickets)
+        {
+            <button class="btn btn-accent" @onclick="() => _composerOpen = true">
+                <Icon Name="Plus" Size="14" /> New request
+            </button>
+        }
     </div>
 
     <div class="stat-grid">
@@ -37,13 +41,16 @@
             <div class="card-title">Quick actions</div>
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; padding: 16px;">
-            <button class="action-tile" @onclick="() => _composerOpen = true">
-                <Icon Name="Plus" Size="20" />
-                <div>
-                    <div class="at-title">File a new request</div>
-                    <div class="at-sub">Report an issue to IT</div>
-                </div>
-            </button>
+            @if (_canCreateTickets)
+            {
+                <button class="action-tile" @onclick="() => _composerOpen = true">
+                    <Icon Name="Plus" Size="20" />
+                    <div>
+                        <div class="at-title">File a new request</div>
+                        <div class="at-sub">Report an issue to IT</div>
+                    </div>
+                </button>
+            }
             <button class="action-tile" @onclick='() => Nav.NavigateTo("/worker/printers")'>
                 <Icon Name="Printer" Size="20" />
                 <div>
@@ -97,6 +104,7 @@
     int _resolvedWeek;
     string FirstName = "there";
     string _userId = "";
+    bool _canCreateTickets;
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,6 +112,7 @@
         _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         var name = auth.User.FindFirst("name")?.Value ?? "";
         FirstName = name.Split(' ').FirstOrDefault() ?? "there";
+        _canCreateTickets = await Access.HasPermissionAsync(_userId, AccessPermissionKeys.TicketsCreate);
         await Refresh();
     }
 

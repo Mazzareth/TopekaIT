@@ -1,5 +1,5 @@
 @page "/manager/loaners"
-@attribute [Authorize(Roles = "Manager,IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewSupervisorConsole)]
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Domain.Enums
 @using TopekaIT.Core.Services
@@ -8,6 +8,7 @@
 @inject UserService UserService
 @inject AuthenticationStateProvider AuthProvider
 @inject AppState State
+@inject AccessControlService Access
 
 <PageTitle>Loaner Console · Topeka IT</PageTitle>
 
@@ -53,7 +54,10 @@
                         <div>@loan.Duration.ToString()</div>
                         <div>@(loan.DateLoaned?.ToString("MMM d") ?? "Unknown")</div>
                         <div style="text-align: right;">
-                            <button class="btn btn-sm" @onclick="() => ReturnSpare(loan.Id)">Return</button>
+                            @if (_canReturnSpares)
+                            {
+                                <button class="btn btn-sm" @onclick="() => ReturnSpare(loan.Id)">Return</button>
+                            }
                         </div>
                     </div>
                 }
@@ -81,7 +85,10 @@
                     @if (isAvailable)
                     {
                         <div style="margin-top: auto;">
-                            <button class="btn btn-primary" style="width: 100%;" @onclick="() => OpenIssuer(spare)">Issue &rarr;</button>
+                            @if (_canIssueSpares)
+                            {
+                                <button class="btn btn-primary" style="width: 100%;" @onclick="() => OpenIssuer(spare)">Issue &rarr;</button>
+                            }
                         </div>
                     }
                     else
@@ -105,9 +112,16 @@
     List<Asset> _spares = new();
     List<User> _users = new();
     Asset? _issuingSpare;
+    bool _canIssueSpares;
+    bool _canReturnSpares;
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canIssueSpares = access?.Has(AccessPermissionKeys.AssetsIssueSpareLoans) == true;
+        _canReturnSpares = access?.Has(AccessPermissionKeys.AssetsReturnSpareLoans) == true;
         await Load();
     }
 
@@ -120,11 +134,13 @@
 
     void OpenIssuer(Asset a)
     {
+        if (!_canIssueSpares) return;
         _issuingSpare = a;
     }
 
     async Task ReturnSpare(string loanId)
     {
+        if (!_canReturnSpares) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         await AssetService.ReturnSpareAsync(loanId, actor);

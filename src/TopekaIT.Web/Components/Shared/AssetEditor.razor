@@ -1,8 +1,11 @@
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Domain.Enums
 @using TopekaIT.Core.Services
+@using System.Security.Claims
 @inject AssetService AssetService
 @inject AssetModelService AssetModelService
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 @code {
     [Parameter] public bool Open { get; set; }
@@ -16,6 +19,8 @@
     bool _wasOpen;
     List<AssetModel> _models = new();
     bool _addingNewModel;
+    bool _canCreateAssets;
+    bool _canManageModels;
     string _newModelName = "";
 
     string TagAndSerial
@@ -31,6 +36,11 @@
     protected override async Task OnInitializedAsync()
     {
         _models = (await AssetModelService.GetAllAsync()).ToList();
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canCreateAssets = access?.Has(AccessPermissionKeys.AssetsCreate) == true;
+        _canManageModels = access?.Has(AccessPermissionKeys.AssetsManageModels) == true;
     }
 
     protected override void OnParametersSet()
@@ -77,6 +87,12 @@
         _error = null;
         try
         {
+            if (!_canCreateAssets)
+            {
+                _error = "You do not have access to create assets.";
+                return;
+            }
+
             await AssetService.AddAsync(_draft);
             await OnChanged.InvokeAsync();
             Close();
@@ -101,6 +117,7 @@
     async Task AddNewModel()
     {
         if (string.IsNullOrWhiteSpace(_newModelName)) return;
+        if (!_canManageModels) return;
         var modelName = _newModelName.Trim();
         await AssetModelService.AddAsync(modelName);
         _models = (await AssetModelService.GetAllAsync()).ToList();
@@ -120,6 +137,7 @@
         var value = e.Value?.ToString() ?? "";
         if (value == "__add_new__")
         {
+            if (!_canManageModels) return;
             _draft.Model = "";
             _addingNewModel = true;
             return;
@@ -189,7 +207,10 @@
                             {
                                 <option value="@m.Name">@m.Name</option>
                             }
-                            <option value="__add_new__">Add new model…</option>
+                            @if (_canManageModels)
+                            {
+                                <option value="__add_new__">Add new model…</option>
+                            }
                         </select>
                     }
                 </div>
@@ -278,6 +299,6 @@
     </ChildContent>
     <Footer>
         <button class="btn btn-ghost" @onclick="Close" disabled="@_saving">Cancel</button>
-        <button class="btn btn-primary" @onclick="Save" disabled="@_saving">Save asset</button>
+        <button class="btn btn-primary" @onclick="Save" disabled="@(_saving || !_canCreateAssets)">Save asset</button>
     </Footer>
 </Modal>

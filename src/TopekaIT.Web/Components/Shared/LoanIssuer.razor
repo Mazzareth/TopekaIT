@@ -5,6 +5,7 @@
 @inject AssetService AssetService
 @inject UserService UserService
 @inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 @code {
     [Parameter] public Asset? Spare { get; set; }
@@ -22,6 +23,7 @@
     string _comments = "";
     List<User> _users = new();
     List<Asset> _spares = new();
+    bool _canIssue;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -29,6 +31,9 @@
         {
             _users = (await UserService.GetAllAsync()).ToList();
             _spares = (await AssetService.GetSparePoolAsync()).ToList();
+            var auth = await AuthProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            _canIssue = await Access.HasPermissionAsync(userId, AccessPermissionKeys.AssetsIssueSpareLoans);
         }
         
         if (IsOpen || Spare != null)
@@ -50,6 +55,7 @@
     {
         var targetSpareId = Spare?.Id ?? _selectedSpareId;
         if (string.IsNullOrWhiteSpace(targetSpareId) || string.IsNullOrWhiteSpace(_borrowerId)) return;
+        if (!_canIssue) return;
         
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
@@ -132,6 +138,6 @@
     </ChildContent>
     <Footer>
         <button class="btn btn-ghost" @onclick="Cancel">Cancel</button>
-        <button class="btn btn-primary" disabled="@(string.IsNullOrWhiteSpace(_borrowerId) || (Spare == null && string.IsNullOrWhiteSpace(_selectedSpareId)))" @onclick="Submit">Issue Spare</button>
+        <button class="btn btn-primary" disabled="@(!_canIssue || string.IsNullOrWhiteSpace(_borrowerId) || (Spare == null && string.IsNullOrWhiteSpace(_selectedSpareId)))" @onclick="Submit">Issue Spare</button>
     </Footer>
 </Modal>

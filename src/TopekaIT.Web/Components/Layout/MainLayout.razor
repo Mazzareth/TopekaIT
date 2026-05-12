@@ -5,15 +5,18 @@
 @inject ITenantContext TenantContext
 @inject IDivisionRepository DivisionRepo
 @inject NavigationManager Nav
+@inject AccessControlService Access
 
 @if (_ready)
 {
-    <div class="app @(State.NavCollapsed ? "nav-collapsed" : "")">
+    <div class="app refresh-shell">
         <TopBar />
         <Sidebar />
+        <FleetPulse />
         <main class="main">
             @Body
         </main>
+        <CommandPalette />
         <ToastContainer />
     </div>
 }
@@ -46,10 +49,12 @@
                 TenantContext.SetDivision(division.Id, division.ConnectionString);
             }
         }
-        else if (auth.User.IsInRole("SuperAdmin"))
+        else
         {
+            var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
             var path = new Uri(Nav.Uri).AbsolutePath;
-            if (!path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
+            if (await Access.HasPermissionAsync(userId, AccessPermissionKeys.AdminView)
+                && !path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
             {
                 Nav.NavigateTo("/admin");
             }

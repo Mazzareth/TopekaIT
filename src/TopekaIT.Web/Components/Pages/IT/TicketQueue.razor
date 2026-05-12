@@ -1,5 +1,5 @@
 @page "/it/tickets"
-@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.TicketsViewQueue)]
 @using TopekaIT.Core.Services
 @inject TicketService TicketService
 @inject UserService UserService

@@ -33,6 +33,12 @@ public class PrinterEventService
     public Task<IReadOnlyList<PrinterAlertState>> GetActiveAlertsByPrinterAsync(string printerId, CancellationToken ct = default)
         => _repo.GetActiveAlertsByPrinterAsync(printerId, ct);
 
+    public Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetActiveIncidentsAsync(CancellationToken ct = default)
+        => _repo.GetActiveIncidentsAsync(ct);
+
+    public Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetAllDivisionActiveIncidentsAsync(CancellationToken ct = default)
+        => _repo.GetAllDivisionActiveIncidentsAsync(ct);
+
     public Task SetAlertBlipSuppressedAsync(string printerId, string alertKey, bool suppressed, CancellationToken ct = default)
         => _repo.SetAlertBlipSuppressedAsync(printerId, alertKey, suppressed, ct);
 

@@ -1,8 +1,10 @@
 @page "/worker/printers"
 @page "/manager/printers"
-@attribute [Authorize(Roles = "Worker,Manager,IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.PrintersViewStatus)]
 @using TopekaIT.Core.Services
 @inject PrinterService PrinterService
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>Printers · Topeka IT</PageTitle>
 
@@ -56,10 +58,17 @@
     string Sort = "attention";
     List<Printer> _printers = new();
     bool _composerOpen;
+    bool _canCreateTickets;
     string? _presetType;
     string? _presetId;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        _canCreateTickets = await Access.HasPermissionAsync(userId, AccessPermissionKeys.TicketsCreate);
+        await Load();
+    }
 
     async Task Load()
     {
@@ -111,6 +120,7 @@
 
     void OpenComposer(Printer p)
     {
+        if (!_canCreateTickets) return;
         _presetType = "printer";
         _presetId = p.Id;
         _composerOpen = true;

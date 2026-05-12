@@ -68,6 +68,51 @@ public class PrinterEventRepository : IPrinterEventRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetActiveIncidentsAsync(CancellationToken ct = default)
+    {
+        if (_divisionRepository == null || _tenantContext == null)
+        {
+            throw new InvalidOperationException("Division context is required to query active printer incidents.");
+        }
+
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var divisionId = _tenantContext.DivisionId ?? "";
+        var divisionName = divisionId;
+        if (!string.IsNullOrWhiteSpace(divisionId))
+        {
+            var division = await _divisionRepository.GetByIdAsync(divisionId, ct);
+            divisionName = division?.Name ?? divisionId;
+        }
+
+        return await BuildActiveIncidentQuery(db, divisionId, divisionName)
+            .ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetAllDivisionActiveIncidentsAsync(CancellationToken ct = default)
+    {
+        if (_divisionRepository == null)
+        {
+            throw new InvalidOperationException("Division repository is required to query active printer incidents.");
+        }
+
+        var divisions = await _divisionRepository.GetAllAsync(ct);
+        var incidents = new List<PrinterActiveIncidentReportRow>();
+
+        foreach (var division in divisions)
+        {
+            var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var divisionIncidents = await BuildActiveIncidentQuery(db, division.Id, division.Name)
+                .ToListAsync(ct);
+            incidents.AddRange(divisionIncidents);
+        }
+
+        return incidents
+            .OrderByDescending(i => SeverityRank(i.Severity))
+            .ThenByDescending(i => i.LastSeenAt)
+            .ToList();
+    }
+
     public async Task SetAlertBlipSuppressedAsync(string printerId, string alertKey, bool suppressed, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
@@ -181,6 +226,38 @@ public class PrinterEventRepository : IPrinterEventRepository
                 AlertDetail = e.AlertDetail,
                 FriendlyMessage = e.FriendlyMessage,
                 AlertTrainingLevel = e.AlertTrainingLevel,
+            });
+    }
+
+    private static IQueryable<PrinterActiveIncidentReportRow> BuildActiveIncidentQuery(
+        TopekaDbContext db,
+        string divisionId,
+        string divisionName)
+    {
+        return db.PrinterAlertStates
+            .AsNoTracking()
+            .Include(a => a.Printer)
+            .Where(a => !a.BlipSuppressed)
+            .OrderByDescending(a => a.LastSeenAt)
+            .Select(a => new PrinterActiveIncidentReportRow
+            {
+                DivisionId = divisionId,
+                DivisionName = divisionName,
+                PrinterId = a.PrinterId,
+                PrinterName = a.Printer.Name,
+                Department = a.Printer.Department,
+                IpAddress = a.Printer.IpAddress,
+                AlertKey = a.AlertKey,
+                AlertTitle = a.AlertTitle,
+                AlertCategory = a.AlertCategory,
+                AlertDetail = a.AlertDetail,
+                FriendlyMessage = a.FriendlyMessage,
+                Severity = a.Severity,
+                TrainingLevel = a.TrainingLevel,
+                FirstSeenAt = a.FirstSeenAt,
+                LastSeenAt = a.LastSeenAt,
+                LastEventId = a.LastEventId,
+                OccurrenceCount = a.OccurrenceCount,
             });
     }
 

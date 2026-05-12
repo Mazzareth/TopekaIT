@@ -220,7 +220,7 @@ public class AssetService
     public Task<IEnumerable<LoanRecord>> GetActiveLoansAsync(CancellationToken ct = default) => _repo.GetActiveLoansAsync(ct);
 
     /// <summary>
-    /// Derives a simple three-state label from StatusFlags for the Manager view.
+    /// Derives a simple three-state label from StatusFlags for the Supervisor view.
     /// Returns: "Available", "In Use", "Loaned", or "Attention".
     /// </summary>
     public static string GetSimpleState(StatusFlags flags)

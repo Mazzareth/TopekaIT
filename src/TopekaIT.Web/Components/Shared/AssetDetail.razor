@@ -5,6 +5,7 @@
 @inject ActivityService ActivityService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 @code {
     [Parameter] public Asset? Asset { get; set; }
@@ -18,8 +19,11 @@
     bool _showAssignDropdown;
     string _condition = "ok";
     string _lastKey = "";
+    bool _canAssignAssets;
+    bool _canCheckInOut;
+    bool _canUpdateStatus;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         var key = $"{Asset?.Id}|{Action}";
         if (key != _lastKey)
@@ -30,11 +34,19 @@
             _showAssignDropdown = false;
             _condition = "ok";
         }
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canAssignAssets = access?.Has(AccessPermissionKeys.AssetsAssign) == true;
+        _canCheckInOut = access?.Has(AccessPermissionKeys.AssetsCheckInOut) == true;
+        _canUpdateStatus = access?.Has(AccessPermissionKeys.AssetsUpdateStatus) == true;
     }
 
     async Task DoCheckOut()
     {
         if (Asset == null || string.IsNullOrEmpty(_holder)) return;
+        if (!_canCheckInOut) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         var a = await AssetService.CheckOutAsync(Asset.Id, _holder, 0);
@@ -51,6 +63,7 @@
     async Task DoCheckIn()
     {
         if (Asset == null) return;
+        if (!_canCheckInOut) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         var holder = Users.FirstOrDefault(u => u.Id == Asset.HolderId);
@@ -69,6 +82,7 @@
     async Task DoAssign()
     {
         if (Asset == null || string.IsNullOrEmpty(_holder)) return;
+        if (!_canAssignAssets) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         await AssetService.AssignHolderAsync(Asset.Id, _holder, actor);
@@ -84,6 +98,7 @@
     async Task Unassign()
     {
         if (Asset == null) return;
+        if (!_canAssignAssets) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         await AssetService.AssignHolderAsync(Asset.Id, "", actor);
@@ -95,6 +110,7 @@
     async Task SetStatus(AssetStatus status)
     {
         if (Asset == null) return;
+        if (!_canUpdateStatus) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
         var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
@@ -121,7 +137,7 @@
     }
 
     User? CurrentHolder => Asset == null ? null : Users.FirstOrDefault(u => u.Id == Asset.HolderId);
-    IEnumerable<User> Workers => Users.Where(u => u.Role == UserRole.Worker || u.Role == UserRole.Manager);
+    IEnumerable<User> Workers => Users.Where(u => u.Role is AccessTier.Worker or AccessTier.Supervisor);
 
     static string ScanCode(Asset asset)
         => !string.IsNullOrWhiteSpace(asset.Tag)
@@ -253,7 +269,7 @@
                         </div>
                     }
 
-                    @if (Asset.Category == AssetCategory.SaeDevice)
+                    @if (_canUpdateStatus && Asset.Category == AssetCategory.SaeDevice)
                     {
                         <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px; margin-bottom: 14px;">
                             <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; letter-spacing: 0.06em;">Status</div>
@@ -266,7 +282,7 @@
                         </div>
                     }
 
-                    @if (EffectiveAction() == "out" && Asset.Status == AssetStatus.In && Asset.Category != AssetCategory.SaeDevice)
+                    @if (_canCheckInOut && EffectiveAction() == "out" && Asset.Status == AssetStatus.In && Asset.Category != AssetCategory.SaeDevice)
                     {
                         <div class="form-row">
                             <label>Check out to</label>
@@ -282,7 +298,7 @@
                             <Icon Name="ArrowOut" Size="14" /> Confirm check out
                         </button>
                     }
-                    else if (EffectiveAction() == "in" && Asset.Status == AssetStatus.Out && Asset.Category != AssetCategory.SaeDevice)
+                    else if (_canCheckInOut && EffectiveAction() == "in" && Asset.Status == AssetStatus.Out && Asset.Category != AssetCategory.SaeDevice)
                     {
                         <div class="form-row">
                             <label>Condition</label>
@@ -296,7 +312,7 @@
                             <Icon Name="ArrowIn" Size="14" /> Confirm check in
                         </button>
                     }
-                    else if (EffectiveAction() == "assign" || Asset.Category == AssetCategory.SaeDevice)
+                    else if (_canAssignAssets && (EffectiveAction() == "assign" || Asset.Category == AssetCategory.SaeDevice))
                     {
                         <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px;">
                             <div class="form-row">

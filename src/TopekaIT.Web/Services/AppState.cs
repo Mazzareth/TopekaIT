@@ -4,6 +4,7 @@ public class AppState
 {
     public string Theme { get; private set; } = "light";
     public bool NavCollapsed { get; private set; }
+    public bool CommandPaletteOpen { get; private set; }
 
     public List<Toast> Toasts { get; } = new();
 
@@ -19,6 +20,26 @@ public class AppState
     public void ToggleNav()
     {
         NavCollapsed = !NavCollapsed;
+        NotifyChanged();
+    }
+
+    public void OpenCommandPalette()
+    {
+        if (CommandPaletteOpen) return;
+        CommandPaletteOpen = true;
+        NotifyChanged();
+    }
+
+    public void CloseCommandPalette()
+    {
+        if (!CommandPaletteOpen) return;
+        CommandPaletteOpen = false;
+        NotifyChanged();
+    }
+
+    public void ToggleCommandPalette()
+    {
+        CommandPaletteOpen = !CommandPaletteOpen;
         NotifyChanged();
     }
 

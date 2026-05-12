@@ -34,6 +34,24 @@ window.topekaNav = {
     }
 };
 
+window.topekaCommand = {
+    _ref: null,
+    register(ref) {
+        window.topekaCommand._ref = ref;
+    },
+    focus(el) {
+        if (!el) return;
+        window.requestAnimationFrame(() => el.focus());
+    }
+};
+
+window.addEventListener("keydown", event => {
+    const isCommand = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
+    if (!isCommand || !window.topekaCommand._ref) return;
+    event.preventDefault();
+    window.topekaCommand._ref.invokeMethodAsync("OpenFromKeyboard");
+});
+
 // Blazor enhanced navigation diffs the <html> element's attributes back to
 // the server-rendered value on every nav. Watch for that and re-apply our
 // stored theme so it survives page transitions.

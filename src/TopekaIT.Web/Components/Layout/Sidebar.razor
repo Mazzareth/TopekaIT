@@ -1,124 +1,164 @@
 @using System.Security.Claims
-@using TopekaIT.Core.Services
-@inject AppState State
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
 @inject TicketService Tickets
 @inject PrinterService Printers
 @inject ITenantContext TenantContext
-@inject AssetService AssetSvc
-@inject IJSRuntime JS
+@inject AccessControlService Access
 @implements IDisposable
 
-<aside class="sidebar">
-    <div class="nav-section">@NavSectionLabel</div>
-    @foreach (var item in _nav)
-    {
-        var active = IsActive(item.Route);
-        var badge = Badge(item.Id);
-        var urgent = item.Id == "printers" && badge > 0;
-        <button class="nav-item @(active ? "active" : "")" @onclick="() => Go(item.Route)">
-            <Icon Name="@item.Icon" Size="16" />
-            <span class="label">@item.Label</span>
-            @if (badge > 0)
-            {
-                <span class="badge @(urgent ? "urgent" : "")">@badge</span>
-            }
-        </button>
-    }
-
-    <div class="sidebar-foot">
-        <div class="theme-toggle">
-            <button class="@(State.Theme == "light" ? "active" : "")" @onclick='() => ApplyTheme("light")' title="Light">
-                <Icon Name="Sun" Size="14" />
-            </button>
-            <button class="@(State.Theme == "dark" ? "active" : "")" @onclick='() => ApplyTheme("dark")' title="Dark">
-                <Icon Name="Moon" Size="14" />
-            </button>
-        </div>
+<nav class="app-nav" aria-label="Primary">
+    <div class="app-nav__primary">
+        @foreach (var item in _primary)
+        {
+            @NavButton(item)
+        }
     </div>
-</aside>
+    @if (_secondary.Count > 0)
+    {
+        <div class="app-nav__secondary">
+            <div class="nav-sep"></div>
+            @foreach (var item in _secondary)
+            {
+                @NavButton(item)
+            }
+        </div>
+    }
+</nav>
 
 @code {
     record NavItem(string Id, string Label, string Icon, string Route);
 
-    List<NavItem> _nav = new();
-    string _role = "";
-    int _openTickets, _downPrinters;
+    List<NavItem> _primary = new();
+    List<NavItem> _secondary = new();
+    UserAccess? _access;
+    AccessTier _tier = AccessTier.Worker;
+    int _openTickets;
+    int _downPrinters;
+
+    RenderFragment NavButton(NavItem item) => @<button type="button"
+        class="app-nav__item @(IsActive(item.Route) ? "is-active" : "")"
+        @onclick="() => Go(item.Route)">
+        <Icon Name="@item.Icon" Size="15" />
+        <span>@item.Label</span>
+        @if (Badge(item.Id) > 0)
+        {
+            <span class="badge @(item.Id == "printers" ? "urgent" : "")">@Badge(item.Id)</span>
+        }
+    </button>;
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += LocationChanged;
-        State.OnChange += Rerender;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
-        _role = auth.User.FindFirst(ClaimTypes.Role)?.Value ?? "";
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        _access = await Access.GetUserAccessAsync(userId);
+        _tier = _access?.Tier ?? AccessTierExtensions.ParseTierOrWorker(auth.User.FindFirst(ClaimTypes.Role)?.Value);
         BuildNav();
         await RefreshBadges();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    void BuildNav()
     {
-        if (!firstRender) return;
-        await JS.InvokeVoidAsync("topekaNav.apply");
-        var stored = await JS.InvokeAsync<string?>("topekaTheme.get");
-        if (!string.IsNullOrEmpty(stored))
+        _primary = new();
+        _secondary = new();
+
+        if (TenantContext.IsResolved)
         {
-            await JS.InvokeVoidAsync("topekaTheme.set", stored);
-            if (stored != State.Theme) State.SetTheme(stored);
+            AddPrinterNav();
+            AddAssetNav();
+            AddTicketNav();
+            AddIf(_primary, AccessPermissionKeys.LockersView, "lockers", "Lockers", "Locker", "/manager/lockers");
+            AddIf(_primary, AccessPermissionKeys.AssetsViewSupervisorConsole, "loaners", "Loaners", "Clock", "/manager/loaners");
+            AddHomeNav();
+        }
+        else
+        {
+            AddIf(_secondary, AccessPermissionKeys.AdminCreateDivisions, "divisions", "Divisions", "Activity", "/admin/divisions/new");
+        }
+
+        AddIf(_secondary, AccessPermissionKeys.AdminViewLantronix, "lantronix", "Lantronix", "Link", "/admin/lantronix");
+        AddUsersNav();
+        AddIf(_secondary, AccessPermissionKeys.AdminView, "admin", "Admin", "User", "/admin");
+    }
+
+    void AddHomeNav()
+    {
+        if (Has(AccessPermissionKeys.ItDashboard))
+        {
+            _primary.Add(new("home", "Control room", "Home", "/it"));
+        }
+        else if (Has(AccessPermissionKeys.SupervisorHome))
+        {
+            _primary.Add(new("home", "Home", "Home", "/manager"));
+        }
+        else if (Has(AccessPermissionKeys.WorkerHome))
+        {
+            _primary.Add(new("home", "Home", "Home", "/worker"));
         }
     }
 
-    async Task ApplyTheme(string theme)
+    void AddTicketNav()
     {
-        State.SetTheme(theme);
-        await JS.InvokeVoidAsync("topekaTheme.set", theme);
+        if (Has(AccessPermissionKeys.TicketsViewQueue))
+        {
+            _primary.Add(new("tickets", "Tickets", "Ticket", "/it/tickets"));
+        }
+        else if (Has(AccessPermissionKeys.TicketsViewOwn))
+        {
+            _primary.Add(new("tickets", "My requests", "Ticket", _tier >= AccessTier.Supervisor ? "/manager/tickets" : "/worker/tickets"));
+        }
     }
 
-    void BuildNav()
+    void AddPrinterNav()
     {
-        _nav = _role switch
+        if (Has(AccessPermissionKeys.PrintersViewAdmin))
         {
-            "Worker" => new()
-            {
-                new("home",     "Home",        "Home",    "/worker"),
-                new("printers", "Printers",    "Printer", "/worker/printers"),
-                new("tickets",  "My Requests", "Ticket",  "/worker/tickets"),
-            },
-            "Manager" => new()
-            {
-                new("home",     "Home",        "Home",    "/manager"),
-                new("assets",   "Assets",      "Watch",   "/manager/assets"),
-                new("printers", "Printers",    "Printer", "/manager/printers"),
-                new("tickets",  "My Requests", "Ticket",  "/manager/tickets"),
-                new("users",    "Workers",     "Users",   "/manager/users"),
-            },
-            "IT" => new()
-            {
-                new("home",     "Dashboard", "Home",    "/it"),
-                new("tickets",  "Tickets",   "Ticket",  "/it/tickets"),
-                new("printers", "Printers",  "Printer", "/it/printers"),
-                new("assets",   "Assets",    "Watch",   "/it/assets"),
-                new("users",    "Users",     "Users",   "/it/users"),
-            },
-            "SuperAdmin" => TenantContext.IsResolved
-                ? new()
-                {
-                    new("admin",    "Admin",     "User",    "/admin"),
-                    new("home",     "Dashboard", "Home",    "/it"),
-                    new("tickets",  "Tickets",   "Ticket",  "/it/tickets"),
-                    new("printers", "Printers",  "Printer", "/it/printers"),
-                    new("assets",   "Assets",    "Watch",   "/it/assets"),
-                    new("users",    "Users",     "Users",   "/admin/users"),
-                }
-                : new()
-                {
-                    new("admin",     "Admin",     "User",     "/admin"),
-                    new("divisions", "Divisions", "Activity", "/admin/divisions/new"),
-                    new("users",     "Users",     "Users",  "/admin/users"),
-                },
-            _ => new()
-        };
+            _primary.Add(new("printers", "Printers", "Printer", "/it/printers"));
+        }
+        else if (Has(AccessPermissionKeys.PrintersViewStatus))
+        {
+            _primary.Add(new("printers", "Printers", "Printer", _tier >= AccessTier.Supervisor ? "/manager/printers" : "/worker/printers"));
+        }
     }
+
+    void AddAssetNav()
+    {
+        if (Has(AccessPermissionKeys.AssetsViewItConsole))
+        {
+            _primary.Add(new("assets", "Assets", "Watch", "/it/assets"));
+        }
+        else if (Has(AccessPermissionKeys.AssetsViewSupervisorConsole))
+        {
+            _primary.Add(new("assets", "Assets", "Watch", "/manager/assets"));
+        }
+    }
+
+    void AddUsersNav()
+    {
+        if (!Has(AccessPermissionKeys.UsersView))
+        {
+            return;
+        }
+
+        var route = _tier == AccessTier.SuperAdmin
+            ? "/admin/users"
+            : _tier >= AccessTier.Admin
+                ? "/it/users"
+                : "/manager/users";
+        var label = _tier >= AccessTier.Admin || _tier == AccessTier.SuperAdmin ? "Users" : "Workers";
+        AddIf(_secondary, AccessPermissionKeys.UsersView, "users", label, "Users", route);
+    }
+
+    void AddIf(List<NavItem> target, string permission, string id, string label, string icon, string route)
+    {
+        if (Has(permission) && target.All(item => item.Id != id))
+        {
+            target.Add(new(id, label, icon, route));
+        }
+    }
+
+    bool Has(string permission) => _access?.Has(permission) == true;
 
     async Task RefreshBadges()
     {
@@ -133,7 +173,7 @@
         var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
         var allTickets = await Tickets.GetAllAsync();
-        _openTickets = _role is "IT" or "SuperAdmin"
+        _openTickets = Has(AccessPermissionKeys.TicketsViewQueue)
             ? allTickets.Count(t => t.Status != TicketStatus.Resolved)
             : allTickets.Count(t => t.ReportedById == userId && t.Status != TicketStatus.Resolved);
 
@@ -148,24 +188,15 @@
         _ => 0,
     };
 
-    string NavSectionLabel => _role switch
-    {
-        "Manager" => "Shift workspace",
-        "Worker" => "My tools",
-        "SuperAdmin" when !TenantContext.IsResolved => "Administration",
-        _ => "Operations",
-    };
-
     bool IsActive(string route)
     {
         var current = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/');
         if (current.Length == 0) current = "/";
-        var r = route.TrimEnd('/');
-        if (r.Length == 0) r = "/";
-        if (current == r) return true;
-        var isRoleHome = r is "/worker" or "/manager" or "/it";
-        if (!isRoleHome && current.StartsWith(r)) return true;
-        return false;
+        var normalizedRoute = route.TrimEnd('/');
+        if (normalizedRoute.Length == 0) normalizedRoute = "/";
+        if (current == normalizedRoute) return true;
+        var isRoleHome = normalizedRoute is "/worker" or "/manager" or "/it";
+        return !isRoleHome && current.StartsWith(normalizedRoute, StringComparison.OrdinalIgnoreCase);
     }
 
     void Go(string route) => Nav.NavigateTo(route);
@@ -176,11 +207,8 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    void Rerender() => InvokeAsync(StateHasChanged);
-
     public void Dispose()
     {
         Nav.LocationChanged -= LocationChanged;
-        State.OnChange -= Rerender;
     }
 }

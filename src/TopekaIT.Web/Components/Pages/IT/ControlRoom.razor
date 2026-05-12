@@ -1,5 +1,5 @@
 @page "/it"
-@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.ItDashboard)]
 @using TopekaIT.Core.Services
 @inject TicketService TicketService
 @inject PrinterService PrinterService
@@ -10,79 +10,63 @@
 
 <PageTitle>Control room · Topeka IT</PageTitle>
 
-<div class="page">
-    <div class="page-head">
-        <div>
-            <h1>Control room</h1>
-            <div class="page-sub">Floor-wide IT pulse across tickets, printers, assets, and activity.</div>
-        </div>
-        <div class="page-actions">
-            <div class="seg">
-                @foreach (var scope in _scopes)
-                {
-                    <button class="@(_scope == scope.Id ? "active" : "")" @onclick="() => SetScope(scope.Id)">@scope.Label</button>
-                }
-            </div>
+<div class="page control-room-page">
+    <PageHeader Crumbs="_crumbs"
+                Title="Control room"
+                Subtitle="@HeaderSubtitle">
+        <Actions>
+            <SegmentedControl Options="_scopeSegments" Selected="_scope" SelectedChanged="SetScope" AriaLabel="Time window" />
             <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/it/tickets")'>
                 <Icon Name="Ticket" Size="14" /> Queue
             </button>
+        </Actions>
+    </PageHeader>
+
+    <div class="dash-grid">
+        <div class="dash-card @(_downP > 0 || _warnP > 0 ? "is-warn" : "")">
+            <div class="l">Printer attention</div>
+            <div class="v">@(_downP + _warnP)</div>
+            <div class="m">@_downP down - @_warnP warning - @_upP quiet</div>
+        </div>
+        <div class="dash-card @(_urgent > 0 ? "is-crit" : _open > 8 ? "is-warn" : "")">
+            <div class="l">Open tickets</div>
+            <div class="v">@_open</div>
+            <div class="m">@_urgent urgent - @_highP high - @_newInScope new in @_scopeLabel</div>
+        </div>
+        <div class="dash-card @(_repair > 0 ? "is-warn" : "")">
+            <div class="l">Assets out</div>
+            <div class="v">@_out</div>
+            <div class="m">@_repair in repair - @_batteryQty batteries tracked</div>
+        </div>
+        <div class="dash-card @(_avgCloseHours <= 8 && _resolved > 0 ? "is-ok" : "")">
+            <div class="l">Avg time to close</div>
+            <div class="v">@AvgCloseLabel</div>
+            <div class="m">@_resolved resolved in @_scopeLabel</div>
         </div>
     </div>
 
-    <div class="ops-kpi-grid">
-        <div class="ops-kpi @(_open > 8 ? "warn" : "")">
-            <div class="kpi-label">Open tickets</div>
-            <div class="kpi-value">@_open</div>
-            <div class="kpi-foot">@_urgent urgent · @_highP high · @_newInScope new in @_scopeLabel</div>
-        </div>
-        <div class="ops-kpi @(_downP > 0 ? "down" : _warnP > 0 ? "warn" : "")">
-            <div class="kpi-label">Printer attention</div>
-            <div class="kpi-value">@(_downP + _warnP)</div>
-            <div class="kpi-foot">@_downP down · @_warnP warning · @_upP quiet</div>
-        </div>
-        <div class="ops-kpi @(_repair > 0 ? "warn" : "")">
-            <div class="kpi-label">Assets out</div>
-            <div class="kpi-value">@_out</div>
-            <div class="kpi-foot">@_repair in repair · @_batteryQty batteries tracked</div>
-        </div>
-        <div class="ops-kpi @(_avgCloseHours <= 8 && _resolved > 0 ? "up" : "")">
-            <div class="kpi-label">Avg time to close</div>
-            <div class="kpi-value">@AvgCloseLabel</div>
-            <div class="kpi-foot">@_resolved resolved in @_scopeLabel</div>
-        </div>
-    </div>
-
-    <div class="control-grid">
-        <section class="card">
-            <div class="card-head">
-                <div class="card-title">Printer fleet</div>
-                <span class="card-link">@_printers.Count total</span>
-            </div>
+    <div class="dash-two">
+        <section class="dash-block">
+            <h3>Printer fleet <span class="h-meta">@_printers.Count total - @_upP healthy</span></h3>
             @if (_printers.Count == 0)
             {
                 <EmptyState IconName="Printer" Title="No printers">Add printers to see fleet health here.</EmptyState>
             }
             else
             {
-                <div class="fleet-heatmap">
+                <div class="printer-tiles">
                     @foreach (var printer in _printers.OrderByDescending(PrinterRank).ThenBy(p => p.Name))
                     {
-                        <button class="fleet-tile @PrinterTileClass(printer)" @onclick="() => OpenPrinter(printer)">
-                            <span class="fleet-name">@printer.Name</span>
-                            <span class="fleet-meta">@printer.Department</span>
-                            <span class="fleet-latency">@LatencyLabel(printer)</span>
-                            <span class="fleet-pulse"></span>
+                        <button class="printer-tile @PrinterTileClass(printer)" @onclick="() => OpenPrinter(printer)">
+                            <div class="ip">@PrinterName(printer)</div>
+                            <div class="ms">@LatencyLabel(printer)</div>
+                            <span class="dot @PrinterDotClass(printer)"></span>
                         </button>
                     }
                 </div>
             }
-        </section>
 
-        <section class="card">
-            <div class="card-head">
-                <div class="card-title">Event shape</div>
-                <span class="card-link">@_scopeLabel</span>
-            </div>
+            <h3>Event shape <span class="h-meta">@_scopeLabel - ticket activity</span></h3>
             <div class="event-histogram">
                 @foreach (var bucket in _histogram)
                 {
@@ -94,53 +78,47 @@
                 <span>now</span>
             </div>
         </section>
-    </div>
 
-    <div class="control-grid lower">
-        <section class="card">
-            <div class="card-head">
-                <div class="card-title">Top of queue</div>
-                <a class="card-link" @onclick='() => Nav.NavigateTo("/it/tickets")' style="cursor: pointer;">Full queue -></a>
-            </div>
+        <section class="dash-block">
+            <h3>Top of queue <span class="h-meta">@_topTickets.Count of @_open</span></h3>
             @if (_topTickets.Count == 0)
             {
-                <EmptyState IconName="Ticket" Title="All clear">Queue is empty.</EmptyState>
+                <EmptyState IconName="Ticket" Title="All clear">Queue is empty. The first ticket of the shift will appear here.</EmptyState>
             }
             else
             {
-                <div class="ops-queue">
+                <div class="activity queue-activity">
                     @foreach (var ticket in _topTickets)
                     {
-                        <button class="ops-queue-row priority-@ticket.Priority.ToString().ToLowerInvariant()" @onclick="() => OpenTicket(ticket)">
-                            <span class="mono">#@ShortId(ticket.Id)</span>
-                            <span>
-                                <strong>@ticket.Title</strong>
-                                <small>@ReportedBy(ticket) · @AssignedTo(ticket)</small>
-                            </span>
-                            <span class="mono">@Age(ticket.CreatedAt)</span>
+                        <button class="activity-row ticket-row priority-@ticket.Priority.ToString().ToLowerInvariant()" @onclick="() => OpenTicket(ticket)">
+                            <span class="priority-stripe"></span>
+                            <div class="icon @TicketTone(ticket)"><Icon Name="Ticket" Size="12" /></div>
+                            <div class="body">
+                                <div class="l1"><b class="mono">#@ShortId(ticket.Id)</b> - @ticket.Title</div>
+                                <div class="e-sub">@ReportedBy(ticket) - @AssignedTo(ticket)</div>
+                            </div>
+                            <div class="when">@Age(ticket.CreatedAt)</div>
                         </button>
                     }
                 </div>
             }
-        </section>
 
-        <section class="card">
-            <div class="card-head">
-                <div class="card-title">Recent activity</div>
-            </div>
+            <h3>Recent activity <span class="h-meta">@_activity.Count events</span></h3>
             @if (_activity.Count == 0)
             {
-                <EmptyState IconName="Activity" Title="Quiet">No activity yet.</EmptyState>
+                <EmptyState IconName="Activity" Title="Quiet">No activity yet. New ticket, printer, and asset events will appear here.</EmptyState>
             }
             else
             {
-                <div class="feed">
+                <div class="activity">
                     @foreach (var ev in _activity)
                     {
-                        <div class="feed-item">
-                            <div class="feed-icon"><Icon Name="@ActIcon(ev.Kind)" Size="14" /></div>
-                            <div class="feed-text">@ev.Text</div>
-                            <div class="feed-time">@Format.RelTime(ev.Timestamp)</div>
+                        <div class="activity-row">
+                            <div class="icon"><Icon Name="@ActIcon(ev.Kind)" Size="12" /></div>
+                            <div class="body">
+                                <div class="l1">@ev.Text</div>
+                            </div>
+                            <div class="when">@Format.RelTime(ev.Timestamp)</div>
                         </div>
                     }
                 </div>
@@ -152,12 +130,20 @@
 <TicketDetail Ticket="_viewing" OnClose="() => _viewing = null" OnChanged="Refresh" />
 
 @code {
+    private readonly string[] _crumbs = ["Operations", "Control room"];
     private readonly ScopeOption[] _scopes =
     [
         new("1h", "1h", TimeSpan.FromHours(1)),
         new("24h", "24h", TimeSpan.FromHours(24)),
         new("7d", "7d", TimeSpan.FromDays(7)),
         new("30d", "30d", TimeSpan.FromDays(30)),
+    ];
+    private readonly SegmentedControlOption[] _scopeSegments =
+    [
+        new("1h", "1h"),
+        new("24h", "24h"),
+        new("7d", "7d"),
+        new("30d", "30d"),
     ];
 
     Ticket? _viewing;
@@ -175,6 +161,7 @@
     List<HistogramBucket> _histogram = new();
 
     string AvgCloseLabel => _resolved == 0 ? "-" : _avgCloseHours < 24 ? $"{_avgCloseHours:0.0}h" : $"{_avgCloseHours / 24:0.0}d";
+    string HeaderSubtitle => $"Floor-wide pulse - printers, assets, tickets, activity - {DateTimeOffset.Now.ToString("M/d h:mm tt")}";
 
     protected override async Task OnInitializedAsync() => await Refresh();
 
@@ -281,11 +268,22 @@
 
     string PrinterTileClass(Printer printer) => printer.Status switch
     {
-        PrinterStatus.Down => "down",
-        PrinterStatus.Warn => "warn",
-        _ when printer.LastLatencyMs >= 600 => "warn",
+        PrinterStatus.Down => "is-crit",
+        PrinterStatus.Warn => "is-warn",
+        _ when printer.LastLatencyMs >= 600 => "is-warn",
         _ => "",
     };
+
+    string PrinterDotClass(Printer printer) => printer.Status switch
+    {
+        PrinterStatus.Down => "dot--crit",
+        PrinterStatus.Warn => "dot--warn",
+        _ when printer.LastLatencyMs >= 600 => "dot--warn",
+        _ => "dot--ok",
+    };
+
+    static string PrinterName(Printer printer)
+        => !string.IsNullOrWhiteSpace(printer.IpAddress) ? printer.IpAddress : printer.Name;
 
     static string LatencyLabel(Printer printer)
         => printer.LastLatencyMs.HasValue ? $"{printer.LastLatencyMs} ms" : "no ping";
@@ -299,6 +297,13 @@
             : _users.FirstOrDefault(u => u.Id == ticket.AssigneeId)?.Name ?? "assigned";
 
     static string ShortId(string id) => id.Length <= 6 ? id : id[..6];
+
+    static string TicketTone(Ticket ticket) => ticket.Priority switch
+    {
+        TicketPriority.Urgent => "is-crit",
+        TicketPriority.High => "is-warn",
+        _ => "is-info",
+    };
 
     static string Age(DateTimeOffset created)
     {

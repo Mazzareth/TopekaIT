@@ -1,5 +1,5 @@
 @page "/it/printers/{Id}"
-@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.PrintersViewDetail)]
 @using ApexCharts
 @using TopekaIT.Core.Services
 @inject PrinterService PrinterService
@@ -7,6 +7,8 @@
 @inject PrinterEventService PrinterEvents
 @inject NavigationManager Nav
 @inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 @implements IDisposable
 
 <PageTitle>@(_printer?.Name ?? "Printer") · Topeka IT</PageTitle>
@@ -152,9 +154,12 @@ else
                                 <div class="printer-alert-message">@alert.FriendlyMessage</div>
                                 <div class="mono" style="font-size: 11px; color: var(--text-faint);">Last seen @TopekaIT.Web.Services.Format.RelTime(alert.LastSeenAt)</div>
                             </div>
-                            <button class="btn btn-sm" @onclick="() => ClearAlert(alert)">
-                                Clear
-                            </button>
+                            @if (_canClearAlerts)
+                            {
+                                <button class="btn btn-sm" @onclick="() => ClearAlert(alert)">
+                                    Clear
+                                </button>
+                            }
                         </div>
                     }
                 </div>
@@ -162,6 +167,8 @@ else
         }
 
         <!-- Printer Log -->
+        @if (_canViewLogs)
+        {
         <div class="card">
             <div class="card-head">
                 <span class="card-title">Printer Log</span>
@@ -248,6 +255,7 @@ else
                 }
             }
         </div>
+        }
     </div>
 }
 
@@ -264,6 +272,8 @@ else
     string _eventTypeFilter = "all";
     string _timeFilter = "all";
     string _logSearch = "";
+    bool _canClearAlerts;
+    bool _canViewLogs;
 
     ApexChartOptions<UptimeDataPoint> _uptimeChartOptions = new();
     ApexChartOptions<LatencyDataPoint> _latencyChartOptions = new();
@@ -276,6 +286,11 @@ else
     protected override async Task OnInitializedAsync()
     {
         State.OnChange += OnThemeChanged;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canClearAlerts = access?.Has(AccessPermissionKeys.PrintersClearAlerts) == true;
+        _canViewLogs = access?.Has(AccessPermissionKeys.PrintersViewErrorLogs) == true;
 
         _printer = await PrinterService.GetByIdAsync(Id);
         if (_printer == null) return;
@@ -497,6 +512,7 @@ else
 
     async Task ClearAlert(PrinterAlertState alert)
     {
+        if (!_canClearAlerts) return;
         await PrinterEvents.ClearAlertAsync(alert.PrinterId, alert.AlertKey);
         await LoadData();
     }

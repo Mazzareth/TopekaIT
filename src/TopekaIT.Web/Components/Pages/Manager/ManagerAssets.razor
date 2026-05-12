@@ -1,5 +1,5 @@
 @page "/manager/assets"
-@attribute [Authorize(Roles = "Manager,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewSupervisorConsole)]
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Domain.Enums
 @using TopekaIT.Core.Services
@@ -9,6 +9,7 @@
 @inject UserService UserService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>Assets · Topeka IT</PageTitle>
 
@@ -19,12 +20,18 @@
             <div class="page-sub">Lockers, SAE devices, scanners, and batteries.</div>
         </div>
         <div class="page-actions">
-            <button class="btn" @onclick="() => _createOpen = true">
-                <Icon Name="Plus" Size="14" /> Add Asset
-            </button>
-            <button class="btn btn-primary" @onclick="FocusScanDock">
-                <Icon Name="Scan" Size="14" /> Scan
-            </button>
+            @if (_canCreateAssets)
+            {
+                <button class="btn" @onclick="() => _createOpen = true">
+                    <Icon Name="Plus" Size="14" /> Add Asset
+                </button>
+            }
+            @if (_canScanAssets)
+            {
+                <button class="btn btn-primary" @onclick="FocusScanDock">
+                    <Icon Name="Scan" Size="14" /> Scan
+                </button>
+            }
         </div>
     </div>
 
@@ -45,7 +52,7 @@
         }
         else if (_scanNotFound)
         {
-            <span class="scan-result" style="color:var(--warn)">Not found — <button class="btn btn-sm" @onclick="OpenRegister">Register</button></span>
+            <span class="scan-result" style="color:var(--warn)">Not found @if (_canCreateAssets) { <span>— <button class="btn btn-sm" @onclick="OpenRegister">Register</button></span> }</span>
         }
     </div>
 
@@ -189,9 +196,12 @@
                                     <span>Never audited</span>
                                 }
                             </span>
+                        @if (_canEditLockers)
+                        {
                             <button class="btn btn-sm btn-ghost" @onclick="() => OpenLocker(locker)">
                                 <Icon Name="Edit" Size="12" /> Edit
                             </button>
+                        }
                         </div>
                     </div>
                 }
@@ -269,7 +279,7 @@
                             </span>
                         </div>
                         <div style="text-align:right;display:flex;gap:5px;justify-content:flex-end;" @onclick:stopPropagation="true">
-                            @if (a.Category == AssetCategory.Scanner)
+                            @if (_canPairScanners && a.Category == AssetCategory.Scanner)
                             {
                                 <button class="btn btn-sm" @onclick="() => OpenPairScanner(a)">
                                     <Icon Name="Link" Size="12" /> Pair
@@ -378,6 +388,10 @@
     bool _scanNotFound;
     bool _camScanOpen;
     bool _createOpen;
+    bool _canCreateAssets;
+    bool _canScanAssets;
+    bool _canPairScanners;
+    bool _canEditLockers;
 
     Asset? _viewing;
     string? _viewAction;
@@ -395,7 +409,17 @@
 
     ElementReference _scanInput;
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canCreateAssets = access?.Has(AccessPermissionKeys.AssetsCreate) == true;
+        _canScanAssets = access?.Has(AccessPermissionKeys.AssetsScanSearch) == true;
+        _canPairScanners = access?.Has(AccessPermissionKeys.AssetsPairScanners) == true;
+        _canEditLockers = access?.Has(AccessPermissionKeys.LockersEditMetadata) == true;
+        await Load();
+    }
 
     async Task Load()
     {
@@ -410,6 +434,7 @@
 
     async Task FocusScanDock()
     {
+        if (!_canScanAssets) return;
         try { await _scanInput.FocusAsync(); } catch { /* JS not yet ready */ }
     }
 
@@ -468,6 +493,7 @@
 
     void OpenRegister()
     {
+        if (!_canCreateAssets) return;
         _prefillSerial = _scanValue;
         _createOpen    = true;
         _scanNotFound  = false;
@@ -497,6 +523,7 @@
     async Task SaveLocker()
     {
         if (_editingLocker == null) return;
+        if (!_canEditLockers) return;
         await LockerService.UpdateAsync(_editingLocker);
         State.PushToast("Locker updated", "up");
         _editingLocker = null;
@@ -505,6 +532,7 @@
 
     void OpenPairScanner(Asset scanner)
     {
+        if (!_canPairScanners) return;
         _pairingScanner = scanner;
         _pairTarget     = "";
         _pairError      = null;
@@ -513,6 +541,7 @@
     async Task CommitPair()
     {
         if (_pairingScanner == null) return;
+        if (!_canPairScanners) return;
         _pairError = null;
 
         var sae = await AssetService.FindByScanAsync(_pairTarget);

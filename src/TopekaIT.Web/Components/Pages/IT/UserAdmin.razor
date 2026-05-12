@@ -1,29 +1,33 @@
 @page "/it/users"
 @page "/manager/users"
 @page "/admin/users"
-@attribute [Authorize(Roles = "IT,Manager,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.UsersView)]
+@using System.Security.Claims
 @using TopekaIT.Core.Services
 @inject UserService UserService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
-@inject ITenantContext TenantContext
 @inject DivisionService DivisionService
 @inject IJSRuntime JS
+@inject AccessControlService Access
 
-<PageTitle>@(_isSuperAdmin || _isIT ? "Users" : "Workers") · Topeka IT</PageTitle>
+<PageTitle>@PageTitleText · Topeka IT</PageTitle>
 
 <div class="page">
     <div class="page-head">
         <div>
-            <h1>@(_isSuperAdmin || _isIT ? "Users" : "Workers")</h1>
-            <div class="page-sub">Accounts, lockers, audit access, and stale activity.</div>
+            <h1>@PageTitleText</h1>
+            <div class="page-sub">Accounts, lockers, audit access, stale activity, and scoped feature access.</div>
         </div>
         <div class="page-actions">
             @if (_selected.Count > 0)
             {
                 <button class="btn" @onclick="() => _selected.Clear()">@_selected.Count selected</button>
             }
-            <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add user</button>
+            @if (_canCreateUsers)
+            {
+                <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add user</button>
+            }
         </div>
     </div>
 
@@ -42,7 +46,7 @@
             <label class="checkbox"><input type="checkbox" checked="@AllVisibleSelected" @onchange="ToggleAll" /></label>
             <div>Name</div>
             <div>Username</div>
-            @if (_isSuperAdmin)
+            @if (_actorTier == AccessTier.SuperAdmin)
             {
                 <div>Division</div>
             }
@@ -50,13 +54,13 @@
             <div>Locker</div>
             <div>Last active</div>
             <div>Audit</div>
-            <div>Role</div>
+            <div>Tier</div>
             <div style="text-align: right;">Actions</div>
         </div>
 
         @if (_rows.Count == 0)
         {
-            <EmptyState IconName="Users" Title="@(_isSuperAdmin || _isIT ? "No users yet" : "No workers yet")">Add an account to get started.</EmptyState>
+            <EmptyState IconName="Users" Title="@($"No {PageTitleText.ToLowerInvariant()} yet")">Add an account to get started.</EmptyState>
         }
 
         @foreach (var row in _rows)
@@ -66,11 +70,11 @@
                 <div>
                     <div class="asset-row user-cols" style="@UserGridStyle">
                         <div></div>
-                        <input class="inline-input" @bind="row.Name" @bind:event="oninput" placeholder="Full name" />
-                        <input class="inline-input mono" @bind="row.Username" @bind:event="oninput" placeholder="username" />
-                        @if (_isSuperAdmin)
+                        <input class="inline-input" @bind="row.Name" @bind:event="oninput" placeholder="Full name" disabled="@(!CanEditRow(row))" />
+                        <input class="inline-input mono" @bind="row.Username" @bind:event="oninput" placeholder="username" disabled="@(!CanEditRow(row))" />
+                        @if (_actorTier == AccessTier.SuperAdmin)
                         {
-                            <select class="inline-input" @bind="row.DivisionId" disabled="@(row.Role == UserRole.SuperAdmin)">
+                            <select class="inline-input" @bind="row.DivisionId" disabled="@(row.Role == AccessTier.SuperAdmin || !CanEditRow(row))">
                                 <option value="">Global</option>
                                 @foreach (var division in _divisions)
                                 {
@@ -78,24 +82,18 @@
                                 }
                             </select>
                         }
-                        <input class="inline-input" @bind="row.Position" @bind:event="oninput" placeholder="Position" />
-                        <input class="inline-input mono" @bind="row.LockerNumber" @bind:event="oninput" placeholder="L#" />
+                        <input class="inline-input" @bind="row.Position" @bind:event="oninput" placeholder="Position" disabled="@(!CanEditRow(row))" />
+                        <input class="inline-input mono" @bind="row.LockerNumber" @bind:event="oninput" placeholder="L#" disabled="@(!CanEditRow(row))" />
                         <div></div>
-                        <label class="checkbox"><input type="checkbox" @bind="row.Audit" /></label>
-                        <select class="inline-input" @bind="row.Role" disabled="@(!_isIT && !_isSuperAdmin)">
-                            <option value="@UserRole.Worker">Worker</option>
-                            @if (_isIT || _isSuperAdmin)
+                        <label class="checkbox"><input type="checkbox" @bind="row.Audit" disabled="@(!CanEditRow(row))" /></label>
+                        <select class="inline-input" @bind="row.Role" disabled="@(!CanChangeRowTier(row))">
+                            @foreach (var tier in RoleOptions(row))
                             {
-                                <option value="@UserRole.Manager">Manager</option>
-                                <option value="@UserRole.IT">IT</option>
-                            }
-                            @if (_isSuperAdmin)
-                            {
-                                <option value="@UserRole.SuperAdmin">SuperAdmin</option>
+                                <option value="@tier">@tier.DisplayName()</option>
                             }
                         </select>
                         <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
-                            <button class="btn btn-sm btn-accent" @onclick="() => SaveRow(row)" disabled="@(string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Username))">
+                            <button class="btn btn-sm btn-accent" @onclick="() => SaveRow(row)" disabled="@(string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Username) || !CanEditRow(row))">
                                 <Icon Name="Check" Size="12" />
                             </button>
                             <button class="btn btn-sm btn-ghost" @onclick="() => CancelRow(row)"><Icon Name="X" Size="12" /></button>
@@ -116,7 +114,7 @@
                     <label class="checkbox"><input type="checkbox" checked="@_selected.Contains(row.Id)" @onchange="args => ToggleSelected(row.Id, args)" /></label>
                     <div style="font-weight: 500;">@row.Name</div>
                     <div class="mono" style="font-size: 12px;">@row.Username</div>
-                    @if (_isSuperAdmin)
+                    @if (_actorTier == AccessTier.SuperAdmin)
                     {
                         <div style="font-size: 12px;">@DivisionName(row.DivisionId)</div>
                     }
@@ -124,14 +122,24 @@
                     <div class="mono" style="font-size: 12px;">@LockerText(row)</div>
                     <div class="mono" style="font-size: 11px; color: var(--text-faint);">@LastActiveText(row.LastActiveAt)</div>
                     <div style="font-size: 12px;">@(row.Audit ? "Yes" : "No")</div>
-                    <div class="quiet-role">@row.Role</div>
+                    <div><Pill Kind="@RolePill(row.Role)">@row.Role.DisplayName()</Pill></div>
                     <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
-                        @if (_isIT || _isSuperAdmin)
+                        @if (_canResetPasswords && CanManageRow(row))
                         {
                             <button class="btn btn-sm" @onclick="() => ResetPassword(row)" title="Reset password"><Icon Name="Key" Size="12" /></button>
                         }
-                        <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                        @if (_canEditAccess && CanManageRow(row))
+                        {
+                            <button class="btn btn-sm" @onclick="() => OpenAccessCatalog(row)" title="Access catalog"><Icon Name="List" Size="12" /></button>
+                        }
+                        @if (_canEditUsers && CanManageRow(row))
+                        {
+                            <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
+                        }
+                        @if (_canDeleteUsers && CanManageRow(row))
+                        {
+                            <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                        }
                     </div>
                 </div>
             }
@@ -142,10 +150,58 @@
             <span>@_rows.Count(r => r.LastActiveAt == null) never active</span>
         </div>
     </div>
-
 </div>
 
-@* Set Password Modal *@
+<Modal Open="@_accessOpen" OnClose="CloseAccessCatalog" Wide>
+    <Title>Access Catalog</Title>
+    <ChildContent>
+        @if (_accessRow != null && _selectedAccess != null)
+        {
+            <div style="display: grid; gap: 14px;">
+                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+                    <div>
+                        <div style="font-weight: 600;">@_accessRow.Name</div>
+                        <div style="font-size: 12px; color: var(--text-faint);">@_accessRow.Role.DisplayName() · @DivisionName(_accessRow.DivisionId)</div>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-faint);">Inherited defaults plus user overrides</div>
+                </div>
+
+                @foreach (var group in AccessCatalog.Permissions.GroupBy(p => p.Group))
+                {
+                    <div class="card" style="padding: 0;">
+                        <div class="card-head">
+                            <span class="card-title">@group.Key</span>
+                        </div>
+                        @foreach (var permission in group)
+                        {
+                            var isDefault = IsDefaultAllowed(_accessRow.Role, permission);
+                            var isEffective = _selectedAccess.Has(permission.Key);
+                            var overrideState = _selectedAccess.OverrideFor(permission.Key);
+                            var canMutate = CanMutatePermission(_accessRow, permission);
+                            <div class="asset-row" style="grid-template-columns: 1.5fr 90px 95px 210px; align-items: center;">
+                                <div>
+                                    <div style="font-weight: 500;">@permission.DisplayName</div>
+                                    <div class="mono" style="font-size: 11px; color: var(--text-faint);">@permission.Key</div>
+                                </div>
+                                <div><Pill Kind="@(isDefault ? "pill-info" : "pill-dim")">@(isDefault ? "Default" : "Off")</Pill></div>
+                                <div><Pill Kind="@(isEffective ? "pill-up" : "pill-dim")">@(isEffective ? "Allowed" : "Denied")</Pill></div>
+                                <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                                    <button class="@OverrideButtonClass(overrideState == null)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, null)">Inherit</button>
+                                    <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Allow)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Allow)">Allow</button>
+                                    <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Deny)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Deny)">Deny</button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-accent" @onclick="CloseAccessCatalog"><Icon Name="Check" Size="14" /> Done</button>
+    </Footer>
+</Modal>
+
 <Modal Open="@_showSetPassword" OnClose="CloseSetPasswordModal">
     <Title>Set Password</Title>
     <ChildContent>
@@ -172,7 +228,6 @@
     </Footer>
 </Modal>
 
-@* Temp Password Modal *@
 <Modal Open="@_showTempPassword" OnClose="CloseTempPasswordModal">
     <Title>Temporary Password</Title>
     <ChildContent>
@@ -202,35 +257,55 @@
     List<UserRow> _rows = new();
     List<Division> _divisions = new();
     HashSet<string> _selected = new();
-    bool _isIT;
-    bool _isSuperAdmin;
+    AccessTier _actorTier = AccessTier.Worker;
+    string _currentUserId = "";
     string? _currentDivisionId;
-    string UserGridStyle => _isSuperAdmin
-        ? "grid-template-columns: 40px 1fr 1fr 120px 100px 90px 105px 70px 90px 160px;"
-        : "grid-template-columns: 40px 1fr 1fr 100px 90px 105px 70px 90px 160px;";
-    bool AllVisibleSelected => _rows.Count > 0 && _rows.Where(r => !r.IsNew && !r.IsEditing).All(r => _selected.Contains(r.Id));
 
-    // Set password modal state
+    bool _canCreateUsers;
+    bool _canEditUsers;
+    bool _canDeleteUsers;
+    bool _canResetPasswords;
+    bool _canChangeTier;
+    bool _canEditAccess;
+
+    bool _accessOpen;
+    UserRow? _accessRow;
+    UserAccess? _selectedAccess;
+
     bool _showSetPassword;
     string _setPasswordInput = "";
     UserRow? _pendingResetRow;
 
-    // Temp password result modal state
     bool _showTempPassword;
     string _tempPassword = "";
     string _resetUserName = "";
     string _copyFeedback = "";
 
+    string PageTitleText => _actorTier >= AccessTier.Admin || _actorTier == AccessTier.SuperAdmin ? "Users" : "Workers";
+    string UserGridStyle => _actorTier == AccessTier.SuperAdmin
+        ? "grid-template-columns: 40px 1fr 1fr 120px 100px 90px 105px 70px 100px 210px;"
+        : "grid-template-columns: 40px 1fr 1fr 100px 90px 105px 70px 100px 210px;";
+    bool AllVisibleSelected => _rows.Count > 0 && _rows.Where(r => !r.IsNew && !r.IsEditing).All(r => _selected.Contains(r.Id));
+
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
-        _isIT = auth.User.IsInRole("IT");
-        _isSuperAdmin = auth.User.IsInRole("SuperAdmin");
+        _currentUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         _currentDivisionId = auth.User.FindFirst("division")?.Value;
         if (string.IsNullOrWhiteSpace(_currentDivisionId))
         {
             _currentDivisionId = auth.User.FindFirst("active_division")?.Value;
         }
+
+        var currentAccess = await Access.GetUserAccessAsync(_currentUserId);
+        _actorTier = currentAccess?.Tier ?? AccessTierExtensions.ParseTierOrWorker(auth.User.FindFirst(ClaimTypes.Role)?.Value);
+        _canCreateUsers = currentAccess?.Has(AccessPermissionKeys.UsersCreate) == true;
+        _canEditUsers = currentAccess?.Has(AccessPermissionKeys.UsersEdit) == true;
+        _canDeleteUsers = currentAccess?.Has(AccessPermissionKeys.UsersDelete) == true;
+        _canResetPasswords = currentAccess?.Has(AccessPermissionKeys.UsersResetPasswords) == true;
+        _canChangeTier = currentAccess?.Has(AccessPermissionKeys.UsersChangeTier) == true;
+        _canEditAccess = currentAccess?.Has(AccessPermissionKeys.UsersEditAccess) == true;
+
         _divisions = (await DivisionService.GetAllAsync()).ToList();
         await Load();
     }
@@ -239,20 +314,20 @@
     {
         var unsavedNewRows = _rows.Where(r => r.IsNew).ToList();
         IEnumerable<User> allUsers = await UserService.GetAllAsync();
-        if (_isSuperAdmin)
+        if (_actorTier == AccessTier.SuperAdmin)
         {
-            // SuperAdmin sees all users.
+            // Super Admin sees all users.
         }
-        else if (_isIT)
+        else if (_actorTier >= AccessTier.Admin)
         {
             allUsers = allUsers.Where(u => u.DivisionId == _currentDivisionId);
         }
         else
         {
-            allUsers = allUsers.Where(u => u.DivisionId == _currentDivisionId && u.Role == UserRole.Worker);
+            allUsers = allUsers.Where(u => u.DivisionId == _currentDivisionId && u.Role == AccessTier.Worker);
         }
-        var users = allUsers.OrderBy(u => u.Name).ToList();
-        _rows = users.Select(u => new UserRow
+
+        _rows = allUsers.OrderBy(u => u.Name).Select(u => new UserRow
         {
             Id = u.Id,
             Name = u.Name,
@@ -264,8 +339,6 @@
             Audit = u.Audit,
             DivisionId = u.DivisionId,
             LastActiveAt = u.LastActiveAt,
-            IsNew = false,
-            IsEditing = false,
         }).ToList();
 
         foreach (var unsaved in unsavedNewRows)
@@ -275,8 +348,8 @@
     }
 
     IEnumerable<RoleStat> RoleStats()
-        => Enum.GetValues<UserRole>()
-            .Select(role => new RoleStat(role.ToString(), _rows.Count(r => r.Role == role)))
+        => Enum.GetValues<AccessTier>()
+            .Select(role => new RoleStat(role.DisplayName(), _rows.Count(r => r.Role == role)))
             .Where(stat => stat.Count > 0);
 
     void ToggleAll(ChangeEventArgs args)
@@ -297,23 +370,19 @@
     void ToggleSelected(string id, ChangeEventArgs args)
     {
         var isChecked = args.Value is bool b && b;
-        if (isChecked)
-        {
-            _selected.Add(id);
-        }
-        else
-        {
-            _selected.Remove(id);
-        }
+        if (isChecked) _selected.Add(id);
+        else _selected.Remove(id);
     }
 
     void AddRow()
     {
-        _rows.Insert(0, new UserRow { IsNew = true, Role = UserRole.Worker, DivisionId = _currentDivisionId });
+        if (!_canCreateUsers) return;
+        _rows.Insert(0, new UserRow { IsNew = true, Role = AccessTier.Worker, DivisionId = _currentDivisionId });
     }
 
     void EditRow(UserRow row)
     {
+        if (!CanEditRow(row)) return;
         row.IsEditing = true;
         row._backupName = row.Name;
         row._backupUsername = row.Username;
@@ -329,41 +398,41 @@
         if (row.IsNew)
         {
             _rows.Remove(row);
+            return;
         }
-        else
-        {
-            row.Name = row._backupName;
-            row.Username = row._backupUsername;
-            row.Role = row._backupRole;
-            row.DivisionId = row._backupDivisionId;
-            row.Position = row._backupPosition;
-            row.LockerNumber = row._backupLockerNumber;
-            row.Audit = row._backupAudit;
-            row.IsEditing = false;
-        }
+
+        row.Name = row._backupName;
+        row.Username = row._backupUsername;
+        row.Role = row._backupRole;
+        row.DivisionId = row._backupDivisionId;
+        row.Position = row._backupPosition;
+        row.LockerNumber = row._backupLockerNumber;
+        row.Audit = row._backupAudit;
+        row.IsEditing = false;
     }
 
     async Task SaveRow(UserRow row)
     {
         if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Username)) return;
+        if (!CanEditRow(row)) return;
 
-        if (!_isIT && !_isSuperAdmin && row.Role != UserRole.Worker)
+        if (!CanAssignTier(row.Role))
         {
-            State.PushToast("Managers can only manage Workers.", "down");
+            State.PushToast("You can only assign lower tiers.", "down");
             return;
         }
 
-        if (!_isSuperAdmin && row.Role == UserRole.SuperAdmin)
+        if (!row.IsNew && row.Role != row._backupRole && !_canChangeTier)
         {
-            State.PushToast("Only SuperAdmin can create SuperAdmin users.", "down");
+            State.PushToast("You do not have access to change tiers.", "down");
             return;
         }
 
-        var divisionId = row.Role == UserRole.SuperAdmin
+        var divisionId = row.Role == AccessTier.SuperAdmin
             ? null
-            : (_isSuperAdmin ? row.DivisionId : _currentDivisionId);
+            : (_actorTier == AccessTier.SuperAdmin ? row.DivisionId : _currentDivisionId);
 
-        if (row.Role != UserRole.SuperAdmin && string.IsNullOrWhiteSpace(divisionId))
+        if (row.Role != AccessTier.SuperAdmin && string.IsNullOrWhiteSpace(divisionId))
         {
             State.PushToast("Select a division.", "down");
             return;
@@ -395,11 +464,13 @@
                 State.PushToast($"Updated {existing.Name}", "");
             }
         }
+
         await Load();
     }
 
     async Task Remove(UserRow row)
     {
+        if (!_canDeleteUsers || !CanManageRow(row)) return;
         var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete {row.Name}? This cannot be undone.");
         if (!confirmed) return;
         await UserService.DeleteAsync(row.Id);
@@ -407,8 +478,38 @@
         await Load();
     }
 
+    async Task OpenAccessCatalog(UserRow row)
+    {
+        if (!_canEditAccess || !CanManageRow(row)) return;
+        _accessRow = row;
+        _selectedAccess = await Access.GetUserAccessAsync(row.Id);
+        _accessOpen = true;
+    }
+
+    async Task SetPermissionOverride(string permissionKey, PermissionOverrideState? state)
+    {
+        if (_accessRow == null) return;
+        var result = await Access.SetOverrideAsync(_currentUserId, _accessRow.Id, permissionKey, state);
+        if (!result.Succeeded)
+        {
+            State.PushToast(result.Error ?? "Access change denied.", "down");
+            return;
+        }
+
+        _selectedAccess = await Access.GetUserAccessAsync(_accessRow.Id);
+        State.PushToast("Access updated", "up");
+    }
+
+    void CloseAccessCatalog()
+    {
+        _accessOpen = false;
+        _accessRow = null;
+        _selectedAccess = null;
+    }
+
     void ResetPassword(UserRow row)
     {
+        if (!_canResetPasswords || !CanManageRow(row)) return;
         _pendingResetRow = row;
         _setPasswordInput = "";
         _showSetPassword = true;
@@ -421,14 +522,12 @@
         _pendingResetRow = null;
     }
 
-    void GeneratePasswordPreview()
-    {
-        _setPasswordInput = UserService.GenerateTempPassword();
-    }
+    void GeneratePasswordPreview() => _setPasswordInput = UserService.GenerateTempPassword();
 
     async Task ConfirmSetPassword()
     {
         if (_pendingResetRow == null) return;
+        if (!_canResetPasswords || !CanManageRow(_pendingResetRow)) return;
         var row = _pendingResetRow;
         var custom = string.IsNullOrWhiteSpace(_setPasswordInput) ? null : _setPasswordInput;
         CloseSetPasswordModal();
@@ -461,18 +560,56 @@
         _copyFeedback = "";
     }
 
-    string RolePill(UserRole role) => role switch
+    bool CanEditRow(UserRow row)
+        => row.IsNew ? _canCreateUsers : _canEditUsers && CanManageRow(row);
+
+    bool CanChangeRowTier(UserRow row)
+        => CanEditRow(row) && (row.IsNew || _canChangeTier);
+
+    bool CanManageRow(UserRow row)
+        => row.Id != _currentUserId && AccessCatalog.CanManageTier(_actorTier, row.Role);
+
+    bool CanAssignTier(AccessTier tier)
+        => AccessControlService.CanAssignTier(_actorTier, tier);
+
+    IEnumerable<AccessTier> RoleOptions(UserRow row)
     {
-        UserRole.IT => "pill-info",
-        UserRole.SuperAdmin => "pill-info",
-        UserRole.Manager => "pill-warn",
+        var options = Enum.GetValues<AccessTier>()
+            .Where(CanAssignTier)
+            .ToList();
+
+        if (!options.Contains(row.Role))
+        {
+            options.Insert(0, row.Role);
+        }
+
+        return options.OrderBy(t => t);
+    }
+
+    bool CanMutatePermission(UserRow row, AccessPermissionDefinition permission)
+        => _canEditAccess
+            && CanManageRow(row)
+            && AccessCatalog.IsPermissionGrantableBy(_actorTier, permission);
+
+    static bool IsDefaultAllowed(AccessTier tier, AccessPermissionDefinition permission)
+        => tier == AccessTier.SuperAdmin || tier >= permission.DefaultTier;
+
+    static string OverrideButtonClass(bool active)
+        => active ? "btn btn-sm btn-primary" : "btn btn-sm";
+
+    static string RolePill(AccessTier role) => role switch
+    {
+        AccessTier.IT => "pill-info",
+        AccessTier.Admin => "pill-info",
+        AccessTier.SuperAdmin => "pill-info",
+        AccessTier.Supervisor => "pill-warn",
         _ => "pill-dim",
     };
 
     static string LockerText(UserRow row) => string.IsNullOrWhiteSpace(row.LockerNumber) ? "No locker" : row.LockerNumber;
 
-    static string LastActiveText(DateTimeOffset? lastActiveAt) =>
-        lastActiveAt.HasValue ? Format.RelTime(lastActiveAt.Value) : "Never";
+    static string LastActiveText(DateTimeOffset? lastActiveAt)
+        => lastActiveAt.HasValue ? Format.RelTime(lastActiveAt.Value) : "Never";
 
     static string UserRowClass(UserRow row)
     {
@@ -497,14 +634,14 @@
         public string? LockerNumber { get; set; }
         public DateTimeOffset? LastActiveAt { get; set; }
         public bool Audit { get; set; }
-        public UserRole Role { get; set; }
+        public AccessTier Role { get; set; }
         public string Avatar { get; set; } = "";
         public bool IsNew { get; set; }
         public bool IsEditing { get; set; }
 
         internal string _backupName = "";
         internal string _backupUsername = "";
-        internal UserRole _backupRole;
+        internal AccessTier _backupRole;
         internal string? _backupDivisionId;
         internal string? _backupPosition;
         internal string? _backupLockerNumber;

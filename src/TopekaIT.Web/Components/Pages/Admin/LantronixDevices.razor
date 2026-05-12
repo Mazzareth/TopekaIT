@@ -1,0 +1,399 @@
+@page "/admin/lantronix"
+@attribute [Authorize(Policy = AccessPermissionKeys.AdminViewLantronix)]
+@using ApexCharts
+@inject LantronixDeviceService LantronixService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
+@inject IConfiguration Configuration
+@implements IDisposable
+
+<PageTitle>Lantronix Devices · Topeka IT</PageTitle>
+
+<div class="page lantronix-page">
+    <div class="page-head">
+        <div>
+            <h1>Lantronix Devices</h1>
+            <div class="page-sub">@HeaderSub</div>
+        </div>
+        <div class="page-actions">
+            <button class="btn" @onclick="LoadDevices" disabled="@(_loading || _polling)">
+                <Icon Name="RefreshCw" Size="14" /> Refresh
+            </button>
+            @if (SelectedDevice != null && _canPoll)
+            {
+                <button class="btn btn-accent" @onclick="PollSelected" disabled="@_polling">
+                    <Icon Name="Activity" Size="14" /> @(_polling ? "Polling" : "Poll now")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="panel">
+            <div style="padding: 24px; color: var(--text-faint); text-align: center;">Loading devices.</div>
+        </div>
+    }
+    else if (_devices.Count == 0)
+    {
+        <EmptyState IconName="Link" Title="No Lantronix devices">No devices are configured.</EmptyState>
+    }
+    else
+    {
+        <div class="lantronix-layout">
+            <section class="panel lantronix-device-list">
+                <div class="panel-head">
+                    <div>
+                        <div class="panel-title">Devices</div>
+                        <div class="panel-sub">@_devices.Count configured</div>
+                    </div>
+                </div>
+                <div class="lantronix-device-stack">
+                    @foreach (var device in _devices)
+                    {
+                        <button type="button" class="@DeviceRowClass(device)" @onclick="() => SelectDevice(device.Id)">
+                            <span>
+                                <strong>@device.Name</strong>
+                                <small>@DeviceDivision(device)</small>
+                            </span>
+                            <span class="mono">@Endpoint(device)</span>
+                            <Pill Kind="@DevicePill(device)">@DeviceStatus(device)</Pill>
+                        </button>
+                    }
+                </div>
+            </section>
+
+            @if (SelectedDevice != null)
+            {
+                var device = SelectedDevice;
+                <section class="panel lantronix-detail">
+                    <div class="panel-head">
+                        <div>
+                            <div class="panel-title">@device.Name</div>
+                            <div class="panel-sub">
+                                <span class="mono">@Endpoint(device)</span>
+                                @if (!string.IsNullOrWhiteSpace(device.Hostname))
+                                {
+                                    <span> · @device.Hostname</span>
+                                }
+                            </div>
+                        </div>
+                        <Pill Kind="@DevicePill(device)">@DeviceStatus(device)</Pill>
+                    </div>
+
+                    <div class="lantronix-metrics">
+                        <div class="lantronix-metric">
+                            <span>Volume</span>
+                            <strong>@FormatNumber(device.LastFuelVolume, "gal")</strong>
+                        </div>
+                        <div class="lantronix-metric">
+                            <span>Height</span>
+                            <strong>@FormatNumber(device.LastHeight, "in", 2)</strong>
+                        </div>
+                        <div class="lantronix-metric">
+                            <span>Water</span>
+                            <strong>@FormatNumber(device.LastWater, "in", 2)</strong>
+                        </div>
+                        <div class="lantronix-metric">
+                            <span>Temp</span>
+                            <strong>@FormatNumber(device.LastTemperature, "F", 2)</strong>
+                        </div>
+                    </div>
+
+                    <div class="lantronix-meta-strip">
+                        <span><b>Last poll</b> @LastPollText(device)</span>
+                        <span><b>Auto poll</b> @AutoPollText</span>
+                        <span><b>Latency</b> @LatencyText(device.LastLatencyMs)</span>
+                        <span><b>Command</b> <span class="mono">@device.PollCommand</span></span>
+                        @if (!string.IsNullOrWhiteSpace(device.SerialSettings))
+                        {
+                            <span><b>Serial</b> @device.SerialSettings</span>
+                        }
+                    </div>
+
+                    <div class="lantronix-chart">
+                        <div class="lantronix-section-head">
+                            <strong>Tank volume</strong>
+                            <span>last 30 days</span>
+                        </div>
+                        @if (_volumePoints.Count > 1)
+                        {
+                            <ApexChart TItem="FuelVolumePoint" Options="_volumeChartOptions" Height="260">
+                                <ApexPointSeries TItem="FuelVolumePoint"
+                                                 Items="_volumePoints"
+                                                 Name="Volume"
+                                                 XValue="@(e => e.Timestamp)"
+                                                 YValue="@(e => e.Volume)"
+                                                 Color="#1d5fbf" />
+                            </ApexChart>
+                        }
+                        else
+                        {
+                            <div class="lantronix-empty-line">Need at least two successful polls for a chart.</div>
+                        }
+                    </div>
+
+                    <div class="lantronix-samples">
+                        <div class="lantronix-section-head">
+                            <strong>Recent polls</strong>
+                            <span>@_samples.Count shown</span>
+                        </div>
+                        @if (_samples.Count == 0)
+                        {
+                            <div class="lantronix-empty-line">No polls recorded.</div>
+                        }
+                        else
+                        {
+                            <div class="asset-table-head lantronix-sample-head">
+                                <div>Time</div>
+                                <div>Status</div>
+                                <div>Latency</div>
+                                <div>Volume</div>
+                                <div>Temp</div>
+                                <div>Message</div>
+                            </div>
+                            @foreach (var sample in _samples.OrderByDescending(s => s.Timestamp).Take(25))
+                            {
+                                <div class="asset-row lantronix-sample-row">
+                                    <div class="mono">@sample.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</div>
+                                    <div><Pill Kind="@(sample.Success ? "pill-up" : "pill-down")">@(sample.Success ? "OK" : "Fail")</Pill></div>
+                                    <div>@LatencyText(sample.LatencyMs)</div>
+                                    <div>@FormatNumber(sample.Volume, "gal")</div>
+                                    <div>@FormatNumber(sample.Temperature, "F", 2)</div>
+                                    <div>
+                                        @if (sample.Success)
+                                        {
+                                            <span>@ProductText(sample)</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@sample.FailureReason</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(sample.RawResponse))
+                                        {
+                                            <details class="raw-message-details">
+                                                <summary>Raw</summary>
+                                                <div class="raw-message">@sample.RawResponse</div>
+                                            </details>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    List<LantronixDevice> _devices = new();
+    List<LantronixPollSample> _samples = new();
+    List<FuelVolumePoint> _volumePoints = new();
+    string? _selectedDeviceId;
+    bool _loading = true;
+    bool _polling;
+    bool _canPoll;
+    ApexChartOptions<FuelVolumePoint> _volumeChartOptions = new();
+
+    LantronixDevice? SelectedDevice =>
+        _devices.FirstOrDefault(d => d.Id == _selectedDeviceId) ?? _devices.FirstOrDefault();
+
+    string HeaderSub
+    {
+        get
+        {
+            if (_devices.Count == 0) return "No serial gateways";
+            var reporting = _devices.Count(d => d.LastPollSucceeded == true);
+            return $"{reporting}/{_devices.Count} reporting";
+        }
+    }
+
+    string AutoPollText
+    {
+        get
+        {
+            if (!Configuration.GetValue("LantronixAutoPoll:Enabled", true))
+            {
+                return "Off";
+            }
+
+            var interval = Math.Max(1, Configuration.GetValue("LantronixAutoPoll:IntervalMinutes", 30));
+            return $"Every {interval} min";
+        }
+    }
+
+    record FuelVolumePoint(DateTime Timestamp, decimal Volume);
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChange += OnThemeChanged;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        _canPoll = await Access.HasPermissionAsync(userId, AccessPermissionKeys.AdminPollLantronix);
+        SetupChartOptions();
+        await LoadDevices();
+    }
+
+    async Task LoadDevices()
+    {
+        _loading = true;
+        try
+        {
+            _devices = (await LantronixService.GetAllAsync()).ToList();
+            if (_devices.All(d => d.Id != _selectedDeviceId))
+            {
+                _selectedDeviceId = _devices.FirstOrDefault()?.Id;
+            }
+
+            await LoadSamples();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    async Task SelectDevice(string id)
+    {
+        if (_selectedDeviceId == id)
+        {
+            return;
+        }
+
+        _selectedDeviceId = id;
+        await LoadSamples();
+    }
+
+    async Task PollSelected()
+    {
+        if (!_canPoll) return;
+        var device = SelectedDevice;
+        if (device == null) return;
+
+        _polling = true;
+        try
+        {
+            var result = await LantronixService.PollAsync(device.Id);
+            State.PushToast(
+                result.Sample.Success ? "Fuel controller reported data." : $"Poll failed: {result.Sample.FailureReason}",
+                result.Sample.Success ? "up" : "down");
+
+            _devices = (await LantronixService.GetAllAsync()).ToList();
+            _selectedDeviceId = device.Id;
+            await LoadSamples();
+        }
+        finally
+        {
+            _polling = false;
+        }
+    }
+
+    async Task LoadSamples()
+    {
+        var device = SelectedDevice;
+        if (device == null)
+        {
+            _samples = new();
+            _volumePoints = new();
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        _samples = (await LantronixService.GetSamplesAsync(device.Id, now.AddDays(-30), now, 500)).ToList();
+        _volumePoints = _samples
+            .Where(s => s.Success && s.Volume.HasValue)
+            .Select(s => new FuelVolumePoint(s.Timestamp.LocalDateTime, s.Volume!.Value))
+            .ToList();
+    }
+
+    void SetupChartOptions()
+    {
+        var isDark = State.Theme == "dark";
+        var gridColor = isDark ? "#2c2a26" : "#e2ded5";
+
+        _volumeChartOptions = new ApexChartOptions<FuelVolumePoint>
+        {
+            Chart = new Chart { Type = ChartType.Line, Toolbar = new Toolbar { Show = false }, Sparkline = new ChartSparkline { Enabled = false } },
+            Theme = new Theme { Mode = isDark ? Mode.Dark : Mode.Light },
+            Stroke = new Stroke { Curve = Curve.Smooth, Width = 2 },
+            Xaxis = new XAxis
+            {
+                Type = XAxisType.Datetime,
+                Labels = new XAxisLabels { DatetimeFormatter = new DatetimeFormatter { Day = "MMM d", Hour = "h:mm TT" } }
+            },
+            Yaxis = new List<YAxis> { new YAxis { Title = new AxisTitle { Text = "gal" }, Min = 0 } },
+            Tooltip = new Tooltip { Enabled = true, X = new TooltipX { Format = "MMM d h:mm TT" } },
+            Legend = new Legend { Show = false },
+            Grid = new Grid { BorderColor = gridColor },
+            DataLabels = new DataLabels { Enabled = false },
+            Markers = new Markers { Size = 3, Hover = new MarkersHover { SizeOffset = 3 } },
+        };
+    }
+
+    void OnThemeChanged()
+    {
+        SetupChartOptions();
+        InvokeAsync(StateHasChanged);
+    }
+
+    string DeviceRowClass(LantronixDevice device)
+    {
+        var status = device.LastPollSucceeded switch
+        {
+            true => "reporting",
+            false => "silent",
+            _ => "unknown",
+        };
+        var active = device.Id == SelectedDevice?.Id ? " active" : "";
+        return $"lantronix-device-row {status}{active}";
+    }
+
+    static string DevicePill(LantronixDevice device) => device.LastPollSucceeded switch
+    {
+        true => "pill-up",
+        false => "pill-down",
+        _ => "pill-dim",
+    };
+
+    static string DeviceStatus(LantronixDevice device) => device.LastPollSucceeded switch
+    {
+        true => "Reporting",
+        false => "Silent",
+        _ => "Unpolled",
+    };
+
+    static string DeviceDivision(LantronixDevice device) =>
+        device.Division?.Name ?? device.DivisionId ?? "No division";
+
+    static string Endpoint(LantronixDevice device) => $"{device.IpAddress}:{device.Port}";
+
+    static string LastPollText(LantronixDevice device) =>
+        device.LastPollAt.HasValue ? TopekaIT.Web.Services.Format.RelTime(device.LastPollAt.Value) : "Not polled";
+
+    static string LatencyText(int? latencyMs) =>
+        latencyMs.HasValue ? $"{latencyMs.Value} ms" : "--";
+
+    static string ProductText(LantronixPollSample sample) =>
+        string.IsNullOrWhiteSpace(sample.Product)
+            ? "Inventory returned"
+            : $"Tank {sample.TankNumber}: {sample.Product}";
+
+    static string FormatNumber(decimal? value, string unit, int decimals = 0)
+    {
+        if (!value.HasValue)
+        {
+            return "--";
+        }
+
+        var format = decimals == 0 ? "N0" : $"N{decimals}";
+        return $"{value.Value.ToString(format)} {unit}";
+    }
+
+    public void Dispose()
+    {
+        State.OnChange -= OnThemeChanged;
+    }
+}

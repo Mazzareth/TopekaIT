@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TopekaIT.Core.Domain.Entities;
+using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
@@ -16,7 +17,11 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
         b.HasIndex(x => x.Username).IsUnique();
         b.Property(x => x.PasswordHash).HasMaxLength(128).IsRequired();
         b.Property(x => x.PasswordSalt).HasMaxLength(128).IsRequired();
-        b.Property(x => x.Role).HasConversion<string>().HasMaxLength(32);
+        b.Property(x => x.Role)
+            .HasConversion(
+                v => v.ToString(),
+                v => AccessTierExtensions.ParseTierOrWorker(v))
+            .HasMaxLength(32);
         b.Property(x => x.Avatar).HasMaxLength(8);
         b.Property(x => x.Position).HasMaxLength(64);
         // Locker fields kept for backward-compat read; data migrated to Locker entity

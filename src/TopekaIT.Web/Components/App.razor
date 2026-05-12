@@ -8,6 +8,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["TopekaIT.Web.styles.css"]" />
     <link rel="stylesheet" href="_content/Blazor-ApexCharts/css/apexcharts.css" />
@@ -30,7 +33,7 @@
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
-    <script src="_content/Blazor-ApexCharts/js/blazor-apexcharts.js"></script>
+    <script type="module" src="_content/Blazor-ApexCharts/js/blazor-apexcharts.js"></script>
 </body>
 
 </html>

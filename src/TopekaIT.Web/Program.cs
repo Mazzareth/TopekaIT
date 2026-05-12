@@ -9,6 +9,7 @@ using TopekaIT.Core.Services;
 using TopekaIT.Infrastructure;
 using TopekaIT.Infrastructure.Data;
 using TopekaIT.Infrastructure.Seed;
+using TopekaIT.Web.Authorization;
 using TopekaIT.Web.Components;
 using TopekaIT.Web.Services;
 
@@ -44,9 +45,10 @@ public class Program
                 options.SlidingExpiration = true;
             });
 
-        builder.Services.AddAuthorization();
+        builder.Services.AddAuthorization(AccessAuthorizationPolicies.AddPolicies);
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
+        builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         var topekaConnectionString = builder.Configuration.GetConnectionString("Topeka")
             ?? "Server=(localdb)\\MSSQLLocalDB;Database=TopekaIT;Trusted_Connection=true;";
@@ -56,6 +58,7 @@ public class Program
         builder.Services.AddDivisionInfrastructure();
 
         builder.Services.AddScoped<UserService>();
+        builder.Services.AddScoped<AccessControlService>();
         builder.Services.AddScoped<DivisionService>();
         builder.Services.AddScoped<PrinterService>();
         builder.Services.AddScoped<PrinterModelService>();
@@ -67,7 +70,9 @@ public class Program
         builder.Services.AddScoped<PingHistoryService>();
         builder.Services.AddScoped<PrinterEventService>();
         builder.Services.AddScoped<PrinterSetupService>();
+        builder.Services.AddScoped<LantronixDeviceService>();
         builder.Services.AddSingleton<IPrinterSetupTelnetClient, PrinterSetupTelnetClient>();
+        builder.Services.AddSingleton<ILantronixFuelClient, LantronixFuelClient>();
         builder.Services.AddSingleton(_ =>
         {
             var settings = new PrinterSetupSettings();
@@ -83,6 +88,7 @@ public class Program
         builder.Services.AddHostedService<PrinterLogSinkService>();
         builder.Services.AddHostedService<PrinterSnmpTrapSinkService>();
         builder.Services.AddHostedService<PingRetentionService>();
+        builder.Services.AddHostedService<LantronixAutoPollService>();
 
         var app = builder.Build();
 

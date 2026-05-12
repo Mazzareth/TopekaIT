@@ -1,5 +1,5 @@
 @page "/it/printers"
-@attribute [Authorize(Roles = "IT,SuperAdmin")]
+@attribute [Authorize(Policy = AccessPermissionKeys.PrintersViewAdmin)]
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Services
 @inject PrinterService PrinterService
@@ -12,6 +12,8 @@
 @inject ActivityService ActivityService
 @inject NavigationManager Nav
 @inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject AccessControlService Access
 
 <PageTitle>Printer admin · Topeka IT</PageTitle>
 
@@ -22,10 +24,16 @@
             <div class="page-sub">Health first, configuration second.</div>
         </div>
         <div class="page-actions">
-            <button class="btn" @onclick="() => _setupOpen = !_setupOpen">
-                <Icon Name="Wifi" Size="14" /> Auto setup
-            </button>
-            <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add printer</button>
+            @if (_canAutoSetup)
+            {
+                <button class="btn" @onclick="() => _setupOpen = !_setupOpen">
+                    <Icon Name="Wifi" Size="14" /> Auto setup
+                </button>
+            }
+            @if (_canAddEditPrinters)
+            {
+                <button class="btn btn-accent" @onclick="AddRow"><Icon Name="Plus" Size="14" /> Add printer</button>
+            }
         </div>
     </div>
 
@@ -48,6 +56,8 @@
         </div>
     </div>
 
+    @if (_canAutoSetup)
+    {
     <div class="card setup-card @(_setupOpen ? "open" : "")">
         <div class="setup-summary" @onclick="() => _setupOpen = !_setupOpen">
             <div>
@@ -148,6 +158,7 @@
             </div>
         }
     </div>
+    }
 
     <div class="toolbar">
         <div class="seg">
@@ -206,7 +217,10 @@
                                     <option value="@model.Name">@model.Name</option>
                                 }
                             </select>
-                            <button class="btn btn-sm" @onclick="() => BeginAddModel(row)"><Icon Name="Plus" Size="12" /></button>
+                            @if (_canManagePrinterModels)
+                            {
+                                <button class="btn btn-sm" @onclick="() => BeginAddModel(row)"><Icon Name="Plus" Size="12" /></button>
+                            }
                         }
                     </div>
                     <input class="inline-input mono" @bind="row.IpAddress" @bind:event="oninput" placeholder="10.14.0.42" />
@@ -237,12 +251,15 @@
                             <div class="printer-alert-inline">
                                 @foreach (var alert in AllAlerts(row.Id))
                                 {
-                                    <button class="alert-toggle"
-                                            title="@alert.FriendlyMessage"
-                                            @onclick="() => ClearAlert(alert)">
-                                        @alert.AlertCategory
-                                        <span>Clear</span>
-                                    </button>
+                                    @if (_canClearPrinterAlerts)
+                                    {
+                                        <button class="alert-toggle"
+                                                title="@alert.FriendlyMessage"
+                                                @onclick="() => ClearAlert(alert)">
+                                            @alert.AlertCategory
+                                            <span>Clear</span>
+                                        </button>
+                                    }
                                 }
                             </div>
                         }
@@ -273,14 +290,22 @@
                     </div>
                     <div style="text-align: right; display: flex; gap: 6px; justify-content: flex-end;">
                         <button class="btn btn-sm" @onclick="() => ViewDetails(row)">Details</button>
-                        <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
-                        <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                        @if (_canAddEditPrinters)
+                        {
+                            <button class="btn btn-sm" @onclick="() => EditRow(row)"><Icon Name="Edit" Size="12" /></button>
+                        }
+                        @if (_canDeletePrinters)
+                        {
+                            <button class="btn btn-sm btn-danger" @onclick="() => Remove(row)"><Icon Name="Trash" Size="12" /></button>
+                        }
                     </div>
                 </div>
             }
         }
     </div>
 
+    @if (_canViewPrinterErrorLogs)
+    {
     <div class="card" style="margin-top: 16px;">
         <div class="card-head">
             <span class="card-title">Printer Error Log</span>
@@ -330,6 +355,7 @@
             }
         }
     </div>
+    }
 </div>
 
 @code {
@@ -346,12 +372,30 @@
     bool _setupOpen;
     bool _setupTesting;
     bool _setupRunning;
+    bool _canAutoSetup;
+    bool _canAddEditPrinters;
+    bool _canDeletePrinters;
+    bool _canManagePrinterModels;
+    bool _canClearPrinterAlerts;
+    bool _canViewPrinterErrorLogs;
 
     bool CanRunPrinterSetup => !_setupTesting
         && !_setupRunning
         && _setupRows.Any(r => r.Connected && !string.IsNullOrWhiteSpace(r.SelectedModel));
 
-    protected override async Task OnInitializedAsync() => await Load();
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canAutoSetup = access?.Has(AccessPermissionKeys.PrintersAutoSetup) == true;
+        _canAddEditPrinters = access?.Has(AccessPermissionKeys.PrintersAddEdit) == true;
+        _canDeletePrinters = access?.Has(AccessPermissionKeys.PrintersDelete) == true;
+        _canManagePrinterModels = access?.Has(AccessPermissionKeys.PrintersManageModels) == true;
+        _canClearPrinterAlerts = access?.Has(AccessPermissionKeys.PrintersClearAlerts) == true;
+        _canViewPrinterErrorLogs = access?.Has(AccessPermissionKeys.PrintersViewErrorLogs) == true;
+        await Load();
+    }
 
     async Task Load()
     {
@@ -400,6 +444,7 @@
 
     async Task TestPrinterSetup()
     {
+        if (!_canAutoSetup) return;
         _setupTesting = true;
         _setupError = "";
         foreach (var row in _setupRows)
@@ -438,6 +483,7 @@
 
     async Task RunPrinterSetup()
     {
+        if (!_canAutoSetup) return;
         _setupRunning = true;
         _setupError = "";
 
@@ -486,11 +532,13 @@
 
     void AddRow()
     {
+        if (!_canAddEditPrinters) return;
         _rows.Insert(0, new PrinterRow { IsNew = true, Model = DefaultPrinterModelName() });
     }
 
     void EditRow(PrinterRow row)
     {
+        if (!_canAddEditPrinters) return;
         row.IsEditing = true;
         row._backupName = row.Name;
         row._backupDepartment = row.Department;
@@ -516,6 +564,7 @@
 
     async Task SaveRow(PrinterRow row)
     {
+        if (!_canAddEditPrinters) return;
         if (string.IsNullOrWhiteSpace(row.Name) || string.IsNullOrWhiteSpace(row.Model)) return;
 
         if (row.IsNew)
@@ -550,6 +599,7 @@
 
     void BeginAddModel(PrinterRow row)
     {
+        if (!_canManagePrinterModels) return;
         row.IsAddingModel = true;
         row.NewModelName = "";
     }
@@ -563,6 +613,7 @@
     async Task SaveNewModel(PrinterRow row)
     {
         if (string.IsNullOrWhiteSpace(row.NewModelName)) return;
+        if (!_canManagePrinterModels) return;
 
         var model = await PrinterModelService.AddAsync(row.NewModelName);
         row.Model = model.Name;
@@ -637,6 +688,7 @@
 
     async Task ClearAlert(PrinterAlertState alert)
     {
+        if (!_canClearPrinterAlerts) return;
         await PrinterEvents.ClearAlertAsync(alert.PrinterId, alert.AlertKey);
         State.PushToast("Printer alert cleared", "");
         await Load();
@@ -663,6 +715,7 @@
 
     async Task Remove(PrinterRow row)
     {
+        if (!_canDeletePrinters) return;
         await PrinterService.DeleteAsync(row.Id);
         State.PushToast($"Removed {row.Name}", "");
         await Load();

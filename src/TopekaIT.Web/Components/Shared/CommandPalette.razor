@@ -1,0 +1,225 @@
+@implements IDisposable
+@inject AppState State
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject ITenantContext TenantContext
+@inject PrinterService Printers
+@inject TicketService Tickets
+@inject AssetService AssetSvc
+@inject UserService Users
+@inject DivisionService Divisions
+
+@if (State.CommandPaletteOpen)
+{
+    <div class="cmdk-backdrop" @onclick="Close">
+        <section class="cmdk" role="dialog" aria-modal="true" aria-label="Command palette" @onclick:stopPropagation="true">
+            <div class="cmdk__input">
+                <Icon Name="Search" Size="14" />
+                <input @ref="_searchInput"
+                       value="@_query"
+                       @oninput="OnQueryChanged"
+                       @onkeydown="HandleKeyDown"
+                       placeholder="Search printers, assets, tickets, people..."
+                       autocomplete="off" />
+                <kbd>esc</kbd>
+            </div>
+            @if (_loading)
+            {
+                <div class="cmdk__empty">Loading commands.</div>
+            }
+            else if (FilteredItems.Count == 0)
+            {
+                <div class="cmdk__empty">No matching printers, assets, tickets, people, or divisions.</div>
+            }
+            else
+            {
+                @foreach (var group in FilteredItems.GroupBy(i => i.Group))
+                {
+                    <div class="cmdk__section">@group.Key</div>
+                    @foreach (var item in group)
+                    {
+                        <button type="button" class="cmdk__row" @onclick="() => Run(item)">
+                            <span class="cmdk__type @item.Tone">@item.ShortType</span>
+                            <span>@item.Label</span>
+                            <span class="cmdk__sub">@item.Meta</span>
+                        </button>
+                    }
+                }
+            }
+        </section>
+    </div>
+}
+
+@code {
+    ElementReference _searchInput;
+    DotNetObjectReference<CommandPalette>? _ref;
+    bool _loaded;
+    bool _loading;
+    string _query = "";
+    List<CommandItem> _items = new();
+
+    List<CommandItem> FilteredItems => string.IsNullOrWhiteSpace(_query)
+        ? _items.Take(18).ToList()
+        : _items
+            .Where(i => i.Search.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Take(18)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += OnStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("topekaCommand.register", _ref);
+        }
+
+        if (State.CommandPaletteOpen)
+        {
+            if (!_loaded && !_loading)
+            {
+                await LoadItems();
+            }
+
+            await JS.InvokeVoidAsync("topekaCommand.focus", _searchInput);
+        }
+    }
+
+    void OnStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (State.CommandPaletteOpen && !_loaded && !_loading)
+            {
+                await LoadItems();
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public void OpenFromKeyboard() => State.OpenCommandPalette();
+
+    async Task LoadItems()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        var items = new List<CommandItem>
+        {
+            new("JUMP", "Control room", "Operations dashboard", "Go", "jump", "/it"),
+            new("JUMP", "Printers", "Fleet health and setup", "Go", "jump", TenantContext.IsResolved ? "/it/printers" : "/admin"),
+            new("JUMP", "Assets", "Inventory and scanner lookup", "Go", "jump", TenantContext.IsResolved ? "/it/assets" : "/admin"),
+            new("JUMP", "Tickets", "Queue and active requests", "Go", "jump", TenantContext.IsResolved ? "/it/tickets" : "/admin"),
+        };
+
+        if (TenantContext.IsResolved)
+        {
+            var printers = await Printers.GetAllAsync();
+            items.AddRange(printers.Select(p => new CommandItem(
+                "PRINTERS",
+                string.IsNullOrWhiteSpace(p.Name) ? p.IpAddress : p.Name,
+                $"{p.IpAddress} - {p.Department} - {p.Status}",
+                "Prn",
+                p.Status == PrinterStatus.Down ? "is-critical" : p.Status == PrinterStatus.Warn ? "is-warning" : "is-ok",
+                $"/it/printers/{p.Id}")));
+
+            var tickets = await Tickets.GetAllAsync();
+            items.AddRange(tickets
+                .OrderByDescending(t => t.UpdatedAt)
+                .Take(40)
+                .Select(t => new CommandItem(
+                    "TICKETS",
+                    $"{t.Id} - {t.Title}",
+                    $"{t.Priority} - {t.Status} - {Rel(t.CreatedAt)}",
+                    "Tkt",
+                    t.Priority == TicketPriority.Urgent ? "is-critical" : t.Priority == TicketPriority.High ? "is-warning" : "is-info",
+                    "/it/tickets")));
+
+            var assets = await AssetSvc.GetAllAsync();
+            items.AddRange(assets.Select(a => new CommandItem(
+                "ASSETS",
+                string.IsNullOrWhiteSpace(a.Tag) ? a.Serial : a.Tag,
+                $"{Format.CategoryLabel(a.Category)} - {a.Model} - {a.Status}",
+                "Ast",
+                a.Status is AssetStatus.Repair or AssetStatus.InRMA or AssetStatus.Investigating ? "is-warning" : "is-info",
+                "/it/assets")));
+        }
+
+        var users = await Users.GetAllAsync();
+        items.AddRange(users.Select(u => new CommandItem(
+            "PEOPLE",
+            u.Name,
+            $"{u.Username} - {u.Role.DisplayName()} - {u.DivisionId ?? "global"}",
+            "Usr",
+            "is-user",
+            u.Role >= AccessTier.SuperAdmin ? "/admin/users" : "/it/users")));
+
+        var divisions = await Divisions.GetAllAsync();
+        items.AddRange(divisions.Select(d => new CommandItem(
+            "DIVISIONS",
+            d.Name,
+            $"{d.Id} - printer code {d.PrinterPasswordCode ?? "unset"}",
+            "Div",
+            "is-info",
+            $"/admin/enter/{d.Id}")));
+
+        _items = items;
+        _loaded = true;
+        _loading = false;
+    }
+
+    void OnQueryChanged(ChangeEventArgs args)
+    {
+        _query = args.Value?.ToString() ?? "";
+    }
+
+    void HandleKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            Close();
+        }
+        else if (args.Key == "Enter" && FilteredItems.FirstOrDefault() is { } item)
+        {
+            Run(item);
+        }
+    }
+
+    void Run(CommandItem item)
+    {
+        Close();
+        Nav.NavigateTo(item.Route);
+    }
+
+    void Close()
+    {
+        _query = "";
+        _loaded = false;
+        State.CloseCommandPalette();
+    }
+
+    static string Rel(DateTimeOffset timestamp)
+    {
+        var span = DateTimeOffset.UtcNow - timestamp;
+        return span.TotalHours < 1 ? $"{Math.Max(1, (int)span.TotalMinutes)}m" :
+            span.TotalDays < 1 ? $"{(int)span.TotalHours}h" :
+            $"{(int)span.TotalDays}d";
+    }
+
+    public void Dispose()
+    {
+        State.OnChange -= OnStateChanged;
+        _ref?.Dispose();
+    }
+
+    sealed record CommandItem(string Group, string Label, string Meta, string ShortType, string Tone, string Route)
+    {
+        public string Search { get; } = $"{Group} {Label} {Meta} {ShortType}";
+    }
+}
