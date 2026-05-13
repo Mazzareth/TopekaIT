@@ -1,3 +1,4 @@
+using System.Globalization;
 using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Web.Services;
@@ -81,6 +82,54 @@ public static class Format
 
     public static string ShortDate(DateTimeOffset? ts)
         => ts.HasValue ? ts.Value.LocalDateTime.ToString("MMM d") : "—";
+
+    public static DateTimeOffset? LocalDateStartUtc(string? value)
+    {
+        if (!TryParseLocalDate(value, out var date)) return null;
+
+        return LocalDateStartUtc(date);
+    }
+
+    public static DateTimeOffset? LocalDateStartUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+
+        return LocalDateStartUtc(DateOnly.FromDateTime(value.Value));
+    }
+
+    public static DateTimeOffset? LocalDateEndExclusiveUtc(string? value)
+    {
+        if (!TryParseLocalDate(value, out var date)) return null;
+
+        return LocalDateEndExclusiveUtc(date);
+    }
+
+    public static DateTimeOffset? LocalDateEndExclusiveUtc(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+
+        return LocalDateEndExclusiveUtc(DateOnly.FromDateTime(value.Value));
+    }
+
+    private static DateTimeOffset LocalDateStartUtc(DateOnly date)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime();
+    }
+
+    private static DateTimeOffset LocalDateEndExclusiveUtc(DateOnly date)
+    {
+        var local = date.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime();
+    }
+
+    private static bool TryParseLocalDate(string? value, out DateOnly date)
+        => DateOnly.TryParseExact(
+            value,
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out date);
 
     public static string StatusLabel(TicketStatus s) => s switch
     {

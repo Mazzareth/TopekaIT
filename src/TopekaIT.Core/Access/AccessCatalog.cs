@@ -30,6 +30,7 @@ public static class AccessCatalog
         new(AccessPermissionKeys.AssetsViewSupervisorConsole, "View supervisor asset console", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),
         new(AccessPermissionKeys.AssetsViewItConsole, "View IT asset console", "Assets", AccessTier.Admin, AccessTier.Admin),
         new(AccessPermissionKeys.AssetsCreate, "Create assets", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),
+        new(AccessPermissionKeys.AssetsDelete, "Delete assets", "Assets", AccessTier.Admin, AccessTier.Admin),
         new(AccessPermissionKeys.AssetsManageModels, "Manage asset models", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),
         new(AccessPermissionKeys.AssetsScanSearch, "Scan and search assets", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),
         new(AccessPermissionKeys.AssetsAssign, "Assign or unassign asset holders", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),

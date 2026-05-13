@@ -136,6 +136,13 @@ public class PrinterEventRepository : IPrinterEventRepository
     }
 
     public async Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count, CancellationToken ct = default)
+        => await GetErrorsAsync(count, null, null, ct);
+
+    public async Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(
+        int count,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken ct = default)
     {
         if (_divisionRepository == null || _tenantContext == null)
         {
@@ -151,11 +158,18 @@ public class PrinterEventRepository : IPrinterEventRepository
             divisionName = division?.Name ?? divisionId;
         }
 
-        return await ApplyLimit(BuildErrorQuery(db, divisionId, divisionName), count)
+        return await ApplyLimit(BuildErrorQuery(db, divisionId, divisionName, from, to), count)
             .ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<PrinterErrorLogEntry>> GetAllDivisionErrorsAsync(int count, CancellationToken ct = default)
+        => await GetAllDivisionErrorsAsync(count, null, null, ct);
+
+    public async Task<IReadOnlyList<PrinterErrorLogEntry>> GetAllDivisionErrorsAsync(
+        int count,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken ct = default)
     {
         if (_divisionRepository == null)
         {
@@ -169,7 +183,7 @@ public class PrinterEventRepository : IPrinterEventRepository
         {
             var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
             await using var db = await factory.CreateDbContextAsync(ct);
-            var divisionEntries = await ApplyLimit(BuildErrorQuery(db, division.Id, division.Name), count)
+            var divisionEntries = await ApplyLimit(BuildErrorQuery(db, division.Id, division.Name, from, to), count)
                 .ToListAsync(ct);
             entries.AddRange(divisionEntries);
         }
@@ -181,23 +195,39 @@ public class PrinterEventRepository : IPrinterEventRepository
     }
 
     public async Task<IReadOnlyList<PrinterAlertGroup>> GetGroupedErrorsAsync(int count, CancellationToken ct = default)
+        => await GetGroupedErrorsAsync(count, null, null, ct);
+
+    public async Task<IReadOnlyList<PrinterAlertGroup>> GetGroupedErrorsAsync(
+        int count,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken ct = default)
     {
-        var entries = await GetErrorsAsync(count, ct);
+        var entries = await GetErrorsAsync(count, from, to, ct);
         return BuildGroups(entries.Select(ToOccurrence));
     }
 
     public async Task<IReadOnlyList<PrinterAlertGroup>> GetAllDivisionGroupedErrorsAsync(int count, CancellationToken ct = default)
+        => await GetAllDivisionGroupedErrorsAsync(count, null, null, ct);
+
+    public async Task<IReadOnlyList<PrinterAlertGroup>> GetAllDivisionGroupedErrorsAsync(
+        int count,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken ct = default)
     {
-        var entries = await GetAllDivisionErrorsAsync(count, ct);
+        var entries = await GetAllDivisionErrorsAsync(count, from, to, ct);
         return BuildGroups(entries.Select(ToOccurrence));
     }
 
     private static IQueryable<PrinterErrorLogEntry> BuildErrorQuery(
         TopekaDbContext db,
         string divisionId,
-        string divisionName)
+        string divisionName,
+        DateTimeOffset? from = null,
+        DateTimeOffset? to = null)
     {
-        return db.PrinterEvents
+        var query = db.PrinterEvents
             .AsNoTracking()
             .Include(e => e.Printer)
             .Where(e =>
@@ -205,7 +235,19 @@ public class PrinterEventRepository : IPrinterEventRepository
                 e.Severity == "Critical" ||
                 e.Severity == "Warning" ||
                 e.EventType == "Error" ||
-                e.EventType == "Warning")
+                e.EventType == "Warning");
+
+        if (from.HasValue)
+        {
+            query = query.Where(e => e.Timestamp >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(e => e.Timestamp < to.Value);
+        }
+
+        return query
             .OrderByDescending(e => e.Timestamp)
             .Select(e => new PrinterErrorLogEntry
             {

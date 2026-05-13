@@ -3,14 +3,66 @@
 @inject IJSRuntime JS
 @inject ITenantContext TenantContext
 @inject DivisionService Divisions
+@inject AccessControlService Access
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Nav
 
 <header class="topbar app__top">
-    <div class="app__workspace" title="@WorkspaceTitle">
-        <div class="ws-mark">L</div>
-        <div>
-            <div class="workspace-name">Local IT</div>
-            <div class="workspace-sub">@WorkspaceSubtitle</div>
-        </div>
+    <div class="workspace-switcher">
+        @if (_canEnterDivisions)
+        {
+            <button type="button"
+                    class="app__workspace app__workspace--button @(_showDivisionMenu ? "is-open" : "")"
+                    title="@WorkspaceTitle"
+                    aria-haspopup="listbox"
+                    aria-expanded="@_showDivisionMenu"
+                    @onclick="ToggleDivisionMenu">
+                <div class="ws-mark">L</div>
+                <div class="workspace-copy">
+                    <div class="workspace-name">Local IT</div>
+                    <div class="workspace-sub">@WorkspaceSubtitle</div>
+                </div>
+                <Icon Name="ChevronRight" Size="13" Class="workspace-chevron" />
+            </button>
+
+            @if (_showDivisionMenu)
+            {
+                <div class="division-dropdown" role="listbox" aria-label="Switch division">
+                    <label class="division-search">
+                        <Icon Name="Search" Size="13" />
+                        <input @bind="_divisionSearch" @bind:event="oninput" placeholder="Find division..." autofocus />
+                    </label>
+                    <div class="division-list">
+                        @foreach (var division in FilteredDivisions)
+                        {
+                            <button type="button"
+                                    class="division-option @(IsActiveDivision(division) ? "is-active" : "")"
+                                    role="option"
+                                    aria-selected="@IsActiveDivision(division)"
+                                    @onclick="() => EnterDivision(division)">
+                                <span>@division.Name</span>
+                                <code>@division.Id</code>
+                            </button>
+                        }
+
+                        @if (!FilteredDivisions.Any())
+                        {
+                            <div class="division-empty">No divisions found</div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="app__workspace" title="@WorkspaceTitle">
+                <div class="ws-mark">L</div>
+                <div class="workspace-copy">
+                    <div class="workspace-name">Local IT</div>
+                    <div class="workspace-sub">@WorkspaceSubtitle</div>
+                </div>
+            </div>
+        }
     </div>
 
     <button type="button" class="search-inline topbar-search" @onclick="OpenCommandPalette">
@@ -56,7 +108,11 @@
 
 @code {
     bool _showProfileMenu;
+    bool _showDivisionMenu;
+    bool _canEnterDivisions;
     string? _divisionName;
+    string _divisionSearch = "";
+    List<Division> _divisions = new();
 
     string WorkspaceTitle => TenantContext.IsResolved
         ? $"Local IT - {_divisionName ?? TenantContext.DivisionId}"
@@ -66,12 +122,44 @@
         ? $"{_divisionName ?? TenantContext.DivisionId} - {TenantContext.DivisionId}"
         : "Select a division";
 
+    IReadOnlyList<Division> FilteredDivisions
+    {
+        get
+        {
+            var query = _divisionSearch.Trim();
+            var source = _divisions.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                source = source.Where(division =>
+                    division.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
+                    || division.Id.Contains(query, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return source
+                .OrderBy(division => division.Name)
+                .ThenBy(division => division.Id)
+                .Take(12)
+                .ToList();
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _canEnterDivisions = access?.Has(AccessPermissionKeys.AdminEnterDivisions) == true;
+
         if (TenantContext.IsResolved && !string.IsNullOrWhiteSpace(TenantContext.DivisionId))
         {
             var division = await Divisions.GetByIdAsync(TenantContext.DivisionId);
             _divisionName = division?.Name;
+        }
+
+        if (_canEnterDivisions)
+        {
+            _divisions = (await Divisions.GetAllAsync()).ToList();
         }
     }
 
@@ -91,8 +179,55 @@
     }
 
     void OpenCommandPalette() => State.OpenCommandPalette();
-    void ToggleProfileMenu() => _showProfileMenu = !_showProfileMenu;
+    void ToggleProfileMenu()
+    {
+        _showProfileMenu = !_showProfileMenu;
+        if (_showProfileMenu)
+        {
+            _showDivisionMenu = false;
+        }
+    }
+
     void CloseProfileMenu() => _showProfileMenu = false;
+
+    void ToggleDivisionMenu()
+    {
+        _showDivisionMenu = !_showDivisionMenu;
+        if (_showDivisionMenu)
+        {
+            _showProfileMenu = false;
+        }
+    }
+
+    bool IsActiveDivision(Division division) =>
+        TenantContext.IsResolved
+        && string.Equals(TenantContext.DivisionId, division.Id, StringComparison.OrdinalIgnoreCase);
+
+    void EnterDivision(Division division)
+    {
+        if (!_canEnterDivisions)
+        {
+            return;
+        }
+
+        var returnUrl = Uri.EscapeDataString(GetDivisionReturnPath());
+        Nav.NavigateTo($"/auth/enter-division/{Uri.EscapeDataString(division.Id)}?ReturnUrl={returnUrl}", forceLoad: true);
+    }
+
+    string GetDivisionReturnPath()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri);
+        var localPath = "/" + path;
+
+        if (string.IsNullOrWhiteSpace(path)
+            || localPath.StartsWith("/admin", StringComparison.OrdinalIgnoreCase)
+            || localPath.StartsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            return "/it";
+        }
+
+        return localPath;
+    }
 
     async Task ApplyTheme(string theme)
     {

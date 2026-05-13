@@ -51,9 +51,33 @@
                         }
                     </select>
                 </label>
+                @if (SelectedReportUsesPrinterHistory())
+                {
+                    <label>
+                        <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">From</div>
+                        <input class="inline-input" type="date" @bind="_reportStartDate" />
+                    </label>
+                    <label>
+                        <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">To</div>
+                        <input class="inline-input" type="date" @bind="_reportEndDate" />
+                    </label>
+                    <label>
+                        <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Sort</div>
+                        <select class="inline-input" @bind="_reportDateSort">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                        </select>
+                    </label>
+                }
                 <button class="btn btn-accent" @onclick="RunSelectedReport" disabled="@(_reportLoading || !_canRunReports)">
                     <Icon Name="RefreshCw" Size="14" /> Run
                 </button>
+                @if (SelectedReportUsesPrinterHistory() && HasActiveReportDateFilters())
+                {
+                    <button class="btn btn-ghost" @onclick="ClearReportDateFilters" disabled="@(_reportLoading || !_canRunReports)">
+                        Clear
+                    </button>
+                }
             </div>
             <div class="report-caption">@SelectedReport.Description</div>
         </div>
@@ -426,6 +450,9 @@
     AdminTab _activeTab = AdminTab.Reports;
     string _selectedReportId = ActiveIncidentsReportId;
     string _selectedDivisionId = "";
+    DateTime? _reportStartDate;
+    DateTime? _reportEndDate;
+    string _reportDateSort = "newest";
     bool _reportLoading;
     bool _canRunReports;
     bool _canEnterDivisions;
@@ -477,30 +504,30 @@
             else if (_selectedReportId == AuthMonitoringReportId)
             {
                 var entries = await GetSelectedErrorEntries();
-                _authIssueRows = BuildAuthIssueRows(entries);
+                _authIssueRows = BuildAuthIssueRows(entries, ReportNewestFirst());
             }
             else if (_selectedReportId == FaultTrendsReportId)
             {
                 var entries = await GetSelectedErrorEntries();
-                _faultTrendRows = BuildFaultTrendRows(entries);
+                _faultTrendRows = BuildFaultTrendRows(entries, ReportNewestFirst());
             }
             else if (_selectedReportId == PrinterErrorsReportId)
             {
-                var groups = await PrinterEvents.GetAllDivisionGroupedErrorsAsync();
-                _printerAlertGroups = groups
+                var groups = await PrinterEvents.GetAllDivisionGroupedErrorsAsync(0, ReportRangeStartUtc(), ReportRangeEndExclusiveUtc());
+                var filteredGroups = groups
                     .Select(g =>
                     {
-                        g.Occurrences = g.Occurrences
-                            .Where(e => MatchesSelectedDivision(e.DivisionId))
+                        g.Occurrences = SortOccurrences(
+                                g.Occurrences.Where(e => MatchesSelectedDivision(e.DivisionId)),
+                                ReportNewestFirst())
                             .ToList();
                         g.Count = g.Occurrences.Count;
                         g.LatestAt = g.Occurrences.Count > 0 ? g.Occurrences.Max(e => e.Timestamp) : g.LatestAt;
                         return g;
                     })
-                    .Where(g => g.Count > 0)
-                    .OrderByDescending(g => SeverityRank(g.Severity))
-                    .ThenByDescending(g => g.LatestAt)
-                    .ToList();
+                    .Where(g => g.Count > 0);
+
+                _printerAlertGroups = SortGroups(filteredGroups, ReportNewestFirst()).ToList();
             }
         }
         finally
@@ -511,10 +538,42 @@
 
     async Task<List<PrinterErrorLogEntry>> GetSelectedErrorEntries()
     {
-        var entries = await PrinterEvents.GetAllDivisionErrorsAsync();
-        return entries
-            .Where(e => MatchesSelectedDivision(e.DivisionId))
+        var entries = await PrinterEvents.GetAllDivisionErrorsAsync(0, ReportRangeStartUtc(), ReportRangeEndExclusiveUtc());
+        return SortEntries(
+                entries.Where(e => MatchesSelectedDivision(e.DivisionId)),
+                ReportNewestFirst())
             .ToList();
+    }
+
+    bool SelectedReportUsesPrinterHistory() => _selectedReportId != ActiveIncidentsReportId;
+
+    bool ReportNewestFirst() => _reportDateSort != "oldest";
+
+    DateTimeOffset? ReportRangeStartUtc() => Format.LocalDateStartUtc(_reportStartDate);
+
+    DateTimeOffset? ReportRangeEndExclusiveUtc()
+    {
+        if (_reportEndDate.HasValue)
+        {
+            return Format.LocalDateEndExclusiveUtc(_reportEndDate);
+        }
+
+        return !_reportStartDate.HasValue
+            ? null
+            : Format.LocalDateEndExclusiveUtc(_reportStartDate);
+    }
+
+    bool HasActiveReportDateFilters() =>
+        _reportStartDate.HasValue ||
+        _reportEndDate.HasValue ||
+        _reportDateSort != "newest";
+
+    async Task ClearReportDateFilters()
+    {
+        _reportStartDate = null;
+        _reportEndDate = null;
+        _reportDateSort = "newest";
+        await RunSelectedReport();
     }
 
     bool MatchesSelectedDivision(string divisionId) =>
@@ -576,20 +635,35 @@
 
     static string DisplayAlertMessage(PrinterAlertGroup group)
     {
-        var latest = group.Occurrences.FirstOrDefault();
+        var latest = group.Occurrences.OrderByDescending(e => e.Timestamp).FirstOrDefault();
         return latest?.FriendlyMessage
             ?? $"{group.AlertTitle}: {group.AlertDetail}".Trim().Trim(':');
     }
 
-    static List<AuthIssueReportRow> BuildAuthIssueRows(IEnumerable<PrinterErrorLogEntry> entries)
+    static IEnumerable<PrinterErrorLogEntry> SortEntries(IEnumerable<PrinterErrorLogEntry> entries, bool newestFirst) =>
+        newestFirst
+            ? entries.OrderByDescending(e => e.Timestamp)
+            : entries.OrderBy(e => e.Timestamp);
+
+    static IEnumerable<PrinterAlertOccurrence> SortOccurrences(IEnumerable<PrinterAlertOccurrence> entries, bool newestFirst) =>
+        newestFirst
+            ? entries.OrderByDescending(e => e.Timestamp)
+            : entries.OrderBy(e => e.Timestamp);
+
+    static IEnumerable<PrinterAlertGroup> SortGroups(IEnumerable<PrinterAlertGroup> groups, bool newestFirst) =>
+        newestFirst
+            ? groups.OrderByDescending(g => g.LatestAt).ThenByDescending(g => SeverityRank(g.Severity))
+            : groups.OrderBy(g => g.LatestAt).ThenByDescending(g => SeverityRank(g.Severity));
+
+    static List<AuthIssueReportRow> BuildAuthIssueRows(IEnumerable<PrinterErrorLogEntry> entries, bool newestFirst)
     {
-        return entries
+        var rows = entries
             .Where(IsAuthFailure)
             .GroupBy(e => GetTimeBucketTicks(e.Timestamp, AuthBurstMinutes))
             .Select(g =>
             {
-                var ordered = g.OrderByDescending(e => e.Timestamp).ToList();
-                var latest = ordered[0];
+                var ordered = SortEntries(g, newestFirst).ToList();
+                var latest = g.OrderByDescending(e => e.Timestamp).First();
                 var firstSeen = ordered.Min(e => e.Timestamp);
                 var lastSeen = ordered.Max(e => e.Timestamp);
                 var printerCount = ordered.Select(e => e.PrinterId).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.OrdinalIgnoreCase).Count();
@@ -610,19 +684,21 @@
                     JoinTop(ordered.Select(e => e.DivisionName), 3),
                     ordered);
             })
-            .OrderByDescending(r => r.LastSeenAt)
-            .ThenByDescending(r => r.EventCount)
             .ToList();
+
+        return newestFirst
+            ? rows.OrderByDescending(r => r.LastSeenAt).ThenByDescending(r => r.EventCount).ToList()
+            : rows.OrderBy(r => r.LastSeenAt).ThenByDescending(r => r.EventCount).ToList();
     }
 
-    static List<FaultTrendReportRow> BuildFaultTrendRows(IEnumerable<PrinterErrorLogEntry> entries)
+    static List<FaultTrendReportRow> BuildFaultTrendRows(IEnumerable<PrinterErrorLogEntry> entries, bool newestFirst)
     {
-        return entries
+        var rows = entries
             .Where(e => !IsAuthFailure(e))
             .GroupBy(TrendCategory, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
-                var ordered = g.OrderByDescending(e => e.Timestamp).ToList();
+                var ordered = SortEntries(g, newestFirst).ToList();
                 var topAlert = ordered
                     .GroupBy(TrendAlertLabel, StringComparer.OrdinalIgnoreCase)
                     .OrderByDescending(a => a.Count())
@@ -642,10 +718,11 @@
                     JoinTop(ordered.Select(PrinterLabel), 4),
                     ordered);
             })
-            .OrderByDescending(r => SeverityRank(r.Severity))
-            .ThenByDescending(r => r.EventCount)
-            .ThenByDescending(r => r.LastSeenAt)
             .ToList();
+
+        return newestFirst
+            ? rows.OrderByDescending(r => r.LastSeenAt).ThenByDescending(r => SeverityRank(r.Severity)).ThenByDescending(r => r.EventCount).ToList()
+            : rows.OrderBy(r => r.LastSeenAt).ThenByDescending(r => SeverityRank(r.Severity)).ThenByDescending(r => r.EventCount).ToList();
     }
 
     static bool IsAuthFailure(PrinterErrorLogEntry entry)

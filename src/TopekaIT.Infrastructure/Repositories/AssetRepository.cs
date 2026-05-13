@@ -46,6 +46,20 @@ public class AssetRepository : IAssetRepository
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task RemoveAsync(string id, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var asset = await db.Assets.FindAsync(new object?[] { id }, ct);
+        if (asset == null) return;
+
+        await db.Assets
+            .Where(a => a.PairedAssetId == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.PairedAssetId, (string?)null), ct);
+
+        db.Assets.Remove(asset);
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<IEnumerable<Asset>> GetSparePoolAsync(CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);

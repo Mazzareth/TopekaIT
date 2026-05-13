@@ -6,6 +6,7 @@
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject IJSRuntime JS
 
 @code {
     [Parameter] public Asset? Asset { get; set; }
@@ -21,6 +22,7 @@
     string _lastKey = "";
     bool _canAssignAssets;
     bool _canCheckInOut;
+    bool _canDeleteAssets;
     bool _canUpdateStatus;
 
     protected override async Task OnParametersSetAsync()
@@ -40,6 +42,7 @@
         var access = await Access.GetUserAccessAsync(userId);
         _canAssignAssets = access?.Has(AccessPermissionKeys.AssetsAssign) == true;
         _canCheckInOut = access?.Has(AccessPermissionKeys.AssetsCheckInOut) == true;
+        _canDeleteAssets = access?.Has(AccessPermissionKeys.AssetsDelete) == true;
         _canUpdateStatus = access?.Has(AccessPermissionKeys.AssetsUpdateStatus) == true;
     }
 
@@ -127,6 +130,19 @@
             State.PushToast($"Status → {status}", "up");
         }
         await OnChanged.InvokeAsync();
+    }
+
+    async Task DeleteAsset()
+    {
+        if (Asset == null || !_canDeleteAssets) return;
+        var label = Label(Asset);
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete device {label}? This cannot be undone.");
+        if (!confirmed) return;
+
+        await AssetService.DeleteAsync(Asset.Id);
+        State.PushToast($"Removed {label}", "");
+        await OnChanged.InvokeAsync();
+        await OnClose.InvokeAsync();
     }
 
     string EffectiveAction()
@@ -355,4 +371,13 @@
             </div>
         }
     </ChildContent>
+    <Footer>
+        <button class="btn" @onclick="() => OnClose.InvokeAsync()">Close</button>
+        @if (Asset != null && _canDeleteAssets)
+        {
+            <button class="btn btn-danger" @onclick="DeleteAsset">
+                <Icon Name="Trash" Size="14" /> Delete device
+            </button>
+        }
+    </Footer>
 </Modal>

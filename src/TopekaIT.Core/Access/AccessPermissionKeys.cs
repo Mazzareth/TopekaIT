@@ -26,6 +26,7 @@ public static class AccessPermissionKeys
     public const string AssetsViewSupervisorConsole = "assets.view-supervisor-console";
     public const string AssetsViewItConsole = "assets.view-it-console";
     public const string AssetsCreate = "assets.create";
+    public const string AssetsDelete = "assets.delete";
     public const string AssetsManageModels = "assets.manage-models";
     public const string AssetsScanSearch = "assets.scan-search";
     public const string AssetsAssign = "assets.assign-holder";

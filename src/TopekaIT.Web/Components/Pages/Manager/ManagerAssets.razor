@@ -10,6 +10,7 @@
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject IJSRuntime JS
 
 <PageTitle>Assets · Topeka IT</PageTitle>
 
@@ -234,7 +235,7 @@
         </div>
 
         <div class="card" style="margin-top:2px;">
-            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 160px 110px 100px;">
+            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 160px 110px 140px;">
                 <div>Tag / S/N</div>
                 <div>Type</div>
                 <div>Model</div>
@@ -255,7 +256,7 @@
                 {
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
                     <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags)"
-                         style="grid-template-columns:120px 90px 1fr 160px 110px 100px;"
+                         style="grid-template-columns:120px 90px 1fr 160px 110px 140px;"
                          @onclick="() => Open(a, null)">
                         <div class="mono">@PrimaryTag(a)</div>
                         <div>@Format.CategoryLabel(a.Category)</div>
@@ -289,6 +290,12 @@
                             {
                                 <button class="btn btn-sm" @onclick="() => Open(a, null)">
                                     <Icon Name="Eye" Size="12" />
+                                </button>
+                            }
+                            @if (_canDeleteAssets)
+                            {
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteAsset(a)">
+                                    <Icon Name="Trash" Size="12" />
                                 </button>
                             }
                         </div>
@@ -389,6 +396,7 @@
     bool _camScanOpen;
     bool _createOpen;
     bool _canCreateAssets;
+    bool _canDeleteAssets;
     bool _canScanAssets;
     bool _canPairScanners;
     bool _canEditLockers;
@@ -415,6 +423,7 @@
         var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
         var access = await Access.GetUserAccessAsync(userId);
         _canCreateAssets = access?.Has(AccessPermissionKeys.AssetsCreate) == true;
+        _canDeleteAssets = access?.Has(AccessPermissionKeys.AssetsDelete) == true;
         _canScanAssets = access?.Has(AccessPermissionKeys.AssetsScanSearch) == true;
         _canPairScanners = access?.Has(AccessPermissionKeys.AssetsPairScanners) == true;
         _canEditLockers = access?.Has(AccessPermissionKeys.LockersEditMetadata) == true;
@@ -557,6 +566,23 @@
         await AssetService.PairScannerAsync(_pairingScanner.Id, sae.Id, actorId);
         State.PushToast($"Scanner paired to {PrimaryTag(sae)}", "up");
         _pairingScanner = null;
+        await Load();
+    }
+
+    async Task DeleteAsset(Asset asset)
+    {
+        if (!_canDeleteAssets) return;
+        var label = PrimaryTag(asset);
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete device {label}? This cannot be undone.");
+        if (!confirmed) return;
+
+        await AssetService.DeleteAsync(asset.Id);
+        State.PushToast($"Removed {label}", "");
+        if (_viewing?.Id == asset.Id)
+        {
+            _viewing = null;
+            _viewAction = null;
+        }
         await Load();
     }
 

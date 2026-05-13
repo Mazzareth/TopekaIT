@@ -25,6 +25,7 @@ public class AssetService
 
     public Task<IReadOnlyList<Asset>> GetAllAsync(CancellationToken ct = default) => _repo.GetAllAsync(ct);
     public Task<Asset?> GetByIdAsync(string id, CancellationToken ct = default) => _repo.GetByIdAsync(id, ct);
+    public Task DeleteAsync(string id, CancellationToken ct = default) => _repo.RemoveAsync(id, ct);
 
     public async Task AddAsync(Asset asset, CancellationToken ct = default)
     {

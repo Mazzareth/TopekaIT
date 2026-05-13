@@ -18,14 +18,26 @@ public class PrinterEventService
     public Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count = 0, CancellationToken ct = default)
         => _repo.GetErrorsAsync(count, ct);
 
+    public Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        => _repo.GetErrorsAsync(count, from, to, ct);
+
     public Task<IReadOnlyList<PrinterErrorLogEntry>> GetAllDivisionErrorsAsync(int count = 0, CancellationToken ct = default)
         => _repo.GetAllDivisionErrorsAsync(count, ct);
+
+    public Task<IReadOnlyList<PrinterErrorLogEntry>> GetAllDivisionErrorsAsync(int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        => _repo.GetAllDivisionErrorsAsync(count, from, to, ct);
 
     public Task<IReadOnlyList<PrinterAlertGroup>> GetGroupedErrorsAsync(int count = 0, CancellationToken ct = default)
         => _repo.GetGroupedErrorsAsync(count, ct);
 
+    public Task<IReadOnlyList<PrinterAlertGroup>> GetGroupedErrorsAsync(int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        => _repo.GetGroupedErrorsAsync(count, from, to, ct);
+
     public Task<IReadOnlyList<PrinterAlertGroup>> GetAllDivisionGroupedErrorsAsync(int count = 0, CancellationToken ct = default)
         => _repo.GetAllDivisionGroupedErrorsAsync(count, ct);
+
+    public Task<IReadOnlyList<PrinterAlertGroup>> GetAllDivisionGroupedErrorsAsync(int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        => _repo.GetAllDivisionGroupedErrorsAsync(count, from, to, ct);
 
     public Task<IReadOnlyList<PrinterAlertState>> GetActiveAlertsAsync(CancellationToken ct = default)
         => _repo.GetActiveAlertsAsync(ct);

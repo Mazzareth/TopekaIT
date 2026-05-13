@@ -9,6 +9,7 @@
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject IJSRuntime JS
 
 <PageTitle>Asset Console · Topeka IT</PageTitle>
 
@@ -306,6 +307,12 @@
                             <Icon Name="ArrowIn" Size="12" /> Check in
                         </button>
                     }
+                    @if (_canDeleteAssets)
+                    {
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteAsset(sel)">
+                            <Icon Name="Trash" Size="12" /> Delete device
+                        </button>
+                    }
                 </div>
             </div>
         }
@@ -320,6 +327,7 @@
     bool _scanOpen;
     bool _createOpen;
     bool _canCreateAssets;
+    bool _canDeleteAssets;
     bool _canScanAssets;
     bool _canUpdateFlags;
     bool _showSae      = true;
@@ -346,6 +354,7 @@
         var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
         var access = await Access.GetUserAccessAsync(userId);
         _canCreateAssets = access?.Has(AccessPermissionKeys.AssetsCreate) == true;
+        _canDeleteAssets = access?.Has(AccessPermissionKeys.AssetsDelete) == true;
         _canScanAssets = access?.Has(AccessPermissionKeys.AssetsScanSearch) == true;
         _canUpdateFlags = access?.Has(AccessPermissionKeys.AssetsUpdateFlags) == true;
         await Load();
@@ -438,6 +447,19 @@
         await AssetService.SetFlagsAsync(a.Id, toSet, toClear, actorName);
         await Load();
         State.PushToast($"Flag updated", "");
+    }
+
+    async Task DeleteAsset(Asset a)
+    {
+        if (!_canDeleteAssets) return;
+        var label = PrimaryTag(a);
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete device {label}? This cannot be undone.");
+        if (!confirmed) return;
+
+        await AssetService.DeleteAsync(a.Id);
+        State.PushToast($"Removed {label}", "");
+        _selected = null;
+        await Load();
     }
 
     static IEnumerable<(StatusFlags Flag, string Label, string DotClass)> FlagDefs() =>

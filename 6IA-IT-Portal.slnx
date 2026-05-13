@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TopekaIT.Core/TopekaIT.Core.csproj" />
+    <Project Path="src/TopekaIT.DeploymentChecker/TopekaIT.DeploymentChecker.csproj" />
     <Project Path="src/TopekaIT.Infrastructure/TopekaIT.Infrastructure.csproj" />
     <Project Path="src/TopekaIT.Web/TopekaIT.Web.csproj" />
   </Folder>

@@ -14,6 +14,7 @@
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject IJSRuntime JS
 
 <PageTitle>Printer admin · Topeka IT</PageTitle>
 
@@ -315,10 +316,35 @@
             }
         </div>
 
+        <div class="printer-log-filter printer-error-log-filter">
+            <label class="filter-field">
+                <span>From</span>
+                <input class="inline-input printer-log-date" type="date" @bind="_errorStartDate" />
+            </label>
+            <label class="filter-field">
+                <span>To</span>
+                <input class="inline-input printer-log-date" type="date" @bind="_errorEndDate" />
+            </label>
+            <label class="filter-field">
+                <span>Sort</span>
+                <select class="inline-input printer-log-select" @bind="_errorDateSort">
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                </select>
+            </label>
+            <button class="btn btn-sm" @onclick="Load">
+                <Icon Name="RefreshCw" Size="12" /> Apply
+            </button>
+            @if (HasActiveErrorLogFilters())
+            {
+                <button class="btn btn-sm btn-ghost" @onclick="ClearErrorLogFilters">Clear</button>
+            }
+        </div>
+
         @if (_errorLog.Count == 0)
         {
             <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
-                No printer errors have been received for this division.
+                @(HasActiveErrorDateRange() ? "No printer errors match the selected date." : "No printer errors have been received for this division.")
             </div>
         }
         else
@@ -331,7 +357,7 @@
                 <div>Message</div>
                 <div style="text-align: right;">Actions</div>
             </div>
-            @foreach (var ev in _errorLog)
+            @foreach (var ev in VisibleErrorLog())
             {
                 <div class="asset-row" style="grid-template-columns: 120px 1fr 1fr 120px 1.6fr 90px;">
                     <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</div>
@@ -369,6 +395,9 @@
     string _setupError = "";
     string _printerFilter = "all";
     string _printerSort = "health";
+    DateTime? _errorStartDate;
+    DateTime? _errorEndDate;
+    string _errorDateSort = "newest";
     bool _setupOpen;
     bool _setupTesting;
     bool _setupRunning;
@@ -402,7 +431,7 @@
         var unsavedNewRows = _rows.Where(r => r.IsNew).ToList();
         _printerModels = (await PrinterModelService.GetAllAsync()).OrderBy(m => m.Name).ToList();
         var printers = (await PrinterService.GetAllAsync()).OrderBy(p => p.Name).ToList();
-        _errorLog = (await PrinterEvents.GetErrorsAsync()).ToList();
+        _errorLog = (await PrinterEvents.GetErrorsAsync(0, ErrorRangeStartUtc(), ErrorRangeEndExclusiveUtc())).ToList();
         _alertStates = (await PrinterEvents.GetActiveAlertsAsync()).ToList();
         _rows = printers.Select(p => new PrinterRow
         {
@@ -440,6 +469,41 @@
                 _sparklines[printer.Id] = latencies;
             }
         }
+    }
+
+    IEnumerable<PrinterErrorLogEntry> VisibleErrorLog() =>
+        _errorDateSort == "oldest"
+            ? _errorLog.OrderBy(e => e.Timestamp)
+            : _errorLog.OrderByDescending(e => e.Timestamp);
+
+    DateTimeOffset? ErrorRangeStartUtc() => Format.LocalDateStartUtc(_errorStartDate);
+
+    DateTimeOffset? ErrorRangeEndExclusiveUtc()
+    {
+        if (_errorEndDate.HasValue)
+        {
+            return Format.LocalDateEndExclusiveUtc(_errorEndDate);
+        }
+
+        return !_errorStartDate.HasValue
+            ? null
+            : Format.LocalDateEndExclusiveUtc(_errorStartDate);
+    }
+
+    bool HasActiveErrorDateRange() =>
+        _errorStartDate.HasValue ||
+        _errorEndDate.HasValue;
+
+    bool HasActiveErrorLogFilters() =>
+        HasActiveErrorDateRange() ||
+        _errorDateSort != "newest";
+
+    async Task ClearErrorLogFilters()
+    {
+        _errorStartDate = null;
+        _errorEndDate = null;
+        _errorDateSort = "newest";
+        await Load();
     }
 
     async Task TestPrinterSetup()
@@ -716,6 +780,8 @@
     async Task Remove(PrinterRow row)
     {
         if (!_canDeletePrinters) return;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete printer {row.Name}? This cannot be undone.");
+        if (!confirmed) return;
         await PrinterService.DeleteAsync(row.Id);
         State.PushToast($"Removed {row.Name}", "");
         await Load();
