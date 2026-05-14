@@ -19,6 +19,18 @@ public class LockerService
 
     public async Task AddAsync(Locker locker, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(locker.Number))
+        {
+            throw new InvalidOperationException("Locker number is required.");
+        }
+
+        var existing = await _repo.GetAllAsync(ct);
+        if (existing.Any(l => l.IsActive &&
+            string.Equals(l.Number.Trim(), locker.Number.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Locker {locker.Number.Trim()} already exists.");
+        }
+
         locker.Id = Guid.NewGuid().ToString("N")[..16];
         locker.Number = locker.Number.Trim();
         locker.IsActive = true;
@@ -28,22 +40,47 @@ public class LockerService
 
     public async Task UpdateAsync(Locker locker, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(locker.Number))
+        {
+            throw new InvalidOperationException("Locker number is required.");
+        }
+
+        var existing = await _repo.GetAllAsync(ct);
+        if (existing.Any(l => l.Id != locker.Id && l.IsActive &&
+            string.Equals(l.Number.Trim(), locker.Number.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Locker {locker.Number.Trim()} already exists.");
+        }
+
         locker.Number = locker.Number.Trim();
         await _repo.UpdateAsync(locker, ct);
     }
 
     public async Task AssignOccupantAsync(string lockerId, string userId, bool isPrimary, string actorId, CancellationToken ct = default)
     {
-        var locker = await _repo.GetByIdAsync(lockerId, ct);
+        var allLockers = await _repo.GetAllAsync(ct);
+        foreach (var otherLocker in allLockers.Where(l => l.Id != lockerId))
+        {
+            var otherAssignment = otherLocker.Occupants
+                .FirstOrDefault(o => o.UserId == userId && o.UnassignedAt == null);
+            if (otherAssignment == null) continue;
+
+            otherAssignment.UnassignedAt = DateTimeOffset.UtcNow;
+            otherAssignment.UnassignedBy = actorId;
+            await _repo.UpdateAsync(otherLocker, ct);
+        }
+
+        var locker = allLockers.FirstOrDefault(l => l.Id == lockerId)
+            ?? await _repo.GetByIdAsync(lockerId, ct);
         if (locker == null) return;
 
-        // Soft-close any active assignment for this user on this locker
         var existing = locker.Occupants
             .FirstOrDefault(o => o.UserId == userId && o.UnassignedAt == null);
         if (existing != null)
         {
-            existing.UnassignedAt = DateTimeOffset.UtcNow;
-            existing.UnassignedBy = actorId;
+            existing.IsPrimary = isPrimary;
+            await _repo.UpdateAsync(locker, ct);
+            return;
         }
 
         locker.Occupants.Add(new LockerOccupant

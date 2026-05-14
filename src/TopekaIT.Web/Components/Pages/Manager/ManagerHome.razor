@@ -5,6 +5,7 @@
 @inject TicketService TicketService
 @inject PrinterService PrinterService
 @inject AssetService AssetService
+@inject LockerService LockerService
 @inject UserService UserServiceX
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
@@ -281,8 +282,11 @@
 
         _users = (await UserServiceX.GetAllAsync()).ToList();
         
-        var takenLockers = _users.Count(u => !string.IsNullOrWhiteSpace(u.LockerNumber));
-        _availableLockers = 96 - takenLockers;
+        var lockers = await LockerService.GetAllAsync();
+        _availableLockers = lockers.Count(l =>
+            l.IsActive &&
+            !l.Occupants.Any(o => o.UnassignedAt == null) &&
+            !assets.Any(a => a.LockerId == l.Id));
         
         var activeLoans = await AssetService.GetActiveLoansAsync();
         _activeLoansCount = activeLoans.Count();

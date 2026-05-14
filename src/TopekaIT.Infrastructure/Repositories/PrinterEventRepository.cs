@@ -9,6 +9,7 @@ namespace TopekaIT.Infrastructure.Repositories;
 
 public class PrinterEventRepository : IPrinterEventRepository
 {
+    private static readonly TimeSpan ActiveIncidentWindow = TimeSpan.FromDays(2);
     private readonly IDivisionDbContextFactory _factory;
     private readonly IDivisionRepository? _divisionRepository;
     private readonly ITenantContext? _tenantContext;
@@ -276,10 +277,13 @@ public class PrinterEventRepository : IPrinterEventRepository
         string divisionId,
         string divisionName)
     {
+        var activeSince = DateTimeOffset.UtcNow.Subtract(ActiveIncidentWindow);
+
         return db.PrinterAlertStates
             .AsNoTracking()
             .Include(a => a.Printer)
             .Where(a => !a.BlipSuppressed)
+            .Where(a => a.LastSeenAt >= activeSince)
             .OrderByDescending(a => a.LastSeenAt)
             .Select(a => new PrinterActiveIncidentReportRow
             {
@@ -358,6 +362,13 @@ public class PrinterEventRepository : IPrinterEventRepository
     private static PrinterAlertOccurrence ToOccurrence(PrinterErrorLogEntry entry)
     {
         var normalized = PrinterAlertNormalizer.Normalize(entry.RawMessage, entry.EventType, entry.Severity);
+        var useNormalized = PrinterAlertNormalizer.IsAuthenticationFailure(
+            rawMessage: entry.RawMessage,
+            eventType: entry.EventType,
+            alertKey: entry.AlertKey,
+            alertTitle: entry.AlertTitle,
+            alertDetail: entry.AlertDetail,
+            friendlyMessage: entry.FriendlyMessage);
 
         return new PrinterAlertOccurrence
         {
@@ -369,13 +380,13 @@ public class PrinterEventRepository : IPrinterEventRepository
             Department = entry.Department,
             IpAddress = entry.IpAddress,
             Timestamp = entry.Timestamp,
-            AlertKey = entry.AlertKey ?? normalized.AlertKey,
-            AlertTitle = entry.AlertTitle ?? normalized.AlertTitle,
-            AlertCategory = entry.AlertCategory ?? normalized.AlertCategory,
-            AlertDetail = entry.AlertDetail ?? normalized.AlertDetail,
-            FriendlyMessage = entry.FriendlyMessage ?? normalized.FriendlyMessage,
-            Severity = entry.Severity ?? normalized.Severity,
-            TrainingLevel = entry.AlertTrainingLevel ?? normalized.TrainingLevel,
+            AlertKey = useNormalized ? normalized.AlertKey : entry.AlertKey ?? normalized.AlertKey,
+            AlertTitle = useNormalized ? normalized.AlertTitle : entry.AlertTitle ?? normalized.AlertTitle,
+            AlertCategory = useNormalized ? normalized.AlertCategory : entry.AlertCategory ?? normalized.AlertCategory,
+            AlertDetail = useNormalized ? normalized.AlertDetail : entry.AlertDetail ?? normalized.AlertDetail,
+            FriendlyMessage = useNormalized ? normalized.FriendlyMessage : entry.FriendlyMessage ?? normalized.FriendlyMessage,
+            Severity = useNormalized ? normalized.Severity : entry.Severity ?? normalized.Severity,
+            TrainingLevel = useNormalized ? normalized.TrainingLevel : entry.AlertTrainingLevel ?? normalized.TrainingLevel,
             RawMessage = entry.RawMessage,
         };
     }

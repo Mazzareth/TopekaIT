@@ -3,19 +3,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-        <SolidColorBrush x:Key="SurfaceBrush" Color="#090B0A" />
-        <SolidColorBrush x:Key="PanelBrush" Color="#101412" />
-        <SolidColorBrush x:Key="PanelAltBrush" Color="#141A17" />
-        <SolidColorBrush x:Key="TerminalBrush" Color="#050706" />
-        <SolidColorBrush x:Key="LineBrush" Color="#26332D" />
-        <SolidColorBrush x:Key="LineStrongBrush" Color="#395045" />
-        <SolidColorBrush x:Key="InkBrush" Color="#E7F5EA" />
-        <SolidColorBrush x:Key="MutedBrush" Color="#829088" />
-        <SolidColorBrush x:Key="SubtleBrush" Color="#55635B" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#5EE787" />
-        <SolidColorBrush x:Key="AccentDimBrush" Color="#1D3D2B" />
-        <SolidColorBrush x:Key="OkBrush" Color="#5EE787" />
-        <SolidColorBrush x:Key="DownBrush" Color="#FF6B6B" />
-        <SolidColorBrush x:Key="WarnBrush" Color="#F5C542" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#F5EFE6" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#FFFDF8" />
+        <SolidColorBrush x:Key="PanelAltBrush" Color="#F1E7DA" />
+        <SolidColorBrush x:Key="TerminalBrush" Color="#FFF8ED" />
+        <SolidColorBrush x:Key="LineBrush" Color="#DECBBB" />
+        <SolidColorBrush x:Key="LineStrongBrush" Color="#B88472" />
+        <SolidColorBrush x:Key="InkBrush" Color="#33241F" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#765F56" />
+        <SolidColorBrush x:Key="SubtleBrush" Color="#9D8275" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#743542" />
+        <SolidColorBrush x:Key="AccentDimBrush" Color="#F2DFD8" />
+        <SolidColorBrush x:Key="OkBrush" Color="#5D7E55" />
+        <SolidColorBrush x:Key="DownBrush" Color="#A84842" />
+        <SolidColorBrush x:Key="WarnBrush" Color="#A76A2C" />
     </Application.Resources>
 </Application>

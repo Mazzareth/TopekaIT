@@ -4,15 +4,30 @@ namespace TopekaIT.Core.Services;
 
 public static partial class PrinterAlertNormalizer
 {
+    public const string SnmpAuthenticationFailureAlertKey = "SNMP_AUTHENTICATION_FAILURE";
+    private const string SnmpAuthenticationFailureTitle = "SNMP Authentication Failure";
+    private const string SnmpAuthenticationFailureCategory = "SNMP Authentication";
+    private const string SnmpAuthenticationFailureDetail = "Authentication Failure";
+
     public static PrinterAlertInfo Normalize(string rawMessage, string? eventType = null, string? severity = null)
     {
         var message = rawMessage.Trim();
         var title = ExtractMessageTitle(message);
         var detail = ExtractQuotedReportedDetail(message) ?? ExtractField(message, "description");
+        var normalizedSeverity = NormalizeSeverity(ExtractField(message, "severity") ?? severity ?? eventType);
+
+        if (IsAuthenticationFailure(
+            rawMessage: message,
+            eventType: eventType,
+            alertTitle: title,
+            alertDetail: detail))
+        {
+            return BuildAuthenticationFailureInfo();
+        }
+
         var normalizedDetail = NormalizeDetail(detail);
         var category = DeriveCategory(normalizedDetail, title, eventType);
         var normalizedTitle = NormalizeTitle(title, category);
-        var normalizedSeverity = NormalizeSeverity(ExtractField(message, "severity") ?? severity ?? eventType);
         var trainingLevel = ExtractTrainingLevel(message);
         var alertKey = BuildAlertKey(normalizedDetail ?? normalizedTitle);
         var friendly = BuildFriendlyMessage(normalizedTitle, normalizedDetail, normalizedSeverity, trainingLevel);
@@ -25,6 +40,39 @@ public static partial class PrinterAlertNormalizer
             friendly,
             normalizedSeverity,
             trainingLevel);
+    }
+
+    public static bool IsAuthenticationFailure(
+        string? rawMessage = null,
+        string? eventType = null,
+        string? alertKey = null,
+        string? alertTitle = null,
+        string? alertDetail = null,
+        string? friendlyMessage = null)
+    {
+        var source = $"{rawMessage} {eventType} {alertKey} {alertTitle} {alertDetail} {friendlyMessage}";
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return false;
+        }
+
+        return ContainsAuthFailure(source);
+    }
+
+    private static PrinterAlertInfo BuildAuthenticationFailureInfo()
+    {
+        const string displaySeverity = "Warning";
+        var friendly = "SNMP authentication failure traps are being received while monitoring this printer. " +
+            $"This usually points to SNMP community or listener configuration, not a printer hardware fault. Severity: {displaySeverity}";
+
+        return new PrinterAlertInfo(
+            SnmpAuthenticationFailureAlertKey,
+            SnmpAuthenticationFailureTitle,
+            SnmpAuthenticationFailureCategory,
+            SnmpAuthenticationFailureDetail,
+            friendly,
+            displaySeverity,
+            TrainingLevel: null);
     }
 
     private static string ExtractMessageTitle(string message)
@@ -96,6 +144,7 @@ public static partial class PrinterAlertNormalizer
     {
         var source = $"{detail} {title} {eventType}".ToUpperInvariant();
 
+        if (ContainsAuthFailure(source)) return SnmpAuthenticationFailureCategory;
         if (source.Contains("RIBBON")) return "Ribbon";
         if (source.Contains("PRINTHEAD") || source.Contains("PRINT HEAD")) return "Printhead";
         if (source.Contains("CUTTER")) return "Cutter Fault";
@@ -139,6 +188,16 @@ public static partial class PrinterAlertNormalizer
     {
         var upper = Regex.Replace(value.ToUpperInvariant(), @"[^A-Z0-9]+", "_").Trim('_');
         return string.IsNullOrWhiteSpace(upper) ? "PRINTER_ALERT" : upper;
+    }
+
+    private static bool ContainsAuthFailure(string value)
+    {
+        return value.Contains("AUTHENTICATIONFAIL", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("AUTHENTICATION FAILURE", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("AUTH FAILURE", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("GENERIC=AUTHEN", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("SNMPTRAPOID.0=1.3.6.1.6.3.1.1.5.5", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("1.3.6.1.6.3.1.1.5.5", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ToTitleCase(string value)

@@ -6,6 +6,9 @@ namespace TopekaIT.Core.Services;
 
 public class AssetService
 {
+    public const int Ntag213UserBytes = 144;
+    public const string RfidPayloadPrefix = "rfid:";
+
     private readonly IAssetRepository _repo;
     private readonly ActivityService _activity;
 
@@ -44,7 +47,54 @@ public class AssetService
             ScanEquals(a.Tag, normalized) ||
             ScanEquals(a.Serial, normalized) ||
             ScanEquals(a.Imei, normalized) ||
+            ScanEquals(a.RfidTagId, normalized) ||
             ScanEquals(a.Id, normalized));
+    }
+
+    public async Task<Asset?> GenerateRfidLinkAsync(string assetId, string actorName, CancellationToken ct = default)
+    {
+        var existing = await _repo.GetAllAsync(ct);
+        var token = GenerateRfidToken(existing);
+        return await LinkRfidAsync(assetId, token, actorName, ct);
+    }
+
+    public async Task<Asset?> LinkRfidAsync(string assetId, string rfidValue, string actorName, CancellationToken ct = default)
+    {
+        var token = NormalizeRfidToken(rfidValue);
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("RFID value is required.");
+
+        var payload = BuildRfidPayload(token);
+        if (GetPayloadByteCount(payload) > Ntag213UserBytes)
+            throw new InvalidOperationException($"RFID payload is too large for NTAG213 ({Ntag213UserBytes} bytes max).");
+
+        var all = await _repo.GetAllAsync(ct);
+        var duplicate = all.FirstOrDefault(a => a.Id != assetId && ScanEquals(a.RfidTagId, token));
+        if (duplicate != null)
+            throw new InvalidOperationException($"RFID tag is already linked to {AssetLabel(duplicate)}.");
+
+        var asset = await _repo.GetByIdAsync(assetId, ct);
+        if (asset == null) return null;
+
+        asset.RfidTagId = token;
+        asset.RfidLinkedAt = DateTimeOffset.UtcNow;
+        await _repo.UpdateAsync(asset, ct);
+
+        await _activity.PushAsync("rfid_link", $"{AssetLabel(asset)} linked to RFID tag by {actorName}", ct);
+        return asset;
+    }
+
+    public async Task<Asset?> ClearRfidLinkAsync(string assetId, string actorName, CancellationToken ct = default)
+    {
+        var asset = await _repo.GetByIdAsync(assetId, ct);
+        if (asset == null) return null;
+
+        asset.RfidTagId = null;
+        asset.RfidLinkedAt = null;
+        await _repo.UpdateAsync(asset, ct);
+
+        await _activity.PushAsync("rfid_unlink", $"{AssetLabel(asset)} RFID tag cleared by {actorName}", ct);
+        return asset;
     }
 
     public async Task<Asset?> CheckOutAsync(string assetId, string holderId, int dueDays, CancellationToken ct = default)
@@ -144,13 +194,60 @@ public class AssetService
         else
         {
             a.CheckedOutAt = null;
-            SetPrimaryFlag(a, StatusFlags.InCC);
+            SetPrimaryFlag(a, string.IsNullOrWhiteSpace(a.LockerId) ? StatusFlags.InCC : StatusFlags.InLocker);
         }
 
         await _repo.UpdateAsync(a, ct);
 
         var msg = isUnassign ? "unassigned" : $"assigned to {userId}";
         await _activity.PushAsync("assignment", $"{a.Tag ?? a.Serial} {msg} by {actorName}", ct);
+    }
+
+    public async Task AssignToLockerAsync(string assetId, string? lockerId, string? lockerNumber, string actorName, CancellationToken ct = default)
+    {
+        var a = await _repo.GetByIdAsync(assetId, ct);
+        if (a == null) return;
+
+        var assigning = !string.IsNullOrWhiteSpace(lockerId);
+        a.LockerId = assigning ? lockerId : null;
+        a.LastSeenAt = DateTimeOffset.UtcNow;
+        a.LastSeenLocation = assigning ? lockerNumber?.Trim() : null;
+
+        if (assigning)
+        {
+            SetPrimaryFlag(a, string.IsNullOrWhiteSpace(a.HolderId) ? StatusFlags.InLocker : StatusFlags.WithHolder);
+            var nextStatus = string.IsNullOrWhiteSpace(a.HolderId) ? AssetStatus.InLocker : AssetStatus.InUse;
+            if (a.Status != nextStatus)
+            {
+                a.Status = nextStatus;
+                a.StatusChangedAt = DateTimeOffset.UtcNow;
+            }
+        }
+        else
+        {
+            a.Flags &= ~StatusFlags.InLocker;
+            if (!string.IsNullOrWhiteSpace(a.HolderId))
+            {
+                SetPrimaryFlag(a, StatusFlags.WithHolder);
+            }
+            else if (!FormatHasAttention(a.Flags))
+            {
+                SetPrimaryFlag(a, StatusFlags.Spare);
+                if (a.Status != AssetStatus.Spare)
+                {
+                    a.Status = AssetStatus.Spare;
+                    a.StatusChangedAt = DateTimeOffset.UtcNow;
+                }
+            }
+        }
+
+        await _repo.UpdateAsync(a, ct);
+
+        var label = a.Tag ?? a.Serial;
+        var msg = assigning
+            ? $"{label} assigned to locker {lockerNumber} by {actorName}"
+            : $"{label} removed from locker by {actorName}";
+        await _activity.PushAsync("locker_asset", msg, ct);
     }
 
     public async Task PairScannerAsync(string scannerAssetId, string? saeAssetId, string actorName, CancellationToken ct = default)
@@ -257,6 +354,7 @@ public class AssetService
         asset.Serial = asset.Serial.Trim();
         asset.Model = asset.Model.Trim();
         asset.Imei = string.IsNullOrWhiteSpace(asset.Imei) ? null : asset.Imei.Trim();
+        asset.RfidTagId = string.IsNullOrWhiteSpace(asset.RfidTagId) ? null : NormalizeRfidToken(asset.RfidTagId);
         asset.Notes = asset.Notes.Trim();
         asset.Quantity = asset.Category == AssetCategory.Battery ? Math.Max(asset.Quantity, 0) : 1;
         asset.IsSAE = asset.Category == AssetCategory.SaeDevice;
@@ -287,6 +385,40 @@ public class AssetService
     private static bool ScanEquals(string? value, string normalizedScan)
         => string.Equals(NormalizeScanValue(value ?? ""), normalizedScan, StringComparison.OrdinalIgnoreCase);
 
+    public static string BuildRfidPayload(string? rfidTagId)
+    {
+        var token = NormalizeRfidToken(rfidTagId ?? "");
+        return string.IsNullOrWhiteSpace(token) ? "" : $"{RfidPayloadPrefix}{token}";
+    }
+
+    public static int GetPayloadByteCount(string value) => System.Text.Encoding.UTF8.GetByteCount(value);
+
+    private static string GenerateRfidToken(IReadOnlyList<Asset> existing)
+    {
+        while (true)
+        {
+            var token = "NTAG-" + Guid.NewGuid().ToString("N")[..12].ToUpperInvariant();
+            if (!existing.Any(a => ScanEquals(a.RfidTagId, token)))
+                return token;
+        }
+    }
+
+    private static string NormalizeRfidToken(string value) => NormalizeScanValue(value).Trim();
+
+    private static string AssetLabel(Asset asset)
+    {
+        if (!string.IsNullOrWhiteSpace(asset.Tag)) return asset.Tag;
+        if (!string.IsNullOrWhiteSpace(asset.Serial)) return asset.Serial;
+        return asset.Id;
+    }
+
+    private static bool FormatHasAttention(StatusFlags flags) =>
+        flags.HasFlag(StatusFlags.InRMA) ||
+        flags.HasFlag(StatusFlags.InRepair) ||
+        flags.HasFlag(StatusFlags.Missing) ||
+        flags.HasFlag(StatusFlags.OnHold) ||
+        flags.HasFlag(StatusFlags.UnderInvestigation);
+
     private static string NormalizeScanValue(string value)
     {
         var cleaned = value.Trim();
@@ -295,7 +427,7 @@ public class AssetService
         if (Uri.TryCreate(cleaned, UriKind.Absolute, out var uri))
         {
             var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var key in new[] { "asset", "tag", "serial", "sn", "imei", "id" })
+            foreach (var key in new[] { "asset", "tag", "serial", "sn", "imei", "rfid", "nfc", "ntag", "uid", "id" })
             {
                 var match = query.FirstOrDefault(part => part.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase));
                 if (match != null) return Uri.UnescapeDataString(match[(key.Length + 1)..]).Trim();
@@ -304,7 +436,7 @@ public class AssetService
             cleaned = uri.Segments.LastOrDefault()?.Trim('/') ?? cleaned;
         }
 
-        foreach (var prefix in new[] { "asset:", "tag:", "serial:", "sn:", "imei:", "id:" })
+        foreach (var prefix in new[] { "asset:", "tag:", "serial:", "sn:", "imei:", "rfid:", "nfc:", "ntag:", "uid:", "id:" })
         {
             if (cleaned.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {

@@ -10,6 +10,8 @@ public class Asset
     public string Tag { get; set; } = "";
     public string Serial { get; set; } = "";
     public string? Imei { get; set; }
+    public string? RfidTagId { get; set; }
+    public DateTimeOffset? RfidLinkedAt { get; set; }
     public string Model { get; set; } = "";
     public int Quantity { get; set; } = 1;
 

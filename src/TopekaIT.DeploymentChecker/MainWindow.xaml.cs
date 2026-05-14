@@ -9,6 +9,7 @@ public partial class MainWindow : Window
 {
     readonly PowerShellStatusChecker _checker = new();
     readonly DeploymentPushRunner _pusher = new();
+    readonly LocalDevRunner _devRunner = new();
     bool _isEditing;
 
     public MainWindow()
@@ -23,7 +24,9 @@ public partial class MainWindow : Window
         RemotePathBox.Text = settings.RemotePath;
         ServiceNameBox.Text = settings.ServiceName;
         UsernameBox.Text = settings.Username;
-        LogPathText.Text = $"check log: {SettingsStore.HistoryPath}\ndeploy log: {SettingsStore.DeploymentLogPath}";
+        LocalUrlBox.Text = LocalDevRunner.LocalUrl;
+        LocalProjectBox.Text = LocalDevRunner.GetWebProjectPath();
+        LogPathText.Text = $"check log: {SettingsStore.HistoryPath}\ndeploy log: {SettingsStore.DeploymentLogPath}\ndev logs: {SettingsStore.AppDirectory}\\dev-run-*.log";
         SetEditing(false);
         AppendTerminal("console ready");
         await RefreshHistoryAsync();
@@ -62,6 +65,46 @@ public partial class MainWindow : Window
             RenderResult(result);
             AppendTerminal(result.IsOnline ? "remote process online" : $"remote process offline: {result.Reason}");
             await RefreshHistoryAsync();
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    async void KillLocalButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetBusy(true);
+        StatusText.Text = "KILLING LOCAL";
+        StatusText.Foreground = (Brush)FindResource("WarnBrush");
+        ReasonText.Text = "Stopping local TopekaIT.Web processes...";
+        DetailBox.Text = "";
+        AppendTerminal("$ kill local app processes");
+
+        try
+        {
+            var result = await _devRunner.KillLocalAppProcessesAsync(new Progress<string>(AppendTerminal));
+            RenderDevResult(result);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    async void BuildRunButton_Click(object sender, RoutedEventArgs e)
+    {
+        SetBusy(true);
+        StatusText.Text = "BUILDING";
+        StatusText.Foreground = (Brush)FindResource("WarnBrush");
+        ReasonText.Text = "Building and starting the local app...";
+        DetailBox.Text = "";
+        AppendTerminal("$ build and run local app");
+
+        try
+        {
+            var result = await _devRunner.BuildAndRunAsync(new Progress<string>(AppendTerminal));
+            RenderDevResult(result);
         }
         finally
         {
@@ -138,6 +181,8 @@ public partial class MainWindow : Window
         CheckButton.IsEnabled = !isBusy;
         PushButton.IsEnabled = !isBusy;
         EditButton.IsEnabled = !isBusy;
+        KillLocalButton.IsEnabled = !isBusy;
+        BuildRunButton.IsEnabled = !isBusy;
         PasswordBox.IsEnabled = !isBusy && _isEditing;
     }
 
@@ -149,6 +194,17 @@ public partial class MainWindow : Window
             : (Brush)FindResource("DownBrush");
         ReasonText.Text = result.Reason;
         DetailBox.Text = FormatResult(result);
+    }
+
+    void RenderDevResult(LocalDevActionResult result)
+    {
+        StatusText.Text = result.Succeeded ? "LOCAL READY" : "LOCAL FAILED";
+        StatusText.Foreground = result.Succeeded
+            ? (Brush)FindResource("OkBrush")
+            : (Brush)FindResource("DownBrush");
+        ReasonText.Text = result.Reason;
+        DetailBox.Text = FormatDevResult(result);
+        AppendTerminal(result.Succeeded ? result.Reason : $"local action failed: {result.Reason}");
     }
 
     void AppendTerminal(string line)
@@ -201,6 +257,40 @@ public partial class MainWindow : Window
         return builder.ToString();
     }
 
+    static string FormatDevResult(LocalDevActionResult result)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("LOCAL_DEV_RESULT");
+        builder.AppendLine($"Action:    {result.Action}");
+        builder.AppendLine($"Status:    {(result.Succeeded ? "SUCCESS" : "FAILED")}");
+        builder.AppendLine($"Reason:    {result.Reason}");
+        builder.AppendLine($"PID:       {(result.StartedProcessId.HasValue ? result.StartedProcessId.Value.ToString() : "n/a")}");
+        builder.AppendLine($"Log:       {result.LogPath ?? "n/a"}");
+        builder.AppendLine($"Exit code: {(result.ExitCode.HasValue ? result.ExitCode.Value.ToString() : "n/a")}");
+        builder.AppendLine($"Duration:  {result.Duration:mm\\:ss}");
+
+        if (result.Processes.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Matched local processes:");
+            foreach (var process in result.Processes)
+            {
+                builder.AppendLine($"- {(process.Stopped ? "stopped" : "failed")} {process.ProcessName} ({process.ProcessId})");
+                if (!string.IsNullOrWhiteSpace(process.CommandLine))
+                {
+                    builder.AppendLine($"  {TrimForDisplay(process.CommandLine)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(process.Error))
+                {
+                    builder.AppendLine($"  ERR {process.Error}");
+                }
+            }
+        }
+
+        return builder.ToString();
+    }
+
     static string FormatResult(StatusCheckResult result)
     {
         var builder = new StringBuilder();
@@ -242,5 +332,11 @@ public partial class MainWindow : Window
         }
 
         return builder.ToString();
+    }
+
+    static string TrimForDisplay(string value)
+    {
+        const int maxLength = 220;
+        return value.Length <= maxLength ? value : value[..maxLength] + "...";
     }
 }

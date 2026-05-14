@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Topeka IT Portal Guide</title>
+    <style>
+        @page {
+            size: Letter landscape;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --paper: #f2ede3;
+            --surface: #faf6ec;
+            --surface-2: #eee7d8;
+            --line: #d8ccb7;
+            --ink: #14110a;
+            --muted: #6c6254;
+            --accent: #1f3f66;
+            --ok: #2f6f4e;
+            --warn: #9a661f;
+            --critical: #9b2f2f;
+        }
+
+        html {
+            color: var(--ink);
+            font-family: "Geist", "Segoe UI", Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        body {
+            background: var(--paper);
+            margin: 0;
+        }
+
+        .page {
+            background: var(--paper);
+            break-after: page;
+            height: 8.5in;
+            overflow: hidden;
+            padding: 0.36in 0.42in;
+            position: relative;
+            width: 11in;
+        }
+
+        .page:last-child {
+            break-after: auto;
+        }
+
+        h1, h2, h3, p {
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 43px;
+            letter-spacing: 0;
+            line-height: 0.98;
+            max-width: 5in;
+        }
+
+        h2 {
+            font-size: 25px;
+            letter-spacing: 0;
+            line-height: 1.05;
+        }
+
+        h3 {
+            font-size: 15px;
+            line-height: 1.15;
+        }
+
+        .eyebrow {
+            color: var(--muted);
+            font-family: "Geist Mono", "Cascadia Mono", Consolas, monospace;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .lede {
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.45;
+            margin-top: 0.18in;
+            max-width: 4.9in;
+        }
+
+        .topline {
+            align-items: end;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.18in;
+        }
+
+        .topline p {
+            color: var(--muted);
+            font-size: 12px;
+            max-width: 3.85in;
+            text-align: right;
+        }
+
+        .cover {
+            display: grid;
+            gap: 0.3in;
+            grid-template-columns: 0.86fr 1.14fr;
+            padding-top: 0.48in;
+        }
+
+        .cover-copy {
+            align-self: center;
+        }
+
+        .bar {
+            background: var(--ink);
+            height: 5px;
+            margin: 0.22in 0;
+            width: 1.05in;
+        }
+
+        .screen {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(20, 17, 10, 0.12);
+            overflow: hidden;
+        }
+
+        .screen img {
+            display: block;
+            height: auto;
+            width: 100%;
+        }
+
+        .hero-screen {
+            align-self: center;
+        }
+
+        .hero-screen img {
+            height: 5.75in;
+            object-fit: cover;
+            object-position: top left;
+        }
+
+        .mini-grid {
+            display: grid;
+            gap: 0.12in;
+            grid-template-columns: repeat(2, 1fr);
+            margin-top: 0.26in;
+        }
+
+        .mini-card, .step, .note, .shot-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+        }
+
+        .mini-card {
+            min-height: 0.78in;
+            padding: 0.13in;
+        }
+
+        .mini-card strong {
+            display: block;
+            font-size: 15px;
+            margin-bottom: 0.04in;
+        }
+
+        .mini-card span,
+        .step p,
+        .note,
+        .shot-card p {
+            color: var(--muted);
+            font-size: 11.5px;
+        }
+
+        .role-strip {
+            display: grid;
+            gap: 0.12in;
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .role-card {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            display: grid;
+            grid-template-rows: auto 1fr;
+            min-height: 5.95in;
+            overflow: hidden;
+        }
+
+        .role-card .copy {
+            padding: 0.15in 0.16in 0.06in;
+        }
+
+        .role-card h3 {
+            font-size: 17px;
+            margin-bottom: 0.04in;
+        }
+
+        .role-card img {
+            align-self: end;
+            border-top: 1px solid var(--line);
+            height: 4.35in;
+            object-fit: cover;
+            object-position: top left;
+            width: 100%;
+        }
+
+        .two-col {
+            display: grid;
+            gap: 0.18in;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .focus-shot img {
+            height: 5.85in;
+            object-fit: cover;
+            object-position: top left;
+        }
+
+        .stack {
+            display: grid;
+            gap: 0.12in;
+        }
+
+        .flow {
+            display: grid;
+            gap: 0.12in;
+            grid-template-columns: repeat(4, 1fr);
+            margin-bottom: 0.18in;
+        }
+
+        .flow.three {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .step {
+            min-height: 1.02in;
+            padding: 0.12in;
+        }
+
+        .step-num {
+            align-items: center;
+            background: var(--ink);
+            border-radius: 4px;
+            color: var(--surface);
+            display: flex;
+            font-family: "Geist Mono", "Cascadia Mono", Consolas, monospace;
+            font-size: 12px;
+            font-weight: 700;
+            height: 0.24in;
+            justify-content: center;
+            margin-bottom: 0.08in;
+            width: 0.28in;
+        }
+
+        .shot-grid {
+            display: grid;
+            gap: 0.14in;
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .shot-card {
+            overflow: hidden;
+        }
+
+        .shot-card .copy {
+            padding: 0.12in 0.14in;
+        }
+
+        .shot-card h3 {
+            margin-bottom: 0.04in;
+        }
+
+        .shot-card img {
+            border-top: 1px solid var(--line);
+            height: 2.85in;
+            object-fit: cover;
+            object-position: top left;
+            width: 100%;
+        }
+
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.07in;
+            margin-top: 0.1in;
+        }
+
+        .pill {
+            background: var(--surface-2);
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            color: var(--ink);
+            display: inline-block;
+            font-family: "Geist Mono", "Cascadia Mono", Consolas, monospace;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 0.035in 0.07in;
+            text-transform: uppercase;
+        }
+
+        .pill.blue {
+            background: #e7edf4;
+            border-color: #becbda;
+            color: var(--accent);
+        }
+
+        .pill.green {
+            background: #e8f2ea;
+            border-color: #b9d0be;
+            color: var(--ok);
+        }
+
+        .pill.amber {
+            background: #f8eed9;
+            border-color: #e2c993;
+            color: var(--warn);
+        }
+
+        .pill.red {
+            background: #f8e6e2;
+            border-color: #dfb4ae;
+            color: var(--critical);
+        }
+
+        .note {
+            border-left: 6px solid var(--accent);
+            padding: 0.14in 0.16in;
+        }
+
+        .note.green {
+            border-left-color: var(--ok);
+        }
+
+        .note.amber {
+            border-left-color: var(--warn);
+        }
+
+        .nav-sample {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .nav-top {
+            align-items: center;
+            border-bottom: 1px solid var(--line);
+            display: grid;
+            gap: 0.1in;
+            grid-template-columns: 1.5in 1fr 1.2in;
+            padding: 0.08in 0.12in;
+        }
+
+        .logo {
+            align-items: center;
+            display: flex;
+            gap: 0.08in;
+        }
+
+        .logo-mark {
+            align-items: center;
+            background: var(--ink);
+            border-radius: 4px;
+            color: var(--surface);
+            display: flex;
+            font-weight: 800;
+            height: 0.25in;
+            justify-content: center;
+            width: 0.25in;
+        }
+
+        .search {
+            background: #fffaf0;
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            color: var(--muted);
+            padding: 0.055in 0.08in;
+        }
+
+        .user-chip {
+            border: 1px solid var(--line);
+            border-radius: 4px;
+            font-size: 10px;
+            padding: 0.045in 0.06in;
+            text-align: center;
+        }
+
+        .nav-line {
+            align-items: center;
+            display: flex;
+            gap: 0.22in;
+            padding: 0.085in 0.14in;
+        }
+
+        .nav-line span {
+            font-size: 12px;
+        }
+
+        .nav-line .active {
+            border-bottom: 3px solid var(--ink);
+            font-weight: 700;
+            padding-bottom: 0.06in;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+
+            .page {
+                box-shadow: none;
+            }
+        }
+
+        * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    </style>
+</head>
+<body>
+    <section class="page cover">
+        <div class="cover-copy">
+            <div class="eyebrow">Functionality walkthrough</div>
+            <h1>Topeka IT Portal Guide</h1>
+            <div class="bar"></div>
+            <p class="lede">A short visual guide to the real portal experience for Super Admins, Managers, and Workers.</p>
+            <div class="mini-grid">
+                <div class="mini-card">
+                    <strong>Actual screens</strong>
+                    <span>Captured from the live local portal using the test role accounts.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Manager-ready</strong>
+                    <span>Focused on what people click, see, and hand off.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Simple flows</strong>
+                    <span>Create workers, assign lockers, track gear, and report issues.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Clear escalation</strong>
+                    <span>Workers report, Managers coordinate, IT and Admin resolve.</span>
+                </div>
+            </div>
+        </div>
+        <div class="screen hero-screen">
+            <img src="manager-guide-assets/manager-home.png" alt="Manager home page screenshot">
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Portal frame</div>
+                <h2>The app uses one consistent shell</h2>
+            </div>
+            <p>Every role starts with the same top bar, search, role chip, horizontal navigation, and live fleet pulse.</p>
+        </div>
+        <div class="two-col">
+            <div class="nav-sample">
+                <div class="nav-top">
+                    <div class="logo">
+                        <div class="logo-mark">L</div>
+                        <div><strong>Local IT</strong><br><span class="eyebrow">Topeka - 6I-A</span></div>
+                    </div>
+                    <div class="search">Search printers, assets, tickets, people...</div>
+                    <div class="user-chip"><strong>TM Test Manager</strong><br><span class="eyebrow">Supervisor</span></div>
+                </div>
+                <div class="nav-line">
+                    <span>Printers</span>
+                    <span>Assets</span>
+                    <span>My requests</span>
+                    <span>Lockers</span>
+                    <span>Loaners</span>
+                    <span class="active">Home</span>
+                    <span>Workers</span>
+                </div>
+            </div>
+            <div class="stack">
+                <div class="mini-card">
+                    <strong>Search is global</strong>
+                    <span>The command search sits at the top of the app and is visible across roles.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Navigation is permission-driven</strong>
+                    <span>Workers see fewer actions, Managers see floor tools, and Super Admins see system tools.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Fleet pulse stays visible</strong>
+                    <span>Printer, ticket, asset, and sync signals stay near the top while users move through pages.</span>
+                </div>
+                <div class="note green">The guide follows the actual warm-paper UI: compact cards, thin borders, mono labels, and exception-first operational views.</div>
+            </div>
+        </div>
+        <div class="screen focus-shot" style="margin-top:0.18in;">
+            <img src="manager-guide-assets/manager-printers.png" alt="Printer status page screenshot">
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Role views</div>
+                <h2>Each role lands in a different workspace</h2>
+            </div>
+            <p>The same portal adapts from simple reporting to shift coordination to system oversight.</p>
+        </div>
+        <div class="role-strip">
+            <div class="role-card">
+                <div class="copy">
+                    <h3>Super Admin</h3>
+                    <p>Reports, divisions, Lantronix monitoring, and user access across the portal.</p>
+                    <div class="badge-row">
+                        <span class="pill blue">Reports</span>
+                        <span class="pill blue">Divisions</span>
+                        <span class="pill blue">Users</span>
+                    </div>
+                </div>
+                <img src="manager-guide-assets/super-admin-home.png" alt="Super Admin admin page screenshot">
+            </div>
+            <div class="role-card">
+                <div class="copy">
+                    <h3>Manager</h3>
+                    <p>A shift workspace for workers, lockers, loaners, assets, printers, and requests.</p>
+                    <div class="badge-row">
+                        <span class="pill green">Workers</span>
+                        <span class="pill green">Assets</span>
+                        <span class="pill green">Loaners</span>
+                    </div>
+                </div>
+                <img src="manager-guide-assets/manager-home.png" alt="Manager home page screenshot">
+            </div>
+            <div class="role-card">
+                <div class="copy">
+                    <h3>Worker</h3>
+                    <p>A clean home page for new requests, printer status, and personal ticket tracking.</p>
+                    <div class="badge-row">
+                        <span class="pill amber">Requests</span>
+                        <span class="pill amber">Printers</span>
+                        <span class="pill amber">Home</span>
+                    </div>
+                </div>
+                <img src="manager-guide-assets/worker-home.png" alt="Worker home page screenshot">
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Manager home</div>
+                <h2>Managers start with the shift workspace</h2>
+            </div>
+            <p>The first screen answers: who needs help, what equipment is out, what printers need attention, and where to go next.</p>
+        </div>
+        <div class="two-col">
+            <div class="screen focus-shot">
+                <img src="manager-guide-assets/manager-home.png" alt="Manager home screenshot">
+            </div>
+            <div class="stack">
+                <div class="mini-card">
+                    <strong>Employee lookup</strong>
+                    <span>Search a worker by name to quickly see locker and device context.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Action tiles</strong>
+                    <span>Managers jump directly to lockers, loaners, assets, printers, crew requests, or a new request.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>Exceptions stay visible</strong>
+                    <span>Outstanding devices, recent crew requests, and devices needing attention sit below the action row.</span>
+                </div>
+                <div class="note">This page is intentionally practical: it supports the shift without becoming a technical dashboard.</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">People flow</div>
+                <h2>How a Manager creates a worker</h2>
+            </div>
+            <p>The Manager opens Workers, adds a row, fills account details, and saves the new worker in the current division.</p>
+        </div>
+        <div class="flow">
+            <div class="step">
+                <div class="step-num">1</div>
+                <h3>Open Workers</h3>
+                <p>Use the top navigation. Managers see the page labeled Workers.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <h3>Add user</h3>
+                <p>Click Add user. The new editable row appears in the table.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <h3>Fill details</h3>
+                <p>Name, username, position, locker, audit flag, tier, and initial password.</p>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <h3>Save</h3>
+                <p>The worker can sign in and then use requests and printer status.</p>
+            </div>
+        </div>
+        <div class="two-col">
+            <div class="screen focus-shot">
+                <img src="manager-guide-assets/manager-workers.png" alt="Manager workers page screenshot">
+            </div>
+            <div class="stack">
+                <div class="note green">Managers can create and edit lower-tier Worker accounts. Higher access changes and password resets stay with Admin or Super Admin permissions.</div>
+                <div class="mini-card">
+                    <strong>Locker shortcut</strong>
+                    <span>Managers can also open a locker, create a worker there, and assign that worker to the locker in the same flow.</span>
+                </div>
+                <div class="screen" style="box-shadow:none;">
+                    <img src="manager-guide-assets/manager-lockers.png" alt="Manager lockers page screenshot">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Gear flow</div>
+                <h2>Lockers and assets show where equipment belongs</h2>
+            </div>
+            <p>Managers use lockers for physical assignment and the asset console for scanning, category views, status, and pairing.</p>
+        </div>
+        <div class="shot-grid">
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Lockers</h3>
+                    <p>Create lockers, filter empty or attention lockers, assign users, assign devices, and mark audits complete.</p>
+                </div>
+                <img src="manager-guide-assets/manager-lockers.png" alt="Lockers screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Assets</h3>
+                    <p>Scan or search, then work through tabs for lockers, SAE devices, TC77 PODs, scanners, and batteries.</p>
+                </div>
+                <img src="manager-guide-assets/manager-assets.png" alt="Assets screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Loaners</h3>
+                    <p>Issue a spare, select employee, reason, duration, and comments. Return it when the device comes back.</p>
+                </div>
+                <img src="manager-guide-assets/manager-loaners.png" alt="Loaners screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Printers</h3>
+                    <p>Printer status is exception-first: down and warning printers are visible, healthy printers stay quiet.</p>
+                </div>
+                <img src="manager-guide-assets/manager-printers.png" alt="Manager printers screenshot">
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Request flow</div>
+                <h2>Workers and Managers send issues to IT</h2>
+            </div>
+            <p>Requests are intentionally simple: open a new request, attach the related printer or asset if needed, and track status.</p>
+        </div>
+        <div class="two-col">
+            <div class="screen focus-shot">
+                <img src="manager-guide-assets/worker-home.png" alt="Worker home screenshot">
+            </div>
+            <div class="stack">
+                <div class="mini-card">
+                    <strong>Worker home</strong>
+                    <span>Workers can create a request, check printers, and review their own tickets.</span>
+                </div>
+                <div class="mini-card">
+                    <strong>My requests</strong>
+                    <span>Both Workers and Managers can filter Active, Resolved, and All requests.</span>
+                </div>
+                <div class="screen" style="box-shadow:none;">
+                    <img src="manager-guide-assets/worker-requests.png" alt="Worker requests screenshot">
+                </div>
+                <div class="note amber">IT sees the full ticket queue, assigns work, updates status, adds resolution notes, and closes the ticket.</div>
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Super Admin</div>
+                <h2>System tools stay separate from daily shift work</h2>
+            </div>
+            <p>Super Admins handle cross-division reporting, division setup, access, and special monitoring pages.</p>
+        </div>
+        <div class="shot-grid">
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Reports</h3>
+                    <p>Run active incidents, monitoring/auth bursts, fault trends, and printer error reports.</p>
+                </div>
+                <img src="manager-guide-assets/super-admin-home.png" alt="Admin reports screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Users</h3>
+                    <p>See all portal users, divisions, roles, last active state, and scoped access actions.</p>
+                </div>
+                <img src="manager-guide-assets/super-admin-users.png" alt="Super Admin users screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>Lantronix</h3>
+                    <p>Review configured gateways, tank readings, poll status, recent samples, and raw responses.</p>
+                </div>
+                <img src="manager-guide-assets/super-admin-lantronix.png" alt="Lantronix screenshot">
+            </div>
+            <div class="shot-card">
+                <div class="copy">
+                    <h3>New division</h3>
+                    <p>Create a division, configure printer password pieces, and provision the database.</p>
+                </div>
+                <img src="manager-guide-assets/super-admin-division.png" alt="New division screenshot">
+            </div>
+        </div>
+    </section>
+
+    <section class="page">
+        <div class="topline">
+            <div>
+                <div class="eyebrow">Quick reference</div>
+                <h2>Who uses what</h2>
+            </div>
+            <p>Use this page as the quick handoff summary when explaining the portal to managers.</p>
+        </div>
+        <div class="role-strip">
+            <div class="mini-card" style="min-height:5.5in;">
+                <h3>Worker</h3>
+                <div class="bar" style="margin:0.12in 0;width:0.7in;"></div>
+                <p class="lede" style="font-size:13px;margin:0 0 0.2in;">Report issues and check printer status.</p>
+                <div class="badge-row">
+                    <span class="pill amber">Home</span>
+                    <span class="pill amber">My requests</span>
+                    <span class="pill amber">Printers</span>
+                </div>
+            </div>
+            <div class="mini-card" style="min-height:5.5in;">
+                <h3>Manager</h3>
+                <div class="bar" style="margin:0.12in 0;width:0.7in;"></div>
+                <p class="lede" style="font-size:13px;margin:0 0 0.2in;">Coordinate people, lockers, equipment, loaners, requests, and printer awareness.</p>
+                <div class="badge-row">
+                    <span class="pill green">Workers</span>
+                    <span class="pill green">Lockers</span>
+                    <span class="pill green">Assets</span>
+                    <span class="pill green">Loaners</span>
+                    <span class="pill green">Requests</span>
+                    <span class="pill green">Printers</span>
+                </div>
+            </div>
+            <div class="mini-card" style="min-height:5.5in;">
+                <h3>Super Admin</h3>
+                <div class="bar" style="margin:0.12in 0;width:0.7in;"></div>
+                <p class="lede" style="font-size:13px;margin:0 0 0.2in;">Maintain divisions, access, reporting, and advanced monitoring.</p>
+                <div class="badge-row">
+                    <span class="pill blue">Admin</span>
+                    <span class="pill blue">Divisions</span>
+                    <span class="pill blue">Users</span>
+                    <span class="pill blue">Lantronix</span>
+                    <span class="pill blue">Reports</span>
+                </div>
+            </div>
+        </div>
+        <div class="note green" style="margin-top:0.18in;">Daily rhythm: Workers report issues, Managers coordinate floor equipment and people, IT resolves operational work, and Super Admins handle system-level oversight.</div>
+    </section>
+</body>
+</html>

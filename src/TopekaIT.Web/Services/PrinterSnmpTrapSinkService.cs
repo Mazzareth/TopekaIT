@@ -500,6 +500,11 @@ public class PrinterSnmpTrapSinkService : BackgroundService
         }
 
         var upper = message.ToUpperInvariant();
+        if (PrinterAlertNormalizer.IsAuthenticationFailure(rawMessage: message))
+        {
+            return ("Warning", "Warning");
+        }
+
         if (upper.Contains("ERROR") ||
             upper.Contains("FAULT") ||
             upper.Contains("FAIL") ||

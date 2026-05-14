@@ -1,0 +1,78 @@
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Services
+@inject AssetService AssetService
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Asset> OnMatch { get; set; }
+
+    string _rfidValue = "";
+    string? _error;
+    bool _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _rfidValue = "";
+            _error = null;
+        }
+
+        _wasOpen = Open;
+    }
+
+    async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_rfidValue)) return;
+
+        _error = null;
+        var match = await AssetService.FindByScanAsync(_rfidValue);
+        if (match != null)
+        {
+            await OnMatch.InvokeAsync(match);
+            return;
+        }
+
+        _error = $"No asset found for RFID value '{_rfidValue.Trim()}'.";
+    }
+
+    async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") _ = Submit();
+    }
+}
+
+<Modal Open="Open" OnClose="Close">
+    <Title>
+        <span class="modal-title-icon">
+            <Icon Name="Rfid" Size="16" /> RFID Scan
+        </span>
+    </Title>
+    <ChildContent>
+        <div class="form-row">
+            <label>RFID reader value</label>
+            <input @bind="_rfidValue"
+                   @bind:event="oninput"
+                   @onkeydown="OnKey"
+                   placeholder="Scan NTAG213 or enter rfid:NTAG-..."
+                   autocomplete="off"
+                   spellcheck="false"
+                   autofocus />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="form-error">@_error</div>
+        }
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-primary" @onclick="Submit" disabled="@string.IsNullOrWhiteSpace(_rfidValue)">
+            <Icon Name="Check" Size="14" /> Select asset
+        </button>
+    </Footer>
+</Modal>

@@ -28,6 +28,9 @@
             }
             @if (_canScanAssets)
             {
+                <button class="btn" @onclick="() => _rfidScanOpen = true">
+                    <Icon Name="Rfid" Size="14" /> RFID Scan
+                </button>
                 <button class="btn btn-primary" @onclick="() => _scanOpen = true">
                     <Icon Name="Scan" Size="14" /> Scan
                 </button>
@@ -121,10 +124,11 @@
 
         @* Centre: table *@
         <div class="asset-table-body">
-            <div class="asset-table-head" style="grid-template-columns:120px 70px 1fr 160px 110px 80px;">
+            <div class="asset-table-head" style="grid-template-columns:120px 70px 1fr 80px 160px 110px 80px;">
                 <div>Tag / S/N</div>
                 <div>Cat</div>
                 <div>Model</div>
+                <div>RFID</div>
                 <div>Holder</div>
                 <div>State</div>
                 <div>Health</div>
@@ -140,7 +144,7 @@
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
                     var isSelected = _selected?.Id == a.Id;
                     <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags) @(isSelected ? "active" : "")"
-                         style="grid-template-columns:120px 70px 1fr 160px 110px 80px;"
+                         style="grid-template-columns:120px 70px 1fr 80px 160px 110px 80px;"
                          @onclick="() => Select(a)">
                         <div class="mono">@PrimaryTag(a)</div>
                         <div style="color:var(--text-faint);font-size:12px;">@Format.CategoryLabel(a.Category)</div>
@@ -149,6 +153,16 @@
                             @if (!string.IsNullOrWhiteSpace(a.Serial) && a.Serial != PrimaryTag(a))
                             {
                                 <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
+                            }
+                        </div>
+                        <div>
+                            @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
+                            {
+                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Linked</span>
+                            }
+                            else
+                            {
+                                <span style="color:var(--text-faint);font-size:12px;">—</span>
                             }
                         </div>
                         <div>
@@ -295,6 +309,9 @@
                     <button class="btn btn-sm" @onclick="() => OpenDetail(sel, null)">
                         <Icon Name="Eye" Size="12" /> Full detail
                     </button>
+                    <button class="btn btn-sm" @onclick='() => OpenDetail(sel, "rfid")'>
+                        <Icon Name="Rfid" Size="12" /> RFID NTAG213
+                    </button>
                     @if (!sel.Flags.HasFlag(StatusFlags.WithHolder))
                     {
                         <button class="btn btn-sm btn-primary" @onclick='() => OpenDetail(sel, "assign")'>
@@ -320,11 +337,13 @@
 </div>
 
 <ScanModal Open="_scanOpen" OnClose="() => _scanOpen = false" OnMatch="OnScanMatch" />
+<RfidScanModal Open="_rfidScanOpen" OnClose="() => _rfidScanOpen = false" OnMatch="OnRfidScanMatch" />
 <AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="CloseDetail" OnChanged="Load" />
 <AssetEditor Open="_createOpen" OnClose="() => _createOpen = false" OnChanged="Load" />
 
 @code {
     bool _scanOpen;
+    bool _rfidScanOpen;
     bool _createOpen;
     bool _canCreateAssets;
     bool _canDeleteAssets;
@@ -367,6 +386,8 @@
 
         if (_selected != null)
             _selected = _assets.FirstOrDefault(a => a.Id == _selected.Id);
+        if (_viewing != null)
+            _viewing = _assets.FirstOrDefault(a => a.Id == _viewing.Id);
     }
 
     List<Asset> Filtered()
@@ -399,7 +420,7 @@
             q = q.Where(a =>
             {
                 var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.RfidTagId, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
             });
         }
 
@@ -431,6 +452,15 @@
     {
         _scanOpen = false;
         _selected = a;
+        await Task.CompletedTask;
+    }
+
+    async Task OnRfidScanMatch(Asset a)
+    {
+        _rfidScanOpen = false;
+        _selected = a;
+        _viewing = a;
+        _viewAction = null;
         await Task.CompletedTask;
     }
 

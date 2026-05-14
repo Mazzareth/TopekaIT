@@ -29,6 +29,9 @@
             }
             @if (_canScanAssets)
             {
+                <button class="btn" @onclick="() => _rfidScanOpen = true">
+                    <Icon Name="Rfid" Size="14" /> RFID Scan
+                </button>
                 <button class="btn btn-primary" @onclick="FocusScanDock">
                     <Icon Name="Scan" Size="14" /> Scan
                 </button>
@@ -235,10 +238,11 @@
         </div>
 
         <div class="card" style="margin-top:2px;">
-            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 160px 110px 140px;">
+            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 72px 160px 110px 140px;">
                 <div>Tag / S/N</div>
                 <div>Type</div>
                 <div>Model</div>
+                <div>RFID</div>
                 <div>Holder</div>
                 <div>State</div>
                 <div style="text-align:right;">Action</div>
@@ -256,7 +260,7 @@
                 {
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
                     <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags)"
-                         style="grid-template-columns:120px 90px 1fr 160px 110px 140px;"
+                         style="grid-template-columns:120px 90px 1fr 72px 160px 110px 140px;"
                          @onclick="() => Open(a, null)">
                         <div class="mono">@PrimaryTag(a)</div>
                         <div>@Format.CategoryLabel(a.Category)</div>
@@ -265,6 +269,16 @@
                             @if (!string.IsNullOrWhiteSpace(a.Serial))
                             {
                                 <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
+                            }
+                        </div>
+                        <div>
+                            @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
+                            {
+                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Linked</span>
+                            }
+                            else
+                            {
+                                <span style="color:var(--text-faint);font-size:12px;">—</span>
                             }
                         </div>
                         <div>
@@ -310,6 +324,7 @@
 <AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="() => _viewing = null" OnChanged="Load" />
 <AssetEditor Open="_createOpen" PrefillSerial="_prefillSerial" OnClose="CloseEditor" OnChanged="Load" />
 <ScanModal Open="_camScanOpen" OnClose="() => _camScanOpen = false" OnMatch="OnCamScanMatch" />
+<RfidScanModal Open="_rfidScanOpen" OnClose="() => _rfidScanOpen = false" OnMatch="OnRfidScanMatch" />
 
 @* Scanner pairing modal *@
 @if (_pairingScanner != null)
@@ -394,6 +409,7 @@
     string _scanValue = "";
     bool _scanNotFound;
     bool _camScanOpen;
+    bool _rfidScanOpen;
     bool _createOpen;
     bool _canCreateAssets;
     bool _canDeleteAssets;
@@ -439,6 +455,8 @@
         _assets  = (await assetsTask).OrderBy(a => a.Tag).ToList();
         _lockers = (await lockersTask).Where(l => l.IsActive).OrderBy(l => l.Number).ToList();
         _users   = (await usersTask).ToList();
+        if (_viewing != null)
+            _viewing = _assets.FirstOrDefault(a => a.Id == _viewing.Id);
     }
 
     async Task FocusScanDock()
@@ -517,6 +535,13 @@
     async Task OnCamScanMatch(Asset a)
     {
         _camScanOpen = false;
+        await Task.Yield();
+        Open(a, null);
+    }
+
+    async Task OnRfidScanMatch(Asset a)
+    {
+        _rfidScanOpen = false;
         await Task.Yield();
         Open(a, null);
     }
@@ -656,7 +681,7 @@
             q = q.Where(a =>
             {
                 var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.RfidTagId, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
             });
         }
 

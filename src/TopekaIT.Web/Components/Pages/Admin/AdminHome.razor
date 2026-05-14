@@ -87,9 +87,9 @@
             <div class="card">
                 <div class="card-head">
                     <span class="card-title">@SelectedReport.Name</span>
-                    @if (_activeIncidents.Count > 0)
+                    @if (ActiveIncidentDisplayCount > 0)
                     {
-                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_activeIncidents.Count, "incident", "incidents")</span>
+                        <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(ActiveIncidentDisplayCount, "incident", "incidents")</span>
                     }
                 </div>
 
@@ -99,10 +99,10 @@
                         Loading report.
                     </div>
                 }
-                else if (_activeIncidents.Count == 0)
+                else if (ActiveIncidentDisplayCount == 0)
                 {
                     <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
-                        No active printer incidents match this report.
+                        No active printer incidents have been seen in the last two days.
                     </div>
                 }
                 else
@@ -115,6 +115,54 @@
                         <div>Events</div>
                         <div style="text-align: right;">Actions</div>
                     </div>
+                    @foreach (var authGroup in _activeAuthIncidentGroups)
+                    {
+                        <div class="asset-row printer-incident-row">
+                            <div>
+                                <div class="printer-alert-title">
+                                    <span>@authGroup.Title</span>
+                                    <Pill Kind="@SeverityPill(authGroup.Severity)">@authGroup.Severity</Pill>
+                                </div>
+                                <div class="printer-alert-message">@authGroup.Message</div>
+                                <div class="printer-report-meta">
+                                    <span>SNMP Authentication</span>
+                                    <span>First @FormatLocal(authGroup.FirstSeenAt)</span>
+                                </div>
+                            </div>
+                            <div>@authGroup.DivisionSummary</div>
+                            <div>
+                                <div style="font-weight: 600;">@CountLabel(authGroup.PrinterCount, "printer", "printers")</div>
+                                <div class="printer-alert-message">@authGroup.PrinterSummary</div>
+                            </div>
+                            <div class="mono" style="font-size: 12px;">@FormatLocal(authGroup.LastSeenAt)</div>
+                            <div>@authGroup.OccurrenceCount</div>
+                            <div style="text-align: right;">
+                                <button class="btn btn-sm" @onclick="() => ToggleGroup(authGroup.GroupKey)">
+                                    <Icon Name="@(_expandedGroups.Contains(authGroup.GroupKey) ? "ChevronLeft" : "ChevronRight")" Size="12" />
+                                </button>
+                            </div>
+                        </div>
+                        @if (_expandedGroups.Contains(authGroup.GroupKey))
+                        {
+                            <div class="printer-alert-occurrences">
+                                @foreach (var incident in authGroup.Incidents.Take(25))
+                                {
+                                    <details class="printer-alert-occurrence">
+                                        <summary>
+                                            <span style="font-weight: 600;">@incident.PrinterName</span>
+                                            <span>@FormatLocal(incident.LastSeenAt)</span>
+                                            <span>@incident.DivisionName</span>
+                                            <span>@incident.IpAddress</span>
+                                            <button class="btn btn-sm" @onclick:stopPropagation @onclick="() => ViewIncident(incident)">
+                                                <Icon Name="Eye" Size="12" /> View
+                                            </button>
+                                        </summary>
+                                        <div class="raw-message">@DisplayIncidentMessage(incident)</div>
+                                    </details>
+                                }
+                            </div>
+                        }
+                    }
                     @foreach (var incident in _activeIncidents)
                     {
                         <div class="asset-row printer-incident-row">
@@ -436,13 +484,14 @@
 
     List<Division> _divisions = new();
     List<PrinterActiveIncidentReportRow> _activeIncidents = new();
+    List<ActiveAuthIncidentGroupRow> _activeAuthIncidentGroups = new();
     List<AuthIssueReportRow> _authIssueRows = new();
     List<FaultTrendReportRow> _faultTrendRows = new();
     List<PrinterAlertGroup> _printerAlertGroups = new();
     HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
     List<ReportDefinition> _reports = new()
     {
-        new(ActiveIncidentsReportId, "Active Printer Incidents", "Current unresolved SNMP alert states, grouped by printer and fault."),
+        new(ActiveIncidentsReportId, "Active Printer Incidents", "Unresolved SNMP alert states seen in the last two days, grouped by printer and fault."),
         new(AuthMonitoringReportId, "SNMP Auth & Monitoring", "Authentication-failure traps grouped into time bursts so monitoring/config issues do not look like device faults."),
         new(FaultTrendsReportId, "Printer Fault Trends", "Trap history grouped by component or alert family to show the highest-volume printer faults."),
         new(PrinterErrorsReportId, "All Printer Errors", "Raw grouped printer-event history for drill-down and troubleshooting."),
@@ -461,6 +510,7 @@
 
     string ActiveTabTitle => _activeTab == AdminTab.Reports ? "Reports" : "Divisions";
     ReportDefinition SelectedReport => _reports.First(r => r.Id == _selectedReportId);
+    int ActiveIncidentDisplayCount => _activeIncidents.Count + _activeAuthIncidentGroups.Count;
 
     protected override async Task OnInitializedAsync()
     {
@@ -488,6 +538,7 @@
         {
             _expandedGroups.Clear();
             _activeIncidents.Clear();
+            _activeAuthIncidentGroups.Clear();
             _authIssueRows.Clear();
             _faultTrendRows.Clear();
             _printerAlertGroups.Clear();
@@ -495,10 +546,13 @@
             if (_selectedReportId == ActiveIncidentsReportId)
             {
                 var incidents = await PrinterEvents.GetAllDivisionActiveIncidentsAsync();
-                _activeIncidents = incidents
+                var selectedIncidents = incidents
                     .Where(i => MatchesSelectedDivision(i.DivisionId))
-                    .OrderByDescending(i => SeverityRank(i.Severity))
-                    .ThenByDescending(i => i.LastSeenAt)
+                    .ToList();
+                _activeAuthIncidentGroups = BuildActiveAuthIncidentGroups(selectedIncidents, ReportNewestFirst());
+                _activeIncidents = SortActiveIncidents(
+                        selectedIncidents.Where(i => !IsAuthFailure(i)),
+                        ReportNewestFirst())
                     .ToList();
             }
             else if (_selectedReportId == AuthMonitoringReportId)
@@ -640,6 +694,11 @@
             ?? $"{group.AlertTitle}: {group.AlertDetail}".Trim().Trim(':');
     }
 
+    static IEnumerable<PrinterActiveIncidentReportRow> SortActiveIncidents(IEnumerable<PrinterActiveIncidentReportRow> incidents, bool newestFirst) =>
+        newestFirst
+            ? incidents.OrderByDescending(i => SeverityRank(i.Severity)).ThenByDescending(i => i.LastSeenAt)
+            : incidents.OrderByDescending(i => SeverityRank(i.Severity)).ThenBy(i => i.LastSeenAt);
+
     static IEnumerable<PrinterErrorLogEntry> SortEntries(IEnumerable<PrinterErrorLogEntry> entries, bool newestFirst) =>
         newestFirst
             ? entries.OrderByDescending(e => e.Timestamp)
@@ -654,6 +713,53 @@
         newestFirst
             ? groups.OrderByDescending(g => g.LatestAt).ThenByDescending(g => SeverityRank(g.Severity))
             : groups.OrderBy(g => g.LatestAt).ThenByDescending(g => SeverityRank(g.Severity));
+
+    static List<ActiveAuthIncidentGroupRow> BuildActiveAuthIncidentGroups(IEnumerable<PrinterActiveIncidentReportRow> incidents, bool newestFirst)
+    {
+        var authIncidents = incidents
+            .Where(IsAuthFailure)
+            .ToList();
+
+        if (authIncidents.Count == 0)
+        {
+            return new List<ActiveAuthIncidentGroupRow>();
+        }
+
+        var ordered = newestFirst
+            ? authIncidents.OrderByDescending(i => i.LastSeenAt).ThenBy(i => i.PrinterName).ToList()
+            : authIncidents.OrderBy(i => i.LastSeenAt).ThenBy(i => i.PrinterName).ToList();
+        var printerCount = ordered
+            .Select(i => i.PrinterId)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        var divisionCount = ordered
+            .Select(i => i.DivisionId)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        var title = "SNMP Authentication Failure";
+        var message = printerCount > 1
+            ? $"Authentication-failure traps are active across {printerCount} printers. Usually SNMP community or listener configuration, not printer hardware faults."
+            : "Authentication-failure traps are active for this printer. Usually SNMP community or listener configuration, not a printer hardware fault.";
+
+        return new List<ActiveAuthIncidentGroupRow>
+        {
+            new(
+                $"active-auth:{PrinterAlertNormalizer.SnmpAuthenticationFailureAlertKey}",
+                title,
+                message,
+                "Warning",
+                ordered.Min(i => i.FirstSeenAt),
+                ordered.Max(i => i.LastSeenAt),
+                ordered.Sum(i => Math.Max(i.OccurrenceCount, 1)),
+                printerCount,
+                divisionCount,
+                JoinTop(ordered.Select(i => FirstNonEmpty(i.PrinterName, i.IpAddress, i.PrinterId)), 4),
+                JoinTop(ordered.Select(i => i.DivisionName), 3),
+                ordered),
+        };
+    }
 
     static List<AuthIssueReportRow> BuildAuthIssueRows(IEnumerable<PrinterErrorLogEntry> entries, bool newestFirst)
     {
@@ -726,14 +832,20 @@
     }
 
     static bool IsAuthFailure(PrinterErrorLogEntry entry)
-    {
-        var source = $"{entry.AlertKey} {entry.AlertTitle} {entry.AlertDetail} {entry.FriendlyMessage} {entry.RawMessage}";
-        return ContainsIgnoreCase(source, "authenticationfail") ||
-            ContainsIgnoreCase(source, "authentication failure") ||
-            ContainsIgnoreCase(source, "auth failure") ||
-            ContainsIgnoreCase(source, "generic=authent") ||
-            ContainsIgnoreCase(source, "generic=authentication");
-    }
+        => PrinterAlertNormalizer.IsAuthenticationFailure(
+            rawMessage: entry.RawMessage,
+            eventType: entry.EventType,
+            alertKey: entry.AlertKey,
+            alertTitle: entry.AlertTitle,
+            alertDetail: entry.AlertDetail,
+            friendlyMessage: entry.FriendlyMessage);
+
+    static bool IsAuthFailure(PrinterActiveIncidentReportRow incident)
+        => PrinterAlertNormalizer.IsAuthenticationFailure(
+            alertKey: incident.AlertKey,
+            alertTitle: incident.AlertTitle,
+            alertDetail: incident.AlertDetail,
+            friendlyMessage: incident.FriendlyMessage);
 
     static string TrendCategory(PrinterErrorLogEntry entry)
     {
@@ -821,9 +933,6 @@
             : $"{firstLocal:M/d h:mm tt} - {lastLocal:M/d h:mm tt}";
     }
 
-    static bool ContainsIgnoreCase(string source, string value) =>
-        source.Contains(value, StringComparison.OrdinalIgnoreCase);
-
     static string CountLabel(int count, string singular, string plural) =>
         $"{count} {(count == 1 ? singular : plural)}";
 
@@ -856,6 +965,20 @@
     }
 
     record ReportDefinition(string Id, string Name, string Description);
+
+    record ActiveAuthIncidentGroupRow(
+        string GroupKey,
+        string Title,
+        string Message,
+        string Severity,
+        DateTimeOffset FirstSeenAt,
+        DateTimeOffset LastSeenAt,
+        int OccurrenceCount,
+        int PrinterCount,
+        int DivisionCount,
+        string PrinterSummary,
+        string DivisionSummary,
+        List<PrinterActiveIncidentReportRow> Incidents);
 
     record AuthIssueReportRow(
         string GroupKey,

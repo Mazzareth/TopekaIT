@@ -8,7 +8,7 @@
         MinWidth="980"
         Icon="Assets/DeployChecker.ico"
         Background="{StaticResource SurfaceBrush}"
-        FontFamily="Cascadia Mono, Consolas"
+        FontFamily="Segoe UI"
         Loaded="Window_Loaded">
     <Window.Resources>
         <Style TargetType="TextBlock">
@@ -18,6 +18,7 @@
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
             <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,0,0,5" />
         </Style>
 
@@ -25,6 +26,7 @@
             <Setter Property="Background" Value="{StaticResource PanelBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="14" />
         </Style>
 
@@ -73,12 +75,35 @@
             <Setter Property="BorderBrush" Value="{StaticResource LineStrongBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
 
         <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="{StaticResource AccentDimBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TerminalBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <Style TargetType="TabControl">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}" />
+        </Style>
+
+        <Style TargetType="TabItem">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Background" Value="{StaticResource PanelAltBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+                    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -101,11 +126,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel>
-                    <TextBlock Text="TOPEKA::DEPLOY_CONSOLE"
+                    <TextBlock Text="TOPEKA DEPLOY CONSOLE"
                                Foreground="{StaticResource AccentBrush}"
                                FontSize="22"
                                FontWeight="Bold" />
-                    <TextBlock Text="remote status / release push / service control"
+                    <TextBlock Text="remote status / release push / local dev runner"
                                Margin="0,5,0,0"
                                Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
@@ -136,42 +161,94 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0"
-                    Style="{StaticResource Panel}"
-                    Margin="0,0,12,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+            <TabControl Grid.Column="0"
+                        Margin="0,0,12,0">
+                <TabItem Header="REMOTE">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,10">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="REMOTE_SERVER" />
-                        <TextBox x:Name="RemoteServerBox" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="SERVICE" />
-                        <TextBox x:Name="ServiceNameBox" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,10">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="REMOTE_PATH" />
-                        <TextBox x:Name="RemotePathBox" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,0">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="USERNAME" />
-                        <TextBox x:Name="UsernameBox" />
-                    </StackPanel>
-                    <StackPanel Grid.Row="2" Grid.Column="1">
-                        <TextBlock Style="{StaticResource FieldLabel}" Text="PASSWORD" />
-                        <PasswordBox x:Name="PasswordBox" />
-                    </StackPanel>
-                </Grid>
-            </Border>
+                            <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,10">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="REMOTE_SERVER" />
+                                <TextBox x:Name="RemoteServerBox" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,0,10">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="SERVICE" />
+                                <TextBox x:Name="ServiceNameBox" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,10">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="REMOTE_PATH" />
+                                <TextBox x:Name="RemotePathBox" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="USERNAME" />
+                                <TextBox x:Name="UsernameBox" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="1">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="PASSWORD" />
+                                <PasswordBox x:Name="PasswordBox" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </TabItem>
+
+                <TabItem Header="DEV">
+                    <Border Style="{StaticResource Panel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1.15*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="LOCAL_DEV"
+                                           Foreground="{StaticResource MutedBrush}"
+                                           FontSize="11" />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="KillLocalButton"
+                                            Content="KILL LOCAL APP"
+                                            Width="142"
+                                            Margin="0,0,8,0"
+                                            Click="KillLocalButton_Click" />
+                                    <Button x:Name="BuildRunButton"
+                                            Style="{StaticResource AccentButton}"
+                                            Content="BUILD AND RUN"
+                                            Width="146"
+                                            Click="BuildRunButton_Click" />
+                                </StackPanel>
+                                <TextBlock Text="LOCAL_ONLY / TOPEKAIT.WEB"
+                                           Margin="0,14,0,0"
+                                           Foreground="{StaticResource SubtleBrush}"
+                                           FontSize="11" />
+                            </StackPanel>
+
+                            <Grid Grid.Column="1">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="LOCAL_URL" />
+                                    <TextBox x:Name="LocalUrlBox" IsReadOnly="True" />
+                                </StackPanel>
+                                <StackPanel Grid.Row="1">
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="WEB_PROJECT" />
+                                    <TextBox x:Name="LocalProjectBox" IsReadOnly="True" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </TabItem>
+            </TabControl>
 
             <Border Grid.Column="1" Style="{StaticResource Panel}">
                 <StackPanel>
@@ -210,7 +287,7 @@
                     Margin="0,0,12,0">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top"
-                               Text="$ terminal"
+                               Text="ACTIVITY LOG"
                                Foreground="{StaticResource AccentBrush}"
                                FontWeight="Bold"
                                Margin="0,0,0,10" />
@@ -222,7 +299,7 @@
                              VerticalScrollBarVisibility="Auto"
                              VerticalContentAlignment="Top"
                              Background="{StaticResource TerminalBrush}"
-                             Foreground="{StaticResource AccentBrush}"
+                             Foreground="{StaticResource InkBrush}"
                              BorderThickness="0"
                              FontSize="12.5" />
                 </DockPanel>

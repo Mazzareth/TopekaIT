@@ -52,7 +52,7 @@
             <span>slow latency</span>
         </div>
         <div class="health-cell">
-            <span class="mono">@_errorLog.Count</span>
+            <span class="mono">@ErrorEventCount</span>
             <span>logged errors</span>
         </div>
     </div>
@@ -310,9 +310,9 @@
     <div class="card" style="margin-top: 16px;">
         <div class="card-head">
             <span class="card-title">Printer Error Log</span>
-            @if (_errorLog.Count > 0)
+            @if (_errorGroups.Count > 0)
             {
-                <span style="font-size: 12px; color: var(--text-faint);">@_errorLog.Count shown</span>
+                <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(_errorGroups.Count, "group", "groups") · @CountLabel(ErrorEventCount, "event", "events")</span>
             }
         </div>
 
@@ -341,7 +341,7 @@
             }
         </div>
 
-        @if (_errorLog.Count == 0)
+        @if (_errorGroups.Count == 0)
         {
             <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
                 @(HasActiveErrorDateRange() ? "No printer errors match the selected date." : "No printer errors have been received for this division.")
@@ -349,35 +349,49 @@
         }
         else
         {
-            <div class="asset-table-head" style="grid-template-columns: 120px 1fr 1fr 120px 1.6fr 90px;">
-                <div>Time</div>
-                <div>Printer</div>
-                <div>Department</div>
-                <div>IP Address</div>
-                <div>Message</div>
+            <div class="asset-table-head printer-alert-head">
+                <div>Alert type</div>
+                <div>Severity</div>
+                <div>Latest</div>
+                <div>Events</div>
                 <div style="text-align: right;">Actions</div>
             </div>
-            @foreach (var ev in VisibleErrorLog())
+            @foreach (var group in VisibleErrorGroups())
             {
-                <div class="asset-row" style="grid-template-columns: 120px 1fr 1fr 120px 1.6fr 90px;">
-                    <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</div>
-                    <div style="font-weight: 500;">@ev.PrinterName</div>
-                    <div>@ev.Department</div>
-                    <div class="mono" style="font-size: 12px;">@ev.IpAddress</div>
-                    <div style="font-size: 13px;">
-                        <div>@(!string.IsNullOrWhiteSpace(ev.FriendlyMessage) ? ev.FriendlyMessage : ev.RawMessage)</div>
-                        @if (!string.IsNullOrWhiteSpace(ev.FriendlyMessage))
+                <div class="asset-row printer-alert-row">
+                    <div>
+                        <div style="font-weight: 600;">@DisplayAlertTitle(group)</div>
+                        <div class="printer-alert-message">@DisplayAlertMessage(group)</div>
+                    </div>
+                    <div><Pill Kind="@SeverityPill(group.Severity)">@group.Severity</Pill></div>
+                    <div class="mono" style="font-size: 12px;">@group.LatestAt.LocalDateTime.ToString("M/d h:mm tt")</div>
+                    <div>@group.Count</div>
+                    <div style="text-align: right;">
+                        <button class="btn btn-sm" @onclick="() => ToggleErrorGroup(group.AlertKey)">
+                            <Icon Name="@(_expandedErrorGroups.Contains(group.AlertKey) ? "ChevronLeft" : "ChevronRight")" Size="12" />
+                        </button>
+                    </div>
+                </div>
+                @if (_expandedErrorGroups.Contains(group.AlertKey))
+                {
+                    <div class="printer-alert-occurrences">
+                        @foreach (var ev in VisibleOccurrences(group).Take(25))
                         {
-                            <details class="raw-message-details">
-                                <summary>Full message</summary>
+                            <details class="printer-alert-occurrence">
+                                <summary>
+                                    <span style="font-weight: 600;">@ev.PrinterName</span>
+                                    <span>@ev.Timestamp.LocalDateTime.ToString("M/d h:mm tt")</span>
+                                    <span>@ev.Department</span>
+                                    <span>@ev.IpAddress</span>
+                                    <button class="btn btn-sm" @onclick:stopPropagation @onclick="() => ViewDetails(ev.PrinterId)">
+                                        <Icon Name="Eye" Size="12" /> View
+                                    </button>
+                                </summary>
                                 <div class="raw-message">@ev.RawMessage</div>
                             </details>
                         }
                     </div>
-                    <div style="text-align: right;">
-                        <button class="btn btn-sm" @onclick="() => ViewDetails(ev.PrinterId)"><Icon Name="Eye" Size="12" /></button>
-                    </div>
-                </div>
+                }
             }
         }
     </div>
@@ -387,10 +401,11 @@
 @code {
     List<PrinterRow> _rows = new();
     List<PrinterModel> _printerModels = new();
-    List<PrinterErrorLogEntry> _errorLog = new();
+    List<PrinterAlertGroup> _errorGroups = new();
     List<PrinterAlertState> _alertStates = new();
     Dictionary<string, List<decimal>> _sparklines = new();
     List<PrinterSetupRow> _setupRows = new();
+    HashSet<string> _expandedErrorGroups = new(StringComparer.OrdinalIgnoreCase);
     string _setupIpInput = "";
     string _setupError = "";
     string _printerFilter = "all";
@@ -407,6 +422,8 @@
     bool _canManagePrinterModels;
     bool _canClearPrinterAlerts;
     bool _canViewPrinterErrorLogs;
+
+    int ErrorEventCount => _errorGroups.Sum(g => g.Count);
 
     bool CanRunPrinterSetup => !_setupTesting
         && !_setupRunning
@@ -431,7 +448,8 @@
         var unsavedNewRows = _rows.Where(r => r.IsNew).ToList();
         _printerModels = (await PrinterModelService.GetAllAsync()).OrderBy(m => m.Name).ToList();
         var printers = (await PrinterService.GetAllAsync()).OrderBy(p => p.Name).ToList();
-        _errorLog = (await PrinterEvents.GetErrorsAsync(0, ErrorRangeStartUtc(), ErrorRangeEndExclusiveUtc())).ToList();
+        _errorGroups = (await PrinterEvents.GetGroupedErrorsAsync(0, ErrorRangeStartUtc(), ErrorRangeEndExclusiveUtc())).ToList();
+        _expandedErrorGroups.IntersectWith(_errorGroups.Select(g => g.AlertKey));
         _alertStates = (await PrinterEvents.GetActiveAlertsAsync()).ToList();
         _rows = printers.Select(p => new PrinterRow
         {
@@ -471,10 +489,15 @@
         }
     }
 
-    IEnumerable<PrinterErrorLogEntry> VisibleErrorLog() =>
+    IEnumerable<PrinterAlertGroup> VisibleErrorGroups() =>
         _errorDateSort == "oldest"
-            ? _errorLog.OrderBy(e => e.Timestamp)
-            : _errorLog.OrderByDescending(e => e.Timestamp);
+            ? _errorGroups.OrderBy(e => e.LatestAt)
+            : _errorGroups.OrderByDescending(e => e.LatestAt);
+
+    IEnumerable<PrinterAlertOccurrence> VisibleOccurrences(PrinterAlertGroup group) =>
+        _errorDateSort == "oldest"
+            ? group.Occurrences.OrderBy(e => e.Timestamp)
+            : group.Occurrences.OrderByDescending(e => e.Timestamp);
 
     DateTimeOffset? ErrorRangeStartUtc() => Format.LocalDateStartUtc(_errorStartDate);
 
@@ -505,6 +528,35 @@
         _errorDateSort = "newest";
         await Load();
     }
+
+    void ToggleErrorGroup(string alertKey)
+    {
+        if (!_expandedErrorGroups.Add(alertKey))
+        {
+            _expandedErrorGroups.Remove(alertKey);
+        }
+    }
+
+    static string DisplayAlertTitle(PrinterAlertGroup group) =>
+        !string.IsNullOrWhiteSpace(group.AlertDetail) ? group.AlertDetail : group.AlertTitle;
+
+    static string DisplayAlertMessage(PrinterAlertGroup group)
+    {
+        var latest = group.Occurrences.OrderByDescending(e => e.Timestamp).FirstOrDefault();
+        return latest?.FriendlyMessage
+            ?? $"{group.AlertTitle}: {group.AlertDetail}".Trim().Trim(':');
+    }
+
+    static string CountLabel(int count, string singular, string plural) =>
+        $"{count} {(count == 1 ? singular : plural)}";
+
+    static string SeverityPill(string? severity) => severity?.ToUpperInvariant() switch
+    {
+        "CRITICAL" => "pill-down",
+        "ERROR" => "pill-down",
+        "WARNING" => "pill-warn",
+        _ => "pill-info",
+    };
 
     async Task TestPrinterSetup()
     {
