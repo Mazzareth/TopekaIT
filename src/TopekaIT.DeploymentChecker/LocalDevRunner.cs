@@ -392,6 +392,7 @@ $webProject = [System.IO.Path]::GetFullPath($WebProjectPath)
 $relativeBackslash = "src\TopekaIT.Web\TopekaIT.Web.csproj"
 $relativeSlash = "src/TopekaIT.Web/TopekaIT.Web.csproj"
 
+# Match only this repo's local web host, not every dotnet or shell process on the machine.
 $matches = Get-CimInstance Win32_Process | Where-Object {
     $processId = [int]$_.ProcessId
     if ($processId -eq $PID) {

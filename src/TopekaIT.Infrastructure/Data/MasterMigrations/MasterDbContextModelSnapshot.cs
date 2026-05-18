@@ -246,8 +246,8 @@ namespace TopekaIT.Infrastructure.Data.MasterMigrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("LockerCombo")
-                        .HasMaxLength(32)
-                        .HasColumnType("nvarchar(32)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("LockerNumber")
                         .HasMaxLength(16)
@@ -257,6 +257,11 @@ namespace TopekaIT.Infrastructure.Data.MasterMigrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<bool>("MustChangePassword")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("OnLOAReason")
                         .HasMaxLength(512)
@@ -269,6 +274,11 @@ namespace TopekaIT.Infrastructure.Data.MasterMigrations
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("PasswordIterations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(100000);
 
                     b.Property<string>("PasswordSalt")
                         .IsRequired()

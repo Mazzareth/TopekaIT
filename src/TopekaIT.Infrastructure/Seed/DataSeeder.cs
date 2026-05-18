@@ -22,7 +22,7 @@ public static class DataSeeder
 
         if (!await db.Users.AnyAsync(u => u.Username == SuperAdminUsername, ct))
         {
-            var (hash, salt) = PasswordHasher.Hash(AdminPassword);
+            var password = PasswordHasher.HashWithMetadata(AdminPassword);
             db.Users.Add(new User
             {
                 Id = SuperAdminId,
@@ -30,8 +30,10 @@ public static class DataSeeder
                 Username = SuperAdminUsername,
                 Role = AccessTier.SuperAdmin,
                 Avatar = "BW",
-                PasswordHash = hash,
-                PasswordSalt = salt,
+                PasswordHash = password.hash,
+                PasswordSalt = password.salt,
+                PasswordIterations = password.iterations,
+                MustChangePassword = true,
                 DivisionId = null,
             });
             await db.SaveChangesAsync(ct);
@@ -165,7 +167,6 @@ public static class DataSeeder
 
         var definitions = new[]
         {
-            // SAE / general device issues
             new IssueTagDefinition { Code = "RightPortBroken",       Label = "Right port broken",        Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice",          SortOrder = 10 },
             new IssueTagDefinition { Code = "LeftPortBroken",        Label = "Left port broken",         Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice",          SortOrder = 11 },
             new IssueTagDefinition { Code = "ScreenCracked",         Label = "Screen cracked",           Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 20 },
@@ -179,17 +180,14 @@ public static class DataSeeder
             new IssueTagDefinition { Code = "SlowPerformance",       Label = "Slow / freezing",          Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 80 },
             new IssueTagDefinition { Code = "AppCrashing",           Label = "App crashing",             Severity = IssueSeverity.Warning,  ApplicableCategories = null,                  SortOrder = 90 },
 
-            // Scanner-specific
             new IssueTagDefinition { Code = "TriggerStuck",          Label = "Trigger stuck",            Severity = IssueSeverity.Critical, ApplicableCategories = "Scanner",             SortOrder = 110 },
             new IssueTagDefinition { Code = "ScannerNotReading",     Label = "Scanner not reading",      Severity = IssueSeverity.Critical, ApplicableCategories = "Scanner",             SortOrder = 111 },
             new IssueTagDefinition { Code = "ScannerMisreading",     Label = "Frequent scan errors",     Severity = IssueSeverity.Warning,  ApplicableCategories = "Scanner",             SortOrder = 112 },
             new IssueTagDefinition { Code = "PairingIssue",          Label = "Pairing issue",            Severity = IssueSeverity.Warning,  ApplicableCategories = "Scanner",             SortOrder = 113, Description = "Won't stay connected to SAE device" },
 
-            // Battery / container
             new IssueTagDefinition { Code = "BatteryWontHoldCharge", Label = "Won't hold charge",        Severity = IssueSeverity.Critical, ApplicableCategories = "Battery",             SortOrder = 120 },
             new IssueTagDefinition { Code = "BatterySwollen",        Label = "Swollen battery",          Severity = IssueSeverity.Critical, ApplicableCategories = "Battery",             SortOrder = 121, Description = "Physically swollen — remove from service immediately" },
 
-            // General
             new IssueTagDefinition { Code = "LostAccessory",         Label = "Missing accessory",        Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 200, Description = "Missing strap, case, or other accessory" },
             new IssueTagDefinition { Code = "NeedsClean",            Label = "Needs cleaning",           Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 210 },
             new IssueTagDefinition { Code = "Other",                 Label = "Other issue",              Severity = IssueSeverity.Info,     ApplicableCategories = null,                  SortOrder = 999 },

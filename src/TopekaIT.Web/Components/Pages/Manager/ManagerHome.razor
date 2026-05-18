@@ -6,12 +6,12 @@
 @inject PrinterService PrinterService
 @inject AssetService AssetService
 @inject LockerService LockerService
-@inject UserService UserServiceX
+@inject UserService UserService
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Nav
 @inject AccessControlService Access
 
-<PageTitle>Supervisor home · Topeka IT</PageTitle>
+<PageTitle>Manager home · Topeka IT</PageTitle>
 
 <div class="page">
     <div class="page-head">
@@ -280,7 +280,7 @@
         _resolved = tickets.Count(t => t.Status == TicketStatus.Resolved && t.UpdatedAt >= weekAgo);
         _recent = tickets.OrderByDescending(t => t.UpdatedAt).Take(5).ToList();
 
-        _users = (await UserServiceX.GetAllAsync()).ToList();
+        _users = (await UserService.GetAllAsync()).ToList();
         
         var lockers = await LockerService.GetAllAsync();
         _availableLockers = lockers.Count(l =>

@@ -1,9 +1,11 @@
 @page "/admin/divisions/new"
 @attribute [Authorize(Policy = AccessPermissionKeys.AdminCreateDivisions)]
+@using Microsoft.AspNetCore.DataProtection
 @using Microsoft.EntityFrameworkCore
 @using TopekaIT.Infrastructure.Data
 @using TopekaIT.Infrastructure.Seed
 @inject DivisionService DivisionService
+@inject IDataProtectionProvider DataProtectionProvider
 @inject AppState State
 @inject NavigationManager Nav
 
@@ -84,7 +86,7 @@
             var options = new DbContextOptionsBuilder<TopekaDbContext>()
                 .UseSqlServer(created.ConnectionString, sql => sql.CommandTimeout(120))
                 .Options;
-            await using var db = new TopekaDbContext(options);
+            await using var db = new TopekaDbContext(options, DataProtectionProvider);
             await DataSeeder.SeedDivisionAsync(db);
 
             State.PushToast($"Created {created.Name}", "up");

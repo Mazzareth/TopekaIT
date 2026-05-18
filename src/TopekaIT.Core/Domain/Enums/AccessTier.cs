@@ -5,8 +5,7 @@ public enum AccessTier
     Worker = 0,
     Supervisor = 1,
     Admin = 2,
-    IT = 3,
-    SuperAdmin = 4,
+    SuperAdmin = 3,
 }
 
 public static class AccessTierExtensions
@@ -25,7 +24,16 @@ public static class AccessTierExtensions
             return true;
         }
 
-        return Enum.TryParse(normalized, ignoreCase: true, out tier);
+        if (normalized.Equals("IT", StringComparison.OrdinalIgnoreCase))
+        {
+            tier = AccessTier.Admin;
+            return true;
+        }
+
+        if (normalized.All(char.IsDigit)) return false;
+
+        return Enum.TryParse(normalized, ignoreCase: true, out tier)
+            && Enum.IsDefined(tier);
     }
 
     public static AccessTier ParseTierOrWorker(string? value)

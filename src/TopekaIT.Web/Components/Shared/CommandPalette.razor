@@ -27,21 +27,24 @@
             {
                 <div class="cmdk__empty">Loading commands.</div>
             }
-            else if (FilteredItems.Count == 0)
+            else if (DisplayItems.Count == 0)
             {
                 <div class="cmdk__empty">No matching printers, assets, tickets, people, or divisions.</div>
             }
             else
             {
-                @foreach (var group in FilteredItems.GroupBy(i => i.Group))
+                @foreach (var group in DisplayItems.Select((Item, Index) => new { Item, Index }).GroupBy(i => i.Item.Group))
                 {
                     <div class="cmdk__section">@group.Key</div>
-                    @foreach (var item in group)
+                    @foreach (var result in group)
                     {
-                        <button type="button" class="cmdk__row" @onclick="() => Run(item)">
-                            <span class="cmdk__type @item.Tone">@item.ShortType</span>
-                            <span>@item.Label</span>
-                            <span class="cmdk__sub">@item.Meta</span>
+                        <button type="button"
+                                class="@RowClass(result.Index)"
+                                aria-selected="@(result.Index == _selectedIndex)"
+                                @onclick="() => Run(result.Item)">
+                            <span class="cmdk__type @result.Item.Tone">@result.Item.ShortType</span>
+                            <span>@result.Item.Label</span>
+                            <span class="cmdk__sub">@result.Item.Meta</span>
                         </button>
                     }
                 }
@@ -56,14 +59,25 @@
     bool _loaded;
     bool _loading;
     string _query = "";
+    int _selectedIndex;
     List<CommandItem> _items = new();
 
-    List<CommandItem> FilteredItems => string.IsNullOrWhiteSpace(_query)
+    List<CommandItem> SearchItems => string.IsNullOrWhiteSpace(_query)
         ? _items.Take(18).ToList()
         : _items
-            .Where(i => i.Search.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(i => new { Item = i, Score = i.Score(_query) })
+            .Where(i => i.Score > 0)
+            .OrderByDescending(i => i.Score)
+            .ThenBy(i => i.Item.Group)
+            .ThenBy(i => i.Item.Label)
+            .Select(i => i.Item)
             .Take(18)
             .ToList();
+
+    List<CommandItem> DisplayItems => SearchItems
+        .GroupBy(i => i.Group)
+        .SelectMany(group => group)
+        .ToList();
 
     protected override void OnInitialized()
     {
@@ -113,9 +127,9 @@
         var items = new List<CommandItem>
         {
             new("JUMP", "Control room", "Operations dashboard", "Go", "jump", "/it"),
-            new("JUMP", "Printers", "Fleet health and setup", "Go", "jump", TenantContext.IsResolved ? "/it/printers" : "/admin"),
-            new("JUMP", "Assets", "Inventory and scanner lookup", "Go", "jump", TenantContext.IsResolved ? "/it/assets" : "/admin"),
-            new("JUMP", "Tickets", "Queue and active requests", "Go", "jump", TenantContext.IsResolved ? "/it/tickets" : "/admin"),
+            new("JUMP", "Printers", TenantContext.IsResolved ? $"Fleet health and setup - {TenantContext.DivisionId}" : "Fleet health and setup", "Go", "jump", TenantContext.IsResolved ? "/it/printers" : "/admin"),
+            new("JUMP", "Assets", TenantContext.IsResolved ? $"Inventory and scanner lookup - {TenantContext.DivisionId}" : "Inventory and scanner lookup", "Go", "jump", TenantContext.IsResolved ? "/it/assets" : "/admin"),
+            new("JUMP", "Tickets", TenantContext.IsResolved ? $"Queue and active requests - {TenantContext.DivisionId}" : "Queue and active requests", "Go", "jump", TenantContext.IsResolved ? "/it/tickets" : "/admin"),
         };
 
         if (TenantContext.IsResolved)
@@ -124,7 +138,7 @@
             items.AddRange(printers.Select(p => new CommandItem(
                 "PRINTERS",
                 string.IsNullOrWhiteSpace(p.Name) ? p.IpAddress : p.Name,
-                $"{p.IpAddress} - {p.Department} - {p.Status}",
+                $"{p.IpAddress} - {TenantContext.DivisionId} - {p.Department} - {p.Status}",
                 "Prn",
                 p.Status == PrinterStatus.Down ? "is-critical" : p.Status == PrinterStatus.Warn ? "is-warning" : "is-ok",
                 $"/it/printers/{p.Id}")));
@@ -172,11 +186,14 @@
         _items = items;
         _loaded = true;
         _loading = false;
+        ClampSelection();
     }
 
     void OnQueryChanged(ChangeEventArgs args)
     {
         _query = args.Value?.ToString() ?? "";
+        _selectedIndex = 0;
+        ClampSelection();
     }
 
     void HandleKeyDown(KeyboardEventArgs args)
@@ -185,10 +202,54 @@
         {
             Close();
         }
-        else if (args.Key == "Enter" && FilteredItems.FirstOrDefault() is { } item)
+        else if (args.Key == "ArrowDown")
+        {
+            MoveSelection(1);
+        }
+        else if (args.Key == "ArrowUp")
+        {
+            MoveSelection(-1);
+        }
+        else if (args.Key == "Enter" && SelectedItem() is { } item)
         {
             Run(item);
         }
+    }
+
+    void MoveSelection(int direction)
+    {
+        var items = DisplayItems;
+        if (items.Count == 0)
+        {
+            _selectedIndex = 0;
+            return;
+        }
+
+        _selectedIndex = (_selectedIndex + direction + items.Count) % items.Count;
+    }
+
+    CommandItem? SelectedItem()
+    {
+        var items = DisplayItems;
+        if (items.Count == 0)
+        {
+            return null;
+        }
+
+        ClampSelection(items.Count);
+        return items[_selectedIndex];
+    }
+
+    void ClampSelection(int? count = null)
+    {
+        var itemCount = count ?? DisplayItems.Count;
+        if (itemCount == 0)
+        {
+            _selectedIndex = 0;
+            return;
+        }
+
+        _selectedIndex = Math.Clamp(_selectedIndex, 0, itemCount - 1);
     }
 
     void Run(CommandItem item)
@@ -200,6 +261,7 @@
     void Close()
     {
         _query = "";
+        _selectedIndex = 0;
         _loaded = false;
         State.CloseCommandPalette();
     }
@@ -218,8 +280,12 @@
         _ref?.Dispose();
     }
 
+    string RowClass(int index) => index == _selectedIndex ? "cmdk__row is-selected" : "cmdk__row";
+
     sealed record CommandItem(string Group, string Label, string Meta, string ShortType, string Tone, string Route)
     {
         public string Search { get; } = $"{Group} {Label} {Meta} {ShortType}";
+
+        public int Score(string query) => CommandPaletteSearch.Score(query, Label, Group, Meta, ShortType, Search);
     }
 }

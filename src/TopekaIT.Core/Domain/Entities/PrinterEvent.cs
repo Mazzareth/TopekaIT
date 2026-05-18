@@ -6,9 +6,9 @@ public class PrinterEvent
     public string PrinterId { get; set; } = "";
     public Printer Printer { get; set; } = null!;
     public DateTimeOffset Timestamp { get; set; }
-    public string EventType { get; set; } = "";   // JobStarted | Error | Warning | Info
+    public string EventType { get; set; } = "";
     public string RawMessage { get; set; } = "";
-    public string? Severity { get; set; }          // Info | Warning | Error
+    public string? Severity { get; set; }
     public string? AlertKey { get; set; }
     public string? AlertTitle { get; set; }
     public string? AlertCategory { get; set; }

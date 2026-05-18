@@ -42,7 +42,7 @@
         _homeRoute = tier switch
         {
             AccessTier.SuperAdmin => "/admin",
-            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Admin => "/it",
             AccessTier.Supervisor => "/manager",
             _ => "/worker",
         };

@@ -15,16 +15,16 @@ public class AccessControlServiceTests
         var worker = AccessCatalog.DefaultPermissionsFor(AccessTier.Worker);
         var supervisor = AccessCatalog.DefaultPermissionsFor(AccessTier.Supervisor);
         var admin = AccessCatalog.DefaultPermissionsFor(AccessTier.Admin);
-        var it = AccessCatalog.DefaultPermissionsFor(AccessTier.IT);
         var superAdmin = AccessCatalog.DefaultPermissionsFor(AccessTier.SuperAdmin);
 
         Assert.Contains(AccessPermissionKeys.TicketsCreate, worker);
         Assert.DoesNotContain(AccessPermissionKeys.TicketsViewQueue, worker);
+        Assert.DoesNotContain(AccessPermissionKeys.TicketsViewQueue, supervisor);
+        Assert.Contains(AccessPermissionKeys.TicketsViewQueue, admin);
         Assert.Contains(AccessPermissionKeys.AssetsViewSupervisorConsole, supervisor);
         Assert.Contains(AccessPermissionKeys.PrintersViewAdmin, admin);
-        Assert.DoesNotContain(AccessPermissionKeys.PrintersAutoSetup, admin);
+        Assert.Contains(AccessPermissionKeys.PrintersAutoSetup, admin);
         Assert.DoesNotContain(AccessPermissionKeys.AdminViewLantronix, admin);
-        Assert.Contains(AccessPermissionKeys.PrintersAutoSetup, it);
         Assert.Contains(AccessPermissionKeys.AdminCreateDivisions, superAdmin);
     }
 
@@ -61,22 +61,21 @@ public class AccessControlServiceTests
             User("worker", AccessTier.Worker),
             User("supervisor", AccessTier.Supervisor),
             User("admin", AccessTier.Admin),
-            User("it", AccessTier.IT),
             User("super", AccessTier.SuperAdmin));
         var overrides = new FakePermissionOverrideRepository();
         var service = new AccessControlService(users, overrides);
 
-        var itGrant = await service.SetOverrideAsync("it", "worker", AccessPermissionKeys.TicketsViewQueue, PermissionOverrideState.Allow);
+        var superGrantAdminPermission = await service.SetOverrideAsync("super", "worker", AccessPermissionKeys.TicketsViewQueue, PermissionOverrideState.Allow);
         var adminGrant = await service.SetOverrideAsync("admin", "worker", AccessPermissionKeys.TicketsViewQueue, PermissionOverrideState.Allow);
         var supervisorGrant = await service.SetOverrideAsync("supervisor", "worker", AccessPermissionKeys.TicketsCreate, PermissionOverrideState.Allow);
-        var itSelfTierGrant = await service.SetOverrideAsync("it", "admin", AccessPermissionKeys.PrintersAutoSetup, PermissionOverrideState.Allow);
+        var adminSelfTierGrant = await service.SetOverrideAsync("admin", "admin", AccessPermissionKeys.PrintersAutoSetup, PermissionOverrideState.Allow);
         var lantronixViewGrant = await service.SetOverrideAsync("super", "admin", AccessPermissionKeys.AdminViewLantronix, PermissionOverrideState.Allow);
         var superAdminOnlyGrant = await service.SetOverrideAsync("super", "worker", AccessPermissionKeys.AdminCreateDivisions, PermissionOverrideState.Allow);
 
-        Assert.True(itGrant.Succeeded);
+        Assert.True(superGrantAdminPermission.Succeeded);
         Assert.False(adminGrant.Succeeded);
         Assert.True(supervisorGrant.Succeeded);
-        Assert.False(itSelfTierGrant.Succeeded);
+        Assert.False(adminSelfTierGrant.Succeeded);
         Assert.True(lantronixViewGrant.Succeeded);
         Assert.False(superAdminOnlyGrant.Succeeded);
     }
@@ -86,6 +85,19 @@ public class AccessControlServiceTests
     {
         Assert.True(AccessTierExtensions.TryParseTier("Manager", out var tier));
         Assert.Equal(AccessTier.Supervisor, tier);
+    }
+
+    [Fact]
+    public void AccessTierParser_NormalizesLegacyItToAdmin()
+    {
+        Assert.True(AccessTierExtensions.TryParseTier("IT", out var tier));
+        Assert.Equal(AccessTier.Admin, tier);
+    }
+
+    [Fact]
+    public void AccessTierParser_RejectsNumericTierValues()
+    {
+        Assert.False(AccessTierExtensions.TryParseTier("3", out _));
     }
 
     private static User User(string id, AccessTier tier) => new()

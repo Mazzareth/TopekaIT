@@ -1,4 +1,5 @@
 using System.Net.NetworkInformation;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TopekaIT.Core.Domain.Entities;
@@ -13,19 +14,22 @@ namespace TopekaIT.Web.Services;
 public class PrinterMonitoringService : BackgroundService
 {
     private readonly IDbContextFactory<MasterDbContext> _masterFactory;
+    private readonly IDataProtectionProvider _dataProtectionProvider;
     private readonly PrinterSnmpService _snmpService;
     private readonly ILogger<PrinterMonitoringService> _logger;
 
-    // SNMP sysinfo refresh interval: every 120 ping cycles = ~1 hour at 30s cadence
+    // SNMP sysinfo is intentionally refreshed less often than ping status because the printer MIB calls are slower and only enrich inventory metadata.
     private const int SnmpRefreshEveryNCycles = 120;
     private int _cycleCount;
 
     public PrinterMonitoringService(
         IDbContextFactory<MasterDbContext> masterFactory,
+        IDataProtectionProvider dataProtectionProvider,
         PrinterSnmpService snmpService,
         ILogger<PrinterMonitoringService> logger)
     {
         _masterFactory = masterFactory;
+        _dataProtectionProvider = dataProtectionProvider;
         _snmpService = snmpService;
         _logger = logger;
     }
@@ -47,7 +51,7 @@ public class PrinterMonitoringService : BackgroundService
 
             _cycleCount++;
 
-            // 30-second cadence — twice the resolution, still cheap
+            // Keep the poll interval short enough for live status without making every configured printer a constant network target.
             await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         }
 
@@ -67,7 +71,7 @@ public class PrinterMonitoringService : BackgroundService
 
     private async Task CheckDivisionAsync(Division division, CancellationToken stoppingToken)
     {
-        var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+        var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
         var printerService = new PrinterService(new PrinterRepository(factory));
         var activityService = new ActivityService(new ActivityRepository(factory));
         var pingHistoryRepo = new PingHistoryRepository(factory);
@@ -100,12 +104,11 @@ public class PrinterMonitoringService : BackgroundService
                 sample.LatencyMs = isUp ? (int)reply.RoundtripTime : null;
                 sample.FailureReason = isUp ? null : reply.Status.ToString();
 
-                // Update derived live state on the Printer entity
                 printer.LastPingAt = sample.Timestamp;
                 printer.LastLatencyMs = sample.LatencyMs;
                 printer.ConsecutiveFailures = isUp ? 0 : printer.ConsecutiveFailures + 1;
 
-                // Detect status transitions — only log to ActivityEvent on change
+                // Activity events are transition-only so routine ping samples do not flood the visible activity feed.
                 var newStatus = isUp ? PrinterStatus.Up : PrinterStatus.Down;
                 if (printer.Status != newStatus)
                 {
@@ -150,10 +153,11 @@ public class PrinterMonitoringService : BackgroundService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error checking printer {Name} at {Ip}", printer.Name, printer.IpAddress);
-                continue; // skip writing sample on unexpected errors
+
+                // The sample may contain partial state after unexpected failures, so avoid persisting it as telemetry.
+                continue;
             }
 
-            // Persist the structured ping sample
             try
             {
                 await pingHistoryRepo.AddAsync(sample, stoppingToken);
@@ -163,7 +167,7 @@ public class PrinterMonitoringService : BackgroundService
                 _logger.LogError(ex, "Failed to persist PingSample for printer {Name}", printer.Name);
             }
 
-            // SNMP sysinfo refresh (only on designated cycles, only for online printers)
+            // Query SNMP metadata only on scheduled cycles and only while the printer is reachable.
             if (runSnmp && printer.Status == PrinterStatus.Up)
             {
                 try

@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<IPingHistoryRepository, PingHistoryRepository>();
         services.AddScoped<IPrinterEventRepository, PrinterEventRepository>();
         services.AddScoped<ILockerRepository, LockerRepository>();
+        services.AddScoped<IRmaRecordRepository, RmaRecordRepository>();
 
         return services;
     }

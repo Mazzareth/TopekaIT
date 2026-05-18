@@ -1,4 +1,3 @@
-@* Lightweight SVG sparkline for embedding in table rows *@
 <svg width="@Width" height="@Height" viewBox="0 0 @Width @Height" style="display: block;">
     @if (!string.IsNullOrEmpty(_pathData))
     {
@@ -31,7 +30,7 @@
         var min = points.Min();
         var max = points.Max();
         var range = max - min;
-        if (range == 0) range = 1; // avoid division by zero
+        if (range == 0) range = 1;
 
         var step = (double)Width / (points.Count - 1);
         var coords = new List<string>();

@@ -309,6 +309,56 @@
     {
     <div class="card" style="margin-top: 16px;">
         <div class="card-head">
+            <span class="card-title">Export Printer Logs</span>
+            <span style="font-size: 12px; color: var(--text-faint);">@CountLabel(ExportPrinterIds().Count, "printer", "printers") selected</span>
+        </div>
+        <div class="printer-log-filter printer-export-filter">
+            <label class="filter-field">
+                <span>From date</span>
+                <input class="inline-input printer-log-date" type="date" @bind="_exportStartDate" />
+            </label>
+            <label class="filter-field">
+                <span>From time</span>
+                <input class="inline-input printer-log-time" type="time" value="@_exportStartTime" @onchange="args => _exportStartTime = args.Value?.ToString() ?? string.Empty" />
+            </label>
+            <label class="filter-field">
+                <span>To date</span>
+                <input class="inline-input printer-log-date" type="date" @bind="_exportEndDate" />
+            </label>
+            <label class="filter-field">
+                <span>To time</span>
+                <input class="inline-input printer-log-time" type="time" value="@_exportEndTime" @onchange="args => _exportEndTime = args.Value?.ToString() ?? string.Empty" />
+            </label>
+            <label class="checkbox printer-export-all">
+                <input type="checkbox" @bind="_exportAllPrinters" />
+                <span>All printers</span>
+            </label>
+            <div class="printer-log-actions">
+                <button class="btn btn-sm btn-accent" @onclick="ExportPrinterLogs" disabled="@(!CanExportPrinterLogs)">
+                    <Icon Name="Download" Size="12" /> @(_exportingLogs ? "Exporting" : "Export CSV")
+                </button>
+            </div>
+        </div>
+        @if (!_exportAllPrinters)
+        {
+            <div class="printer-export-list">
+                @foreach (var row in ExportablePrinterRows())
+                {
+                    <label class="checkbox printer-export-option">
+                        <input type="checkbox" checked="@_exportPrinterIds.Contains(row.Id)" @onchange="args => ToggleExportPrinter(row.Id, args)" />
+                        <span>@row.Name</span>
+                        <span class="mono">@row.IpAddress</span>
+                    </label>
+                }
+            </div>
+        }
+    </div>
+    }
+
+    @if (_canViewPrinterErrorLogs)
+    {
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-head">
             <span class="card-title">Printer Error Log</span>
             @if (_errorGroups.Count > 0)
             {
@@ -413,6 +463,13 @@
     DateTime? _errorStartDate;
     DateTime? _errorEndDate;
     string _errorDateSort = "newest";
+    DateTime? _exportStartDate = DateTime.Today.AddDays(-1);
+    DateTime? _exportEndDate = DateTime.Today;
+    string _exportStartTime = "00:00";
+    string _exportEndTime = "23:59";
+    HashSet<string> _exportPrinterIds = new(StringComparer.OrdinalIgnoreCase);
+    bool _exportAllPrinters = true;
+    bool _exportingLogs;
     bool _setupOpen;
     bool _setupTesting;
     bool _setupRunning;
@@ -428,6 +485,11 @@
     bool CanRunPrinterSetup => !_setupTesting
         && !_setupRunning
         && _setupRows.Any(r => r.Connected && !string.IsNullOrWhiteSpace(r.SelectedModel));
+
+    bool CanExportPrinterLogs => !_exportingLogs
+        && _exportStartDate.HasValue
+        && _exportEndDate.HasValue
+        && ExportPrinterIds().Count > 0;
 
     protected override async Task OnInitializedAsync()
     {
@@ -471,7 +533,9 @@
             _rows.Insert(0, unsaved);
         }
 
-        // Load sparkline data (last hour of latency per printer)
+        TrimExportPrinterSelection();
+
+        // Sparklines use the last hour only so the printer list stays responsive during refresh.
         var now = DateTimeOffset.UtcNow;
         var from = now.AddHours(-1);
         _sparklines.Clear();
@@ -520,6 +584,94 @@
     bool HasActiveErrorLogFilters() =>
         HasActiveErrorDateRange() ||
         _errorDateSort != "newest";
+
+    IReadOnlyList<PrinterRow> ExportablePrinterRows() =>
+        _rows
+            .Where(r => !r.IsNew && !r.IsEditing && !string.IsNullOrWhiteSpace(r.Id))
+            .OrderBy(r => r.Name)
+            .ToList();
+
+    IReadOnlyList<string> ExportPrinterIds() =>
+        _exportAllPrinters
+            ? ExportablePrinterRows().Select(r => r.Id).ToList()
+            : _exportPrinterIds.ToList();
+
+    void TrimExportPrinterSelection()
+    {
+        var validPrinterIds = ExportablePrinterRows()
+            .Select(r => r.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _exportPrinterIds.RemoveWhere(id => !validPrinterIds.Contains(id));
+    }
+
+    void ToggleExportPrinter(string printerId, ChangeEventArgs args)
+    {
+        if (args.Value is bool selected && selected)
+        {
+            _exportPrinterIds.Add(printerId);
+            return;
+        }
+
+        _exportPrinterIds.Remove(printerId);
+    }
+
+    DateTimeOffset? ExportRangeStartUtc() =>
+        Format.LocalDateTimeUtc(_exportStartDate, _exportStartTime, TimeOnly.MinValue);
+
+    DateTimeOffset? ExportRangeEndExclusiveUtc()
+    {
+        var end = Format.LocalDateTimeUtc(_exportEndDate, _exportEndTime, new TimeOnly(23, 59));
+        return end?.AddMinutes(1);
+    }
+
+    async Task ExportPrinterLogs()
+    {
+        if (!_canViewPrinterErrorLogs) return;
+
+        var printerIds = ExportPrinterIds();
+        var from = ExportRangeStartUtc();
+        var to = ExportRangeEndExclusiveUtc();
+        if (printerIds.Count == 0 || !from.HasValue || !to.HasValue)
+        {
+            State.PushToast("Choose printers and a date/time range.", "down");
+            return;
+        }
+
+        if (from.Value >= to.Value)
+        {
+            State.PushToast("The export end time must be after the start time.", "down");
+            return;
+        }
+
+        _exportingLogs = true;
+        try
+        {
+            var logs = await PrinterEvents.GetLogsAsync(printerIds, from, to);
+            if (logs.Count == 0)
+            {
+                State.PushToast("No printer logs matched that range.", "");
+                return;
+            }
+
+            var csv = PrinterLogCsv.Build(logs);
+            var fileName = $"printer-logs-{FileRangeStamp(_exportStartDate, _exportStartTime)}-{FileRangeStamp(_exportEndDate, _exportEndTime)}.csv";
+            await JS.InvokeVoidAsync("topekaDownload.file", fileName, csv, "text/csv;charset=utf-8");
+            State.PushToast($"Exported {CountLabel(logs.Count, "log", "logs")}", "up");
+        }
+        finally
+        {
+            _exportingLogs = false;
+        }
+    }
+
+    static string FileRangeStamp(DateTime? date, string? time)
+    {
+        var datePart = date?.ToString("yyyyMMdd") ?? "date";
+        var timePart = string.IsNullOrWhiteSpace(time)
+            ? "time"
+            : new string(time.Where(char.IsDigit).ToArray());
+        return $"{datePart}-{timePart}";
+    }
 
     async Task ClearErrorLogFilters()
     {
@@ -855,7 +1007,7 @@
         public bool IsEditing { get; set; }
         public bool IsAddingModel { get; set; }
 
-        // backup for cancel
+        // Editing keeps the original values so cancel can restore the row without reloading data.
         internal string _backupName = "";
         internal string _backupDepartment = "";
         internal string _backupModel = "";

@@ -7,6 +7,7 @@ This is a .NET 10 solution for the Topeka IT Portal. The solution file is `6IA-I
 - `src/TopekaIT.Core`: domain entities, enums, service logic, and repository ports.
 - `src/TopekaIT.Infrastructure`: EF Core `DbContext`, migrations, configurations, repositories, dependency injection, and seed data.
 - `src/TopekaIT.Web`: Blazor app, pages, shared components, layouts, controllers, hosted services, static assets, and app settings.
+- `src/TopekaIT.DeploymentChecker`: local WPF deployment/status helper included in solution builds, but not part of the Blazor web runtime.
 - `References`: source notes and business reference material.
 - `plans`: implementation notes for planned or completed fixes.
 
@@ -30,7 +31,7 @@ Razor components use PascalCase filenames, for example `PrinterEditor.razor`. Ke
 
 ## Testing Guidelines
 
-No test projects are currently checked in. For new behavior, add focused tests under `tests/` using names like `TopekaIT.Core.Tests` or `TopekaIT.Infrastructure.Tests`. Name test classes after the subject under test, for example `TicketServiceTests`, and use method names that describe the expected behavior.
+Focused test projects live under `tests/`, including Core, Infrastructure, and Web source/behavior tests. For new behavior, add focused tests under `tests/` using names like `TopekaIT.Core.Tests` or `TopekaIT.Infrastructure.Tests`. Name test classes after the subject under test, for example `TicketServiceTests`, and use method names that describe the expected behavior.
 
 Before submitting changes, at minimum run `dotnet build 6IA-IT-Portal.slnx`. If tests are added, run `dotnet test`.
 

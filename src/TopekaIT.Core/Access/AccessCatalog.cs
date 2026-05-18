@@ -25,7 +25,7 @@ public static class AccessCatalog
         new(AccessPermissionKeys.PrintersDelete, "Delete printers", "Printers", AccessTier.Admin, AccessTier.Admin),
         new(AccessPermissionKeys.PrintersManageModels, "Manage printer models", "Printers", AccessTier.Admin, AccessTier.Admin),
         new(AccessPermissionKeys.PrintersClearAlerts, "Clear printer alerts", "Printers", AccessTier.Admin, AccessTier.Admin),
-        new(AccessPermissionKeys.PrintersAutoSetup, "Run auto printer setup", "Printers", AccessTier.IT, AccessTier.IT),
+        new(AccessPermissionKeys.PrintersAutoSetup, "Run auto printer setup", "Printers", AccessTier.Admin, AccessTier.Admin),
 
         new(AccessPermissionKeys.AssetsViewSupervisorConsole, "View supervisor asset console", "Assets", AccessTier.Supervisor, AccessTier.Supervisor),
         new(AccessPermissionKeys.AssetsViewItConsole, "View IT asset console", "Assets", AccessTier.Admin, AccessTier.Admin),

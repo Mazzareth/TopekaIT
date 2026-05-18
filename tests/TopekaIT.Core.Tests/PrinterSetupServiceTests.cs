@@ -63,6 +63,24 @@ public class PrinterSetupServiceTests
     }
 
     [Fact]
+    public void ParseDetectedInfo_ReadsPrintNetDescriptionAsName()
+    {
+        var detected = PrinterSetupService.ParseDetectedInfo(
+            """
+            list sysinfo
+            -- System Information ---------------------------------------------------------
+                               description: P062365
+                                  location: 6A Grand Island, NE
+                                   contact: Benjamin Miller
+                                model name: Integrated PrintNet Enterprise
+            """,
+            "");
+
+        Assert.Equal("P062365", detected.Name);
+        Assert.Equal("Integrated PrintNet Enterprise", detected.Model);
+    }
+
+    [Fact]
     public async Task TestAsync_PreservesPerIpSuccessAndFailure()
     {
         var telnet = new FakeTelnetClient();
@@ -200,7 +218,8 @@ public class PrinterSetupServiceTests
             telnet,
             printers ?? new FakePrinterRepository(Array.Empty<Printer>()),
             new FakePrinterModelRepository(new[] { new PrinterModel { Name = PrinterModels.T8000, SupportsLogging = true } }),
-            new PrinterSetupSettings { TimeoutMs = 1000 });
+            new PrinterSetupSettings { TimeoutMs = 1000 },
+            new PrintNetCommandCatalog());
 
     private static Division TestDivision() =>
         new()

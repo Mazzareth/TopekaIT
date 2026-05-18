@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using TopekaIT.Core.Domain.Entities;
 using TopekaIT.Core.Ports;
@@ -13,6 +14,7 @@ public class PrinterEventRepository : IPrinterEventRepository
     private readonly IDivisionDbContextFactory _factory;
     private readonly IDivisionRepository? _divisionRepository;
     private readonly ITenantContext? _tenantContext;
+    private readonly IDataProtectionProvider? _dataProtectionProvider;
 
     public PrinterEventRepository(IDivisionDbContextFactory factory)
     {
@@ -22,11 +24,13 @@ public class PrinterEventRepository : IPrinterEventRepository
     public PrinterEventRepository(
         IDivisionDbContextFactory factory,
         IDivisionRepository divisionRepository,
-        ITenantContext tenantContext)
+        ITenantContext tenantContext,
+        IDataProtectionProvider dataProtectionProvider)
     {
         _factory = factory;
         _divisionRepository = divisionRepository;
         _tenantContext = tenantContext;
+        _dataProtectionProvider = dataProtectionProvider;
     }
 
     public async Task AddAsync(PrinterEvent ev, CancellationToken ct = default)
@@ -38,14 +42,82 @@ public class PrinterEventRepository : IPrinterEventRepository
     }
 
     public async Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(string printerId, int count, CancellationToken ct = default)
+        => await GetByPrinterAsync(printerId, count, null, null, ct);
+
+    public async Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(
+        string printerId,
+        int count,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
-        return await db.PrinterEvents
+        var query = db.PrinterEvents
             .AsNoTracking()
-            .Where(e => e.PrinterId == printerId)
+            .Where(e => e.PrinterId == printerId);
+
+        query = ApplyTimestampRange(query, from, to);
+        query = query.OrderByDescending(e => e.Timestamp);
+        if (count > 0)
+        {
+            query = query.Take(count);
+        }
+
+        return await query.ToListAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<PrinterLogEntry>> GetLogsAsync(
+        IReadOnlyCollection<string> printerIds,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        int count = 0,
+        CancellationToken ct = default)
+    {
+        var ids = printerIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return Array.Empty<PrinterLogEntry>();
+        }
+
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var query = db.PrinterEvents
+            .AsNoTracking()
+            .Include(e => e.Printer)
+            .Where(e => ids.Contains(e.PrinterId));
+
+        query = ApplyTimestampRange(query, from, to);
+
+        var logs = query
             .OrderByDescending(e => e.Timestamp)
-            .Take(count)
-            .ToListAsync(ct);
+            .Select(e => new PrinterLogEntry
+            {
+                Id = e.Id,
+                PrinterId = e.PrinterId,
+                PrinterName = e.Printer.Name,
+                Department = e.Printer.Department,
+                IpAddress = e.Printer.IpAddress,
+                Timestamp = e.Timestamp,
+                EventType = e.EventType,
+                RawMessage = e.RawMessage,
+                Severity = e.Severity,
+                AlertKey = e.AlertKey,
+                AlertTitle = e.AlertTitle,
+                AlertCategory = e.AlertCategory,
+                AlertDetail = e.AlertDetail,
+                FriendlyMessage = e.FriendlyMessage,
+                AlertTrainingLevel = e.AlertTrainingLevel,
+            });
+
+        if (count > 0)
+        {
+            logs = logs.Take(count);
+        }
+
+        return await logs.ToListAsync(ct);
     }
 
     public async Task<IReadOnlyList<PrinterAlertState>> GetActiveAlertsAsync(CancellationToken ct = default)
@@ -91,7 +163,7 @@ public class PrinterEventRepository : IPrinterEventRepository
 
     public async Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetAllDivisionActiveIncidentsAsync(CancellationToken ct = default)
     {
-        if (_divisionRepository == null)
+        if (_divisionRepository == null || _dataProtectionProvider == null)
         {
             throw new InvalidOperationException("Division repository is required to query active printer incidents.");
         }
@@ -101,7 +173,7 @@ public class PrinterEventRepository : IPrinterEventRepository
 
         foreach (var division in divisions)
         {
-            var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+            var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
             await using var db = await factory.CreateDbContextAsync(ct);
             var divisionIncidents = await BuildActiveIncidentQuery(db, division.Id, division.Name)
                 .ToListAsync(ct);
@@ -134,6 +206,17 @@ public class PrinterEventRepository : IPrinterEventRepository
 
         db.PrinterAlertStates.Remove(alert);
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<int> PurgeEventsOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var oldEvents = await db.PrinterEvents
+            .Where(e => e.Timestamp < cutoff)
+            .ToListAsync(ct);
+        db.PrinterEvents.RemoveRange(oldEvents);
+        await db.SaveChangesAsync(ct);
+        return oldEvents.Count;
     }
 
     public async Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count, CancellationToken ct = default)
@@ -172,7 +255,7 @@ public class PrinterEventRepository : IPrinterEventRepository
         DateTimeOffset? to,
         CancellationToken ct = default)
     {
-        if (_divisionRepository == null)
+        if (_divisionRepository == null || _dataProtectionProvider == null)
         {
             throw new InvalidOperationException("Division repository is required to query printer errors.");
         }
@@ -182,7 +265,7 @@ public class PrinterEventRepository : IPrinterEventRepository
 
         foreach (var division in divisions)
         {
-            var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+            var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
             await using var db = await factory.CreateDbContextAsync(ct);
             var divisionEntries = await ApplyLimit(BuildErrorQuery(db, division.Id, division.Name, from, to), count)
                 .ToListAsync(ct);
@@ -270,6 +353,24 @@ public class PrinterEventRepository : IPrinterEventRepository
                 FriendlyMessage = e.FriendlyMessage,
                 AlertTrainingLevel = e.AlertTrainingLevel,
             });
+    }
+
+    private static IQueryable<PrinterEvent> ApplyTimestampRange(
+        IQueryable<PrinterEvent> query,
+        DateTimeOffset? from,
+        DateTimeOffset? to)
+    {
+        if (from.HasValue)
+        {
+            query = query.Where(e => e.Timestamp >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(e => e.Timestamp < to.Value);
+        }
+
+        return query;
     }
 
     private static IQueryable<PrinterActiveIncidentReportRow> BuildActiveIncidentQuery(

@@ -20,7 +20,6 @@ public class LockerOccupantConfig : IEntityTypeConfiguration<LockerOccupant>
             .HasForeignKey(x => x.LockerId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Index for efficiently querying active occupants
         b.HasIndex(x => new { x.UserId, x.UnassignedAt });
     }
 }

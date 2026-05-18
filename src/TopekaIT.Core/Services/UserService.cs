@@ -23,7 +23,24 @@ public class UserService
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password)) return null;
         var user = await _repo.GetByUsernameAsync(username.Trim(), ct);
         if (user == null) return null;
-        return PasswordHasher.Verify(password, user.PasswordHash, user.PasswordSalt) ? user : null;
+        var iterations = user.PasswordIterations > 0
+            ? user.PasswordIterations
+            : PasswordHasher.LegacyIterations;
+        if (!PasswordHasher.Verify(password, user.PasswordHash, user.PasswordSalt, iterations))
+        {
+            return null;
+        }
+
+        if (iterations < PasswordHasher.CurrentIterations)
+        {
+            var upgraded = PasswordHasher.HashWithMetadata(password);
+            user.PasswordHash = upgraded.hash;
+            user.PasswordSalt = upgraded.salt;
+            user.PasswordIterations = upgraded.iterations;
+            await _repo.UpdateAsync(user, ct);
+        }
+
+        return user;
     }
 
     public async Task MarkActiveAsync(string userId, DateTimeOffset timestamp, CancellationToken ct = default)
@@ -44,7 +61,7 @@ public class UserService
             .Max();
         var id = $"u-{(maxNum + 1):D3}";
         var avatar = BuildAvatar(name);
-        var (hash, salt) = PasswordHasher.Hash(string.IsNullOrEmpty(password) ? "changeme" : password);
+        var passwordMetadata = PasswordHasher.HashWithMetadata(string.IsNullOrEmpty(password) ? "changeme" : password);
         var user = new User
         {
             Id = id,
@@ -52,8 +69,10 @@ public class UserService
             Username = username,
             Role = role,
             Avatar = avatar,
-            PasswordHash = hash,
-            PasswordSalt = salt,
+            PasswordHash = passwordMetadata.hash,
+            PasswordSalt = passwordMetadata.salt,
+            PasswordIterations = passwordMetadata.iterations,
+            MustChangePassword = true,
             DivisionId = divisionId,
         };
         await _repo.AddAsync(user, ct);
@@ -64,9 +83,11 @@ public class UserService
     {
         if (!string.IsNullOrEmpty(newPassword))
         {
-            var (hash, salt) = PasswordHasher.Hash(newPassword);
-            user.PasswordHash = hash;
-            user.PasswordSalt = salt;
+            var passwordMetadata = PasswordHasher.HashWithMetadata(newPassword);
+            user.PasswordHash = passwordMetadata.hash;
+            user.PasswordSalt = passwordMetadata.salt;
+            user.PasswordIterations = passwordMetadata.iterations;
+            user.MustChangePassword = false;
         }
         user.Avatar = BuildAvatar(user.Name);
         await _repo.UpdateAsync(user, ct);
@@ -80,19 +101,17 @@ public class UserService
         await _repo.UpdateAsync(user, ct);
     }
 
-    /// <summary>
-    /// Resets a user's password to a randomly generated temporary password.
-    /// Returns the plaintext temp password so IT can share it with the user.
-    /// </summary>
     public async Task<string> ResetPasswordAsync(string userId, string? customPassword = null, CancellationToken ct = default)
     {
         var user = await _repo.GetByIdAsync(userId, ct);
         if (user == null) throw new InvalidOperationException("User not found.");
 
         var password = string.IsNullOrWhiteSpace(customPassword) ? GenerateTempPassword() : customPassword;
-        var (hash, salt) = PasswordHasher.Hash(password);
-        user.PasswordHash = hash;
-        user.PasswordSalt = salt;
+        var passwordMetadata = PasswordHasher.HashWithMetadata(password);
+        user.PasswordHash = passwordMetadata.hash;
+        user.PasswordSalt = passwordMetadata.salt;
+        user.PasswordIterations = passwordMetadata.iterations;
+        user.MustChangePassword = true;
         await _repo.UpdateAsync(user, ct);
         return password;
     }
@@ -108,21 +127,22 @@ public class UserService
 
     public static string GenerateTempPassword()
     {
-        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I/O ambiguity
-        const string lower = "abcdefghjkmnpqrstuvwxyz";  // no i/l/o ambiguity
-        const string digits = "23456789";                 // no 0/1 ambiguity
+        // Exclude characters that are easy to misread when IT relays a temporary password.
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lower = "abcdefghjkmnpqrstuvwxyz";
+        const string digits = "23456789";
         const string all = upper + lower + digits;
 
         var bytes = RandomNumberGenerator.GetBytes(16);
         var chars = new char[16];
-        // Guarantee at least one upper, one lower, one digit
+        // Keep generated passwords compatible with the minimum composition expected by login policy.
         chars[0] = upper[bytes[0] % upper.Length];
         chars[1] = lower[bytes[1] % lower.Length];
         chars[2] = digits[bytes[2] % digits.Length];
         for (int i = 3; i < 16; i++)
             chars[i] = all[bytes[i] % all.Length];
 
-        // Shuffle using Fisher-Yates with the remaining random bytes
+        // Shuffle the required character classes away from predictable positions.
         var shuffleBytes = RandomNumberGenerator.GetBytes(16);
         for (int i = chars.Length - 1; i > 0; i--)
         {

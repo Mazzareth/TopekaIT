@@ -9,6 +9,7 @@
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject IJSRuntime JS
 @implements IDisposable
 
 <PageTitle>@(_printer?.Name ?? "Printer") · Topeka IT</PageTitle>
@@ -83,7 +84,6 @@ else
             </div>
         }
 
-        <!-- Online / Offline timeline — last 24h -->
         <div class="card" style="margin-bottom: 16px;">
             <div class="card-head">
                 <span class="card-title">Online / Offline — last 24h</span>
@@ -106,7 +106,6 @@ else
             }
         </div>
 
-        <!-- Latency chart — last 24h -->
         <div class="card" style="margin-bottom: 16px;">
             <div class="card-head">
                 <span class="card-title">Latency (ms) — last 24h</span>
@@ -130,7 +129,6 @@ else
             }
         </div>
 
-        <!-- Current Alerts -->
         @if (_activeAlerts.Count > 0)
         {
             <div class="card" style="margin-bottom: 16px;">
@@ -166,7 +164,6 @@ else
             </div>
         }
 
-        <!-- Printer Log -->
         @if (_canViewLogs)
         {
         <div class="card">
@@ -177,48 +174,72 @@ else
                     <span style="font-size: 12px; color: var(--text-faint);">@FilteredPrinterLog().Count() / @_printerLog.Count shown</span>
                 }
             </div>
-            @if (_printerLog.Count == 0)
-            {
-                <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
-                    No printer events yet. Events will appear when TCP/UDP logs or SNMP traps are received.
+            <div class="printer-log-filter printer-detail-log-filter" @onfocusin="BeginLogFilterEdit" @onfocusout="EndLogFilterEdit">
+                <div class="seg">
+                    <button class="@(_severityFilter == "all" ? "active" : "")" @onclick='() => SetSeverityFilter("all")'>All <span class="count">@_printerLog.Count</span></button>
+                    <button class="@(_severityFilter == "error" ? "active" : "")" @onclick='() => SetSeverityFilter("error")'>Errors <span class="count">@_printerLog.Count(IsErrorEvent)</span></button>
+                    <button class="@(_severityFilter == "warning" ? "active" : "")" @onclick='() => SetSeverityFilter("warning")'>Warnings <span class="count">@_printerLog.Count(IsWarningEvent)</span></button>
+                    <button class="@(_severityFilter == "info" ? "active" : "")" @onclick='() => SetSeverityFilter("info")'>Info <span class="count">@_printerLog.Count(IsInfoEvent)</span></button>
                 </div>
-            }
-            else
-            {
-                <div class="printer-log-filter">
-                    <div class="seg">
-                        <button class="@(_severityFilter == "all" ? "active" : "")" @onclick='() => SetSeverityFilter("all")'>All <span class="count">@_printerLog.Count</span></button>
-                        <button class="@(_severityFilter == "error" ? "active" : "")" @onclick='() => SetSeverityFilter("error")'>Errors <span class="count">@_printerLog.Count(IsErrorEvent)</span></button>
-                        <button class="@(_severityFilter == "warning" ? "active" : "")" @onclick='() => SetSeverityFilter("warning")'>Warnings <span class="count">@_printerLog.Count(IsWarningEvent)</span></button>
-                        <button class="@(_severityFilter == "info" ? "active" : "")" @onclick='() => SetSeverityFilter("info")'>Info <span class="count">@_printerLog.Count(IsInfoEvent)</span></button>
-                    </div>
 
-                    <select class="inline-input printer-log-select" @bind="_eventTypeFilter">
-                        <option value="all">All event types</option>
-                        @foreach (var type in EventTypes())
-                        {
-                            <option value="@type">@type</option>
-                        }
-                    </select>
+                <select class="inline-input printer-log-select" @bind="_eventTypeFilter">
+                    <option value="all">All event types</option>
+                    @foreach (var type in EventTypes())
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
 
-                    <select class="inline-input printer-log-select" @bind="_timeFilter">
-                        <option value="all">Any time</option>
-                        <option value="15m">Last 15 min</option>
-                        <option value="1h">Last hour</option>
-                        <option value="24h">Last 24 hours</option>
-                    </select>
+                <select class="inline-input printer-log-select" @bind="_timeFilter">
+                    <option value="all">Any time</option>
+                    <option value="15m">Last 15 min</option>
+                    <option value="1h">Last hour</option>
+                    <option value="24h">Last 24 hours</option>
+                </select>
 
-                    <input class="inline-input printer-log-search"
-                           @bind="_logSearch"
-                           @bind:event="oninput"
-                           placeholder="Search message, OID, fault text..." />
+                <label class="filter-field">
+                    <span>From date</span>
+                    <input class="inline-input printer-log-date" type="date" @bind="_logStartDate" />
+                </label>
+                <label class="filter-field">
+                    <span>From time</span>
+                    <input class="inline-input printer-log-time" type="time" value="@_logStartTime" @onchange="args => _logStartTime = args.Value?.ToString() ?? string.Empty" />
+                </label>
+                <label class="filter-field">
+                    <span>To date</span>
+                    <input class="inline-input printer-log-date" type="date" @bind="_logEndDate" />
+                </label>
+                <label class="filter-field">
+                    <span>To time</span>
+                    <input class="inline-input printer-log-time" type="time" value="@_logEndTime" @onchange="args => _logEndTime = args.Value?.ToString() ?? string.Empty" />
+                </label>
 
+                <input class="inline-input printer-log-search"
+                       @bind="_logSearch"
+                       @bind:event="oninput"
+                       placeholder="Search message, OID, fault text..." />
+
+                <div class="printer-log-actions">
+                    <button class="btn btn-sm" @onclick="ApplyLogDateFilters">
+                        <Icon Name="RefreshCw" Size="12" /> Apply
+                    </button>
+                    <button class="btn btn-sm btn-accent" @onclick="ExportVisiblePrinterLogs" disabled="@(!CanExportVisiblePrinterLogs)">
+                        <Icon Name="Download" Size="12" /> @(_exportingLogs ? "Exporting" : "Export CSV")
+                    </button>
                     @if (HasActiveLogFilters())
                     {
                         <button class="btn btn-sm btn-ghost" @onclick="ClearLogFilters">Clear</button>
                     }
                 </div>
-
+            </div>
+            @if (_printerLog.Count == 0)
+            {
+                <div style="padding: 24px; text-align: center; color: var(--text-faint); font-size: 13px;">
+                    @(HasActiveLogFilters() ? "No events match the active filters." : "No printer events yet. Events will appear when TCP/UDP logs or SNMP traps are received.")
+                </div>
+            }
+            else
+            {
                 var filteredLog = FilteredPrinterLog().ToList();
                 @if (filteredLog.Count == 0)
                 {
@@ -228,15 +249,15 @@ else
                 }
                 else
                 {
-                <div class="asset-table-head" style="grid-template-columns: 100px 80px 1fr;">
-                    <div>Time</div>
+                <div class="asset-table-head" style="grid-template-columns: 160px 80px 1fr;">
+                    <div>Date / Time</div>
                     <div>Type</div>
                     <div>Message</div>
                 </div>
                 @foreach (var ev in filteredLog)
                 {
-                    <div class="asset-row" style="grid-template-columns: 100px 80px 1fr;">
-                        <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("h:mm:ss tt")</div>
+                    <div class="asset-row" style="grid-template-columns: 160px 80px 1fr;">
+                        <div class="mono" style="font-size: 12px;">@ev.Timestamp.LocalDateTime.ToString("M/d/yyyy h:mm:ss tt")</div>
                         <div>
                             <Pill Kind="@EventSeverityPill(ev.Severity)">@ev.EventType</Pill>
                         </div>
@@ -272,6 +293,12 @@ else
     string _eventTypeFilter = "all";
     string _timeFilter = "all";
     string _logSearch = "";
+    DateTime? _logStartDate;
+    DateTime? _logEndDate;
+    string _logStartTime = "00:00";
+    string _logEndTime = "23:59";
+    bool _exportingLogs;
+    bool _logFilterEditing;
     bool _canClearAlerts;
     bool _canViewLogs;
 
@@ -298,9 +325,11 @@ else
         SetupChartOptions();
         await LoadData();
 
-        // Auto-refresh every 10 seconds
+        // Pause the timer while log filters have focus so typed date and time values are not replaced mid-edit.
         _refreshTimer = new Timer(async _ =>
         {
+            if (_logFilterEditing) return;
+
             _printer = await PrinterService.GetByIdAsync(Id);
             await LoadData();
             await InvokeAsync(StateHasChanged);
@@ -365,26 +394,23 @@ else
         var now = DateTimeOffset.UtcNow;
         var from24h = now.AddHours(-24);
 
-        // Load ping samples for charts
         var samples = await PingHistory.GetSamplesAsync(Id, from24h, now);
 
-        // Build uptime windows
         _uptimeWindows = await PingHistory.GetUptimeWindowAsync(Id, TimeSpan.FromHours(24));
 
-        // Convert uptime windows to chart data points (range bar)
+        // Apex renders the uptime strip as duration-sized bars, so each window becomes a minute count.
         _uptimeDataPoints = _uptimeWindows.Select(w => new UptimeDataPoint(
             w.Start.LocalDateTime.ToString("h:mm tt"),
             (decimal)(w.End - w.Start).TotalMinutes,
             w.IsUp ? "#22c55e" : "#ef4444"
         )).ToList();
 
-        // Downsample latency: if > 2h window, use 5-min averages
         if (samples.Count > 0)
         {
             var windowHours = 24.0;
             if (windowHours > 2 && samples.Count > 100)
             {
-                // Downsample to 5-minute buckets
+                // Five-minute averages keep the 24-hour latency chart readable without hiding outages.
                 var bucketSize = TimeSpan.FromMinutes(5);
                 var buckets = samples
                     .Where(s => s.Success && s.LatencyMs.HasValue)
@@ -413,8 +439,10 @@ else
             _latencyDataPoints = new List<LatencyDataPoint>();
         }
 
-        // Load printer events
-        _printerLog = await PrinterEvents.GetByPrinterAsync(Id, 100);
+        var logCount = HasActiveLogDateRange() ? 0 : 100;
+        _printerLog = LogDateRangeInvalid()
+            ? Array.Empty<PrinterEvent>()
+            : await PrinterEvents.GetByPrinterAsync(Id, logCount, LogRangeStartUtc(), LogRangeEndExclusiveUtc());
         _activeAlerts = await PrinterEvents.GetActiveAlertsByPrinterAsync(Id);
     }
 
@@ -479,24 +507,107 @@ else
 
     void SetSeverityFilter(string filter) => _severityFilter = filter;
 
-    void ClearLogFilters()
+    async Task ApplyLogDateFilters()
+    {
+        if (LogDateRangeInvalid())
+        {
+            State.PushToast("The log end time must be after the start time.", "down");
+            return;
+        }
+
+        await LoadData();
+    }
+
+    async Task ClearLogFilters()
     {
         _severityFilter = "all";
         _eventTypeFilter = "all";
         _timeFilter = "all";
         _logSearch = "";
+        _logStartDate = null;
+        _logEndDate = null;
+        _logStartTime = "00:00";
+        _logEndTime = "23:59";
+        await LoadData();
     }
 
     bool HasActiveLogFilters() =>
         _severityFilter != "all" ||
         _eventTypeFilter != "all" ||
         _timeFilter != "all" ||
+        HasActiveLogDateRange() ||
         !string.IsNullOrWhiteSpace(_logSearch);
+
+    bool HasActiveLogDateRange() =>
+        _logStartDate.HasValue ||
+        _logEndDate.HasValue;
+
+    DateTimeOffset? LogRangeStartUtc() =>
+        TopekaIT.Web.Services.Format.LocalDateTimeUtc(_logStartDate, _logStartTime, TimeOnly.MinValue);
+
+    DateTimeOffset? LogRangeEndExclusiveUtc()
+    {
+        var end = TopekaIT.Web.Services.Format.LocalDateTimeUtc(_logEndDate, _logEndTime, new TimeOnly(23, 59));
+        return end?.AddMinutes(1);
+    }
+
+    bool LogDateRangeInvalid()
+    {
+        var from = LogRangeStartUtc();
+        var to = LogRangeEndExclusiveUtc();
+        return from.HasValue && to.HasValue && from.Value >= to.Value;
+    }
+
+    bool CanExportVisiblePrinterLogs => !_exportingLogs && _printer != null && FilteredPrinterLog().Any();
+
+    async Task ExportVisiblePrinterLogs()
+    {
+        if (_printer == null) return;
+        if (LogDateRangeInvalid())
+        {
+            State.PushToast("The log export end time must be after the start time.", "down");
+            return;
+        }
+
+        var logs = FilteredPrinterLog().ToList();
+        if (logs.Count == 0)
+        {
+            State.PushToast("No printer logs matched the active filters.", "");
+            return;
+        }
+
+        _exportingLogs = true;
+        try
+        {
+            var csv = PrinterLogCsv.BuildForPrinter(_printer, logs);
+            var fileName = $"printer-log-{SafeFilePart(_printer.Name)}-{DateTime.Now:yyyyMMdd-HHmm}.csv";
+            await JS.InvokeVoidAsync("topekaDownload.file", fileName, csv, "text/csv;charset=utf-8");
+            State.PushToast($"Exported {logs.Count} log{(logs.Count == 1 ? "" : "s")}", "up");
+        }
+        finally
+        {
+            _exportingLogs = false;
+        }
+    }
 
     static string DisplayEventMessage(PrinterEvent ev) =>
         !string.IsNullOrWhiteSpace(ev.FriendlyMessage)
             ? ev.FriendlyMessage
             : ev.RawMessage;
+
+    static string SafeFilePart(string value)
+    {
+        var safe = new string(value.Select(ch => char.IsLetterOrDigit(ch) ? ch : '-').ToArray()).Trim('-');
+        return string.IsNullOrWhiteSpace(safe) ? "printer" : safe;
+    }
+
+    void BeginLogFilterEdit() => _logFilterEditing = true;
+
+    async Task EndLogFilterEdit()
+    {
+        await Task.Delay(150);
+        _logFilterEditing = false;
+    }
 
     static bool IsErrorEvent(PrinterEvent ev) =>
         string.Equals(ev.Severity, "Error", StringComparison.OrdinalIgnoreCase) ||

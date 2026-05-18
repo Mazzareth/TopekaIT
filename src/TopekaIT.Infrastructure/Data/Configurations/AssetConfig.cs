@@ -28,7 +28,7 @@ public class AssetConfig : IEntityTypeConfiguration<Asset>
         b.Property(x => x.LockerId).HasMaxLength(16);
         b.Property(x => x.LastSeenLocation).HasMaxLength(128);
 
-        // Self-referencing for scanner pairing — NoAction required; SQL Server rejects SetNull on self-ref FKs
+        // SQL Server rejects SetNull on this self-referencing scanner-pairing relationship.
         b.HasOne(x => x.PairedAsset)
             .WithMany()
             .HasForeignKey(x => x.PairedAssetId)

@@ -164,13 +164,6 @@
     User? CurrentHolder => Asset == null ? null : Users.FirstOrDefault(u => u.Id == Asset.HolderId);
     IEnumerable<User> Workers => Users.Where(u => u.Role is AccessTier.Worker or AccessTier.Supervisor);
 
-    static string ScanCode(Asset asset)
-        => !string.IsNullOrWhiteSpace(asset.Tag)
-            ? $"tag:{asset.Tag}"
-            : !string.IsNullOrWhiteSpace(asset.Serial)
-                ? $"serial:{asset.Serial}"
-                : $"id:{asset.Id}";
-
     static string Label(Asset asset)
         => !string.IsNullOrWhiteSpace(asset.Tag)
             ? asset.Tag
@@ -202,9 +195,26 @@
         {
             <div style="display: grid; grid-template-columns: 220px 1fr; gap: 20px;">
                 <div>
-                    <QRCode Value="@ScanCode(Asset)" Big />
-                    <div style="font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 8px; text-align: center;">
-                        @ScanCode(Asset)
+                    <div style="padding:12px;background:var(--bg-sunken);border-radius:6px;display:flex;flex-direction:column;gap:8px;">
+                        <div style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text-faint);">Asset identity</div>
+                        @if (!string.IsNullOrWhiteSpace(Asset.Tag))
+                        {
+                            <div>
+                                <div style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text-faint);">Tag</div>
+                                <div class="mono" style="word-break:break-all;">@Asset.Tag</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Asset.Serial))
+                        {
+                            <div>
+                                <div style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text-faint);">Serial</div>
+                                <div class="mono" style="word-break:break-all;">@Asset.Serial</div>
+                            </div>
+                        }
+                        <div>
+                            <div style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text-faint);">Record ID</div>
+                            <div class="mono" style="font-size:11px;word-break:break-all;">@Asset.Id</div>
+                        </div>
                     </div>
                     @if (_canScanAssets)
                     {

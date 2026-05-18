@@ -15,6 +15,12 @@ public class PrinterEventService
     public Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(string printerId, int count = 100, CancellationToken ct = default)
         => _repo.GetByPrinterAsync(printerId, count, ct);
 
+    public Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(string printerId, int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default)
+        => _repo.GetByPrinterAsync(printerId, count, from, to, ct);
+
+    public Task<IReadOnlyList<PrinterLogEntry>> GetLogsAsync(IReadOnlyCollection<string> printerIds, DateTimeOffset? from, DateTimeOffset? to, int count = 0, CancellationToken ct = default)
+        => _repo.GetLogsAsync(printerIds, from, to, count, ct);
+
     public Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count = 0, CancellationToken ct = default)
         => _repo.GetErrorsAsync(count, ct);
 

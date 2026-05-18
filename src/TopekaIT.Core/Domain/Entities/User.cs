@@ -9,10 +9,11 @@ public class User
     public string Username { get; set; } = "";
     public string PasswordHash { get; set; } = "";
     public string PasswordSalt { get; set; } = "";
+    public int PasswordIterations { get; set; } = 100_000;
+    public bool MustChangePassword { get; set; }
     public AccessTier Role { get; set; }
     public string Avatar { get; set; } = "";
-    
-    // New fields for Locker Management
+
     public string? Position { get; set; }
     public string? LockerNumber { get; set; }
     public string? LockerCombo { get; set; }
@@ -21,7 +22,6 @@ public class User
     public string? DivisionId { get; set; }
     public DateTimeOffset? LastActiveAt { get; set; }
 
-    // Leave of Absence
     public bool IsOnLOA { get; set; }
     public DateTimeOffset? OnLOASince { get; set; }
     public string? OnLOAReason { get; set; }

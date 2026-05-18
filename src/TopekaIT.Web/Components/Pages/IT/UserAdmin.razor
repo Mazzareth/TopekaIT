@@ -42,6 +42,31 @@
     </div>
 
     <div class="card">
+        <div class="toolbar user-filter-toolbar">
+            <label class="field user-search-field">
+                <Icon Name="Search" Size="13" />
+                <input @bind="_searchText" @bind:event="oninput" placeholder="Search name, username, position, locker" />
+            </label>
+            @if (CanSeeMultipleDivisions)
+            {
+                <label class="field">
+                    <span class="lbl">Division</span>
+                    <select @bind="_divisionFilter">
+                        <option value="@AllDivisionsFilter">All divisions</option>
+                        <option value="@GlobalDivisionFilter">Global</option>
+                        @foreach (var division in _divisions.OrderBy(d => d.Name))
+                        {
+                            <option value="@division.Id">@division.Name</option>
+                        }
+                    </select>
+                </label>
+            }
+        </div>
+
+        @{
+            var visibleRows = FilteredRows().ToList();
+        }
+
         <div class="asset-table-head user-cols" style="@UserGridStyle">
             <label class="checkbox"><input type="checkbox" checked="@AllVisibleSelected" @onchange="ToggleAll" /></label>
             <div>Name</div>
@@ -62,8 +87,12 @@
         {
             <EmptyState IconName="Users" Title="@($"No {PageTitleText.ToLowerInvariant()} yet")">Add an account to get started.</EmptyState>
         }
+        else if (visibleRows.Count == 0)
+        {
+            <EmptyState IconName="Users" Title="No matching users">Adjust the search or division filter.</EmptyState>
+        }
 
-        @foreach (var row in _rows)
+        @foreach (var row in visibleRows)
         {
             @if (row.IsNew || row.IsEditing)
             {
@@ -145,9 +174,9 @@
             }
         }
         <div class="table-footer-integrity">
-            <span>@_rows.Count users shown</span>
-            <span>@_rows.Count(r => string.IsNullOrWhiteSpace(r.LockerNumber)) without locker</span>
-            <span>@_rows.Count(r => r.LastActiveAt == null) never active</span>
+            <span>@visibleRows.Count of @_rows.Count users shown</span>
+            <span>@visibleRows.Count(r => string.IsNullOrWhiteSpace(r.LockerNumber)) without locker</span>
+            <span>@visibleRows.Count(r => r.LastActiveAt == null) never active</span>
         </div>
     </div>
 </div>
@@ -166,31 +195,66 @@
                     <div style="font-size: 12px; color: var(--text-faint);">Inherited defaults plus user overrides</div>
                 </div>
 
-                @foreach (var group in AccessCatalog.Permissions.GroupBy(p => p.Group))
+                <div style="display: grid; gap: 10px;">
+                    <input class="inline-input"
+                           style="width: 100%;"
+                           @bind="_accessSearch"
+                           @bind:event="oninput"
+                           placeholder="Search permissions by name, key, category, or tier" />
+                    <div class="tab-row" style="overflow-x: auto; padding-bottom: 0;">
+                        @foreach (var category in AccessCategoryOptions())
+                        {
+                            <button class="tab @AccessCategoryTabClass(category)" @onclick="() => _accessCategory = category">
+                                @category
+                                <span class="mono" style="font-size: 11px; color: var(--text-faint); margin-left: 4px;">@AccessCategoryCount(category)</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @{
+                    var filteredPermissions = FilteredAccessPermissions().ToList();
+                }
+
+                @if (filteredPermissions.Count == 0)
+                {
+                    <EmptyState IconName="Search" Title="No permissions found">Adjust the search or category.</EmptyState>
+                }
+
+                @foreach (var categoryGroup in filteredPermissions.GroupBy(p => p.Group))
                 {
                     <div class="card" style="padding: 0;">
                         <div class="card-head">
-                            <span class="card-title">@group.Key</span>
+                            <span class="card-title">@categoryGroup.Key</span>
+                            <span class="mono" style="font-size: 11px; color: var(--text-faint);">@categoryGroup.Count() permissions</span>
                         </div>
-                        @foreach (var permission in group)
+                        @foreach (var tierGroup in categoryGroup.GroupBy(p => p.DefaultTier).OrderBy(g => g.Key))
                         {
-                            var isDefault = IsDefaultAllowed(_accessRow.Role, permission);
-                            var isEffective = _selectedAccess.Has(permission.Key);
-                            var overrideState = _selectedAccess.OverrideFor(permission.Key);
-                            var canMutate = CanMutatePermission(_accessRow, permission);
-                            <div class="asset-row" style="grid-template-columns: 1.5fr 90px 95px 210px; align-items: center;">
-                                <div>
-                                    <div style="font-weight: 500;">@permission.DisplayName</div>
-                                    <div class="mono" style="font-size: 11px; color: var(--text-faint);">@permission.Key</div>
-                                </div>
-                                <div><Pill Kind="@(isDefault ? "pill-info" : "pill-dim")">@(isDefault ? "Default" : "Off")</Pill></div>
-                                <div><Pill Kind="@(isEffective ? "pill-up" : "pill-dim")">@(isEffective ? "Allowed" : "Denied")</Pill></div>
-                                <div style="display: flex; justify-content: flex-end; gap: 6px;">
-                                    <button class="@OverrideButtonClass(overrideState == null)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, null)">Inherit</button>
-                                    <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Allow)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Allow)">Allow</button>
-                                    <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Deny)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Deny)">Deny</button>
-                                </div>
+                            <div style="padding: 10px 14px 4px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border-subtle);">
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-dim);">@tierGroup.Key.DisplayName() defaults</div>
+                                <div class="mono" style="font-size: 11px; color: var(--text-faint);">@tierGroup.Count() shown</div>
                             </div>
+                            @foreach (var permission in tierGroup)
+                            {
+                                var isDefault = IsDefaultAllowed(_accessRow.Role, permission);
+                                var isEffective = _selectedAccess.Has(permission.Key);
+                                var overrideState = _selectedAccess.OverrideFor(permission.Key);
+                                var canMutate = CanMutatePermission(_accessRow, permission);
+                                <div class="asset-row" style="grid-template-columns: minmax(220px, 1.5fr) 90px 95px 120px 210px; align-items: center;">
+                                    <div>
+                                        <div style="font-weight: 500;">@permission.DisplayName</div>
+                                        <div class="mono" style="font-size: 11px; color: var(--text-faint);">@permission.Key</div>
+                                    </div>
+                                    <div><Pill Kind="@(isDefault ? "pill-info" : "pill-dim")">@(isDefault ? "Default" : "Off")</Pill></div>
+                                    <div><Pill Kind="@(isEffective ? "pill-up" : "pill-dim")">@(isEffective ? "Allowed" : "Denied")</Pill></div>
+                                    <div><Pill Kind="pill-dim">@permission.GrantableTier.DisplayName()</Pill></div>
+                                    <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                                        <button class="@OverrideButtonClass(overrideState == null)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, null)">Inherit</button>
+                                        <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Allow)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Allow)">Allow</button>
+                                        <button class="@OverrideButtonClass(overrideState == PermissionOverrideState.Deny)" disabled="@(!canMutate)" @onclick="() => SetPermissionOverride(permission.Key, PermissionOverrideState.Deny)">Deny</button>
+                                    </div>
+                                </div>
+                            }
                         }
                     </div>
                 }
@@ -260,6 +324,8 @@
     AccessTier _actorTier = AccessTier.Worker;
     string _currentUserId = "";
     string? _currentDivisionId;
+    string _searchText = "";
+    string _divisionFilter = AllDivisionsFilter;
 
     bool _canCreateUsers;
     bool _canEditUsers;
@@ -271,6 +337,9 @@
     bool _accessOpen;
     UserRow? _accessRow;
     UserAccess? _selectedAccess;
+    const string AllAccessCategories = "All";
+    string _accessCategory = AllAccessCategories;
+    string _accessSearch = "";
 
     bool _showSetPassword;
     string _setPasswordInput = "";
@@ -281,11 +350,22 @@
     string _resetUserName = "";
     string _copyFeedback = "";
 
+    const string AllDivisionsFilter = "__all";
+    const string GlobalDivisionFilter = "__global";
+
     string PageTitleText => _actorTier >= AccessTier.Admin || _actorTier == AccessTier.SuperAdmin ? "Users" : "Workers";
     string UserGridStyle => _actorTier == AccessTier.SuperAdmin
         ? "grid-template-columns: 40px 1fr 1fr 120px 100px 90px 105px 70px 100px 210px;"
         : "grid-template-columns: 40px 1fr 1fr 100px 90px 105px 70px 100px 210px;";
-    bool AllVisibleSelected => _rows.Count > 0 && _rows.Where(r => !r.IsNew && !r.IsEditing).All(r => _selected.Contains(r.Id));
+    bool CanSeeMultipleDivisions => _actorTier == AccessTier.SuperAdmin;
+    bool AllVisibleSelected
+    {
+        get
+        {
+            var selectableRows = FilteredRows().Where(r => !r.IsNew && !r.IsEditing).ToList();
+            return selectableRows.Count > 0 && selectableRows.All(r => _selected.Contains(r.Id));
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -316,7 +396,6 @@
         IEnumerable<User> allUsers = await UserService.GetAllAsync();
         if (_actorTier == AccessTier.SuperAdmin)
         {
-            // Super Admin sees all users.
         }
         else if (_actorTier >= AccessTier.Admin)
         {
@@ -355,15 +434,20 @@
     void ToggleAll(ChangeEventArgs args)
     {
         var isChecked = args.Value is bool b && b;
+        var visibleIds = FilteredRows()
+            .Where(r => !r.IsNew && !r.IsEditing)
+            .Select(r => r.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         if (!isChecked)
         {
-            _selected.Clear();
+            _selected.RemoveWhere(visibleIds.Contains);
             return;
         }
 
-        foreach (var row in _rows.Where(r => !r.IsNew && !r.IsEditing))
+        foreach (var id in visibleIds)
         {
-            _selected.Add(row.Id);
+            _selected.Add(id);
         }
     }
 
@@ -377,7 +461,10 @@
     void AddRow()
     {
         if (!_canCreateUsers) return;
-        _rows.Insert(0, new UserRow { IsNew = true, Role = AccessTier.Worker, DivisionId = _currentDivisionId });
+        var divisionId = CanSeeMultipleDivisions && _divisionFilter != AllDivisionsFilter && _divisionFilter != GlobalDivisionFilter
+            ? _divisionFilter
+            : _currentDivisionId;
+        _rows.Insert(0, new UserRow { IsNew = true, Role = AccessTier.Worker, DivisionId = divisionId });
     }
 
     void EditRow(UserRow row)
@@ -483,6 +570,8 @@
         if (!_canEditAccess || !CanManageRow(row)) return;
         _accessRow = row;
         _selectedAccess = await Access.GetUserAccessAsync(row.Id);
+        _accessCategory = AllAccessCategories;
+        _accessSearch = "";
         _accessOpen = true;
     }
 
@@ -505,6 +594,8 @@
         _accessOpen = false;
         _accessRow = null;
         _selectedAccess = null;
+        _accessCategory = AllAccessCategories;
+        _accessSearch = "";
     }
 
     void ResetPassword(UserRow row)
@@ -591,6 +682,42 @@
             && CanManageRow(row)
             && AccessCatalog.IsPermissionGrantableBy(_actorTier, permission);
 
+    static IEnumerable<string> AccessCategoryOptions()
+        => new[] { AllAccessCategories }
+            .Concat(AccessCatalog.Permissions.Select(p => p.Group).Distinct().OrderBy(group => group));
+
+    int AccessCategoryCount(string category)
+        => AccessCatalog.Permissions.Count(p => AccessCategoryMatches(p, category));
+
+    string AccessCategoryTabClass(string category)
+        => string.Equals(_accessCategory, category, StringComparison.OrdinalIgnoreCase) ? "active" : "";
+
+    IEnumerable<AccessPermissionDefinition> FilteredAccessPermissions()
+    {
+        IEnumerable<AccessPermissionDefinition> permissions = AccessCatalog.Permissions
+            .Where(p => AccessCategoryMatches(p, _accessCategory));
+
+        if (!string.IsNullOrWhiteSpace(_accessSearch))
+        {
+            var search = _accessSearch.Trim();
+            permissions = permissions.Where(p =>
+                p.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || p.Key.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || p.Group.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || p.DefaultTier.DisplayName().Contains(search, StringComparison.OrdinalIgnoreCase)
+                || p.GrantableTier.DisplayName().Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return permissions
+            .OrderBy(p => p.Group)
+            .ThenBy(p => p.DefaultTier)
+            .ThenBy(p => p.DisplayName);
+    }
+
+    static bool AccessCategoryMatches(AccessPermissionDefinition permission, string category)
+        => string.Equals(category, AllAccessCategories, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(permission.Group, category, StringComparison.OrdinalIgnoreCase);
+
     static bool IsDefaultAllowed(AccessTier tier, AccessPermissionDefinition permission)
         => tier == AccessTier.SuperAdmin || tier >= permission.DefaultTier;
 
@@ -599,7 +726,6 @@
 
     static string RolePill(AccessTier role) => role switch
     {
-        AccessTier.IT => "pill-info",
         AccessTier.Admin => "pill-info",
         AccessTier.SuperAdmin => "pill-info",
         AccessTier.Supervisor => "pill-warn",
@@ -622,6 +748,41 @@
         if (string.IsNullOrWhiteSpace(divisionId)) return "Global";
         return _divisions.FirstOrDefault(d => d.Id == divisionId)?.Name ?? divisionId;
     }
+
+    IEnumerable<UserRow> FilteredRows()
+    {
+        var rows = _rows.AsEnumerable();
+
+        if (CanSeeMultipleDivisions)
+        {
+            rows = _divisionFilter switch
+            {
+                GlobalDivisionFilter => rows.Where(r => string.IsNullOrWhiteSpace(r.DivisionId)),
+                AllDivisionsFilter => rows,
+                _ => rows.Where(r => string.Equals(r.DivisionId, _divisionFilter, StringComparison.OrdinalIgnoreCase)),
+            };
+        }
+
+        var search = _searchText.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            rows = rows.Where(r => MatchesSearch(r, search));
+        }
+
+        return rows;
+    }
+
+    bool MatchesSearch(UserRow row, string search)
+        => Contains(row.Name, search)
+            || Contains(row.Username, search)
+            || Contains(row.Position, search)
+            || Contains(row.LockerNumber, search)
+            || Contains(row.Role.DisplayName(), search)
+            || Contains(DivisionName(row.DivisionId), search);
+
+    static bool Contains(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value)
+            && value.Contains(search, StringComparison.OrdinalIgnoreCase);
 
     class UserRow
     {

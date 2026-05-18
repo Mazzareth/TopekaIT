@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TopekaIT.Core.Domain.Entities;
@@ -19,6 +20,7 @@ namespace TopekaIT.Web.Services;
 public class PrinterLogSinkService : BackgroundService
 {
     private readonly IDbContextFactory<MasterDbContext> _masterFactory;
+    private readonly IDataProtectionProvider _dataProtectionProvider;
     private readonly ILogger<PrinterLogSinkService> _logger;
     private readonly int _tcpPort;
     private readonly int _udpPort;
@@ -29,9 +31,14 @@ public class PrinterLogSinkService : BackgroundService
     private static readonly TimeSpan PartialMessageFlushInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan PrinterMapRefreshInterval = TimeSpan.FromMinutes(5);
 
-    public PrinterLogSinkService(IDbContextFactory<MasterDbContext> masterFactory, ILogger<PrinterLogSinkService> logger, IConfiguration configuration)
+    public PrinterLogSinkService(
+        IDbContextFactory<MasterDbContext> masterFactory,
+        IDataProtectionProvider dataProtectionProvider,
+        ILogger<PrinterLogSinkService> logger,
+        IConfiguration configuration)
     {
         _masterFactory = masterFactory;
+        _dataProtectionProvider = dataProtectionProvider;
         _logger = logger;
         var defaultPort = configuration.GetValue<int>("PrinterLogSink:Port", 4010);
         _tcpPort = configuration.GetValue("PrinterLogSink:TcpPort", defaultPort);
@@ -72,7 +79,7 @@ public class PrinterLogSinkService : BackgroundService
                         break;
                     }
 
-                    // Handle each connection in a fire-and-forget task
+                    // Keep accepting printer connections while each stream drains independently.
                     _ = HandleClientAsync(client, stoppingToken);
                 }
             }
@@ -154,7 +161,6 @@ public class PrinterLogSinkService : BackgroundService
             {
                 await using var stream = client.GetStream();
 
-                // Resolve printer by IP
                 var route = await ResolvePrinterAsync(remoteIp, ct);
                 if (route == null)
                 {
@@ -164,7 +170,7 @@ public class PrinterLogSinkService : BackgroundService
                 }
 
                 await ReadMessagesAsync(stream, route, ct);
-            } // end using (client)
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -224,7 +230,7 @@ public class PrinterLogSinkService : BackgroundService
 
             foreach (var division in divisions)
             {
-                var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+                var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
                 var printers = await new PrinterRepository(factory).GetAllAsync(ct);
                 foreach (var printer in printers.Where(p => PrinterModels.SupportsLogging(p.Model) && !string.IsNullOrWhiteSpace(p.IpAddress)))
                 {
@@ -342,7 +348,7 @@ public class PrinterLogSinkService : BackgroundService
 
         try
         {
-            var eventRepo = new PrinterEventRepository(new DirectDivisionDbContextFactory(route.ConnectionString));
+            var eventRepo = new PrinterEventRepository(new DirectDivisionDbContextFactory(route.ConnectionString, _dataProtectionProvider));
             await eventRepo.AddAsync(ev, ct);
             _logger.LogInformation("Captured printer log event for {PrinterId}: {EventType} {Message}", route.PrinterId, eventType, message);
         }
@@ -390,7 +396,6 @@ public class PrinterLogSinkService : BackgroundService
     /// </summary>
     private static (string EventType, string? Severity, string Message) ParseLine(string line)
     {
-        // Try to detect severity keywords
         string? severity = null;
         string eventType = "Info";
 

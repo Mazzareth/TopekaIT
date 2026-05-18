@@ -6,6 +6,8 @@ public interface IPrinterEventRepository
 {
     Task AddAsync(PrinterEvent ev, CancellationToken ct = default);
     Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(string printerId, int count, CancellationToken ct = default);
+    Task<IReadOnlyList<PrinterEvent>> GetByPrinterAsync(string printerId, int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
+    Task<IReadOnlyList<PrinterLogEntry>> GetLogsAsync(IReadOnlyCollection<string> printerIds, DateTimeOffset? from, DateTimeOffset? to, int count = 0, CancellationToken ct = default);
     Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count, CancellationToken ct = default);
     Task<IReadOnlyList<PrinterErrorLogEntry>> GetErrorsAsync(int count, DateTimeOffset? from, DateTimeOffset? to, CancellationToken ct = default);
     Task<IReadOnlyList<PrinterErrorLogEntry>> GetAllDivisionErrorsAsync(int count, CancellationToken ct = default);
@@ -20,4 +22,5 @@ public interface IPrinterEventRepository
     Task<IReadOnlyList<PrinterActiveIncidentReportRow>> GetAllDivisionActiveIncidentsAsync(CancellationToken ct = default);
     Task SetAlertBlipSuppressedAsync(string printerId, string alertKey, bool suppressed, CancellationToken ct = default);
     Task ClearAlertAsync(string printerId, string alertKey, CancellationToken ct = default);
+    Task<int> PurgeEventsOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
 }

@@ -17,12 +17,10 @@ public class PrinterConfig : IEntityTypeConfiguration<Printer>
         b.Property(x => x.IpAddress).HasMaxLength(64);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(16);
 
-        // Derived live state
         b.Property(x => x.LastPingAt).HasColumnType("datetimeoffset");
         b.Property(x => x.LastLatencyMs);
         b.Property(x => x.ConsecutiveFailures).HasDefaultValue(0);
 
-        // T8000 sysinfo fields
         b.Property(x => x.SerialNumber).HasMaxLength(64);
         b.Property(x => x.FirmwareVersion).HasMaxLength(64);
         b.Property(x => x.MacAddress).HasMaxLength(32);

@@ -1,4 +1,3 @@
-# Deploy.ps1
 $RemoteServer = "10.36.155.64"
 $RemotePath = "C:\Topeka Portal"
 $ServiceName = "ItPortal"

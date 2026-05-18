@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TopekaIT.Core.Domain.Entities;
 using TopekaIT.Core.Domain.Enums;
+using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
@@ -17,6 +18,8 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
         b.HasIndex(x => x.Username).IsUnique();
         b.Property(x => x.PasswordHash).HasMaxLength(128).IsRequired();
         b.Property(x => x.PasswordSalt).HasMaxLength(128).IsRequired();
+        b.Property(x => x.PasswordIterations).HasDefaultValue(100_000);
+        b.Property(x => x.MustChangePassword).HasDefaultValue(false);
         b.Property(x => x.Role)
             .HasConversion(
                 v => v.ToString(),
@@ -24,9 +27,9 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
             .HasMaxLength(32);
         b.Property(x => x.Avatar).HasMaxLength(8);
         b.Property(x => x.Position).HasMaxLength(64);
-        // Locker fields kept for backward-compat read; data migrated to Locker entity
+        // Legacy locker fields remain readable while current assignments live on Locker entities.
         b.Property(x => x.LockerNumber).HasMaxLength(16);
-        b.Property(x => x.LockerCombo).HasMaxLength(32);
+        b.Property(x => x.LockerCombo).HasMaxLength(ComboProtection.ProtectedComboMaxLength);
         b.Property(x => x.LockSerialNumber).HasMaxLength(64);
         b.Property(x => x.DivisionId).HasMaxLength(64);
         b.Property(x => x.LastActiveAt).HasColumnType("datetimeoffset");

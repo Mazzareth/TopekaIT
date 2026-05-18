@@ -45,11 +45,43 @@ window.topekaCommand = {
     }
 };
 
+window.topekaPrinterCommand = {
+    _ref: null,
+    register(ref) {
+        window.topekaPrinterCommand._ref = ref;
+    },
+    focus(el) {
+        if (!el) return;
+        window.requestAnimationFrame(() => el.focus());
+    }
+};
+
+window.topekaDownload = {
+    file(fileName, content, contentType) {
+        const blob = new Blob([content], { type: contentType || "application/octet-stream" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    }
+};
+
 window.addEventListener("keydown", event => {
     const isCommand = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k";
-    if (!isCommand || !window.topekaCommand._ref) return;
-    event.preventDefault();
-    window.topekaCommand._ref.invokeMethodAsync("OpenFromKeyboard");
+    const isPrinterCommand = (event.ctrlKey || event.metaKey) && event.code === "Backquote";
+    if (isCommand && window.topekaCommand._ref) {
+        event.preventDefault();
+        window.topekaCommand._ref.invokeMethodAsync("OpenFromKeyboard");
+    }
+
+    if (isPrinterCommand && window.topekaPrinterCommand._ref) {
+        event.preventDefault();
+        window.topekaPrinterCommand._ref.invokeMethodAsync("OpenFromKeyboard");
+    }
 });
 
 // Blazor enhanced navigation diffs the <html> element's attributes back to

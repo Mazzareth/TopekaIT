@@ -10,13 +10,13 @@
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
 
-<PageTitle>My requests · Topeka IT</PageTitle>
+<PageTitle>@PageTitleText · Topeka IT</PageTitle>
 
 <div class="page">
     <div class="page-head">
         <div>
-            <h1>My requests</h1>
-            <div class="page-sub">Everything you've sent to IT, newest first.</div>
+            <h1>@PageTitleText</h1>
+            <div class="page-sub">@PageSubtitle</div>
         </div>
         @if (_canCreateTickets)
         {
@@ -58,11 +58,20 @@
     List<Asset> _assets = new();
     string _userId = "";
     bool _canCreateTickets;
+    bool _canViewDivisionRequests;
+
+    string PageTitleText => _canViewDivisionRequests ? "Requests" : "My requests";
+    string PageSubtitle => _canViewDivisionRequests
+        ? "Crew requests across this division, newest first."
+        : "Everything you've sent to IT, newest first.";
 
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var currentUser = string.IsNullOrWhiteSpace(_userId) ? null : await UserService.GetByIdAsync(_userId);
+        var currentTier = currentUser?.Role ?? AccessTierExtensions.ParseTierOrWorker(auth.User.FindFirst(ClaimTypes.Role)?.Value);
+        _canViewDivisionRequests = CanViewDivisionRequests(currentTier);
         _canCreateTickets = await Access.HasPermissionAsync(_userId, AccessPermissionKeys.TicketsCreate);
         await Load();
     }
@@ -70,7 +79,7 @@
     async Task Load()
     {
         var all = await TicketService.GetAllAsync();
-        _mine = all.Where(t => t.ReportedById == _userId).OrderByDescending(t => t.UpdatedAt).ToList();
+        _mine = ScopeRequestsForUser(all, _userId, _canViewDivisionRequests);
         _users = (await UserService.GetAllAsync()).ToList();
         _printers = (await PrinterService.GetAllAsync()).ToList();
         _assets = (await AssetService.GetAllAsync()).ToList();
@@ -89,4 +98,14 @@
     {
         await Load();
     }
+
+    public static bool CanViewDivisionRequests(AccessTier tier)
+        => tier >= AccessTier.Supervisor;
+
+    public static List<Ticket> ScopeRequestsForUser(IEnumerable<Ticket> tickets, string userId, bool canViewDivisionRequests)
+        => (canViewDivisionRequests
+                ? tickets
+                : tickets.Where(t => t.ReportedById == userId))
+            .OrderByDescending(t => t.UpdatedAt)
+            .ToList();
 }

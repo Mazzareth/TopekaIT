@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using TopekaIT.Core.Ports;
 using ApexCharts;
@@ -33,11 +34,17 @@ public class Program
 
         builder.Services.AddControllersWithViews();
         builder.Services.AddHttpContextAccessor();
+        builder.Services.AddHealthChecks();
+        builder.Services.AddDataProtection()
+            .SetApplicationName("TopekaITPortal");
 
         builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {
                 options.Cookie.Name = "TopekaAuth";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Lax;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
                 options.LoginPath = "/login";
                 options.LogoutPath = "/auth/logout";
                 options.AccessDeniedPath = "/login";
@@ -67,9 +74,11 @@ public class Program
         builder.Services.AddScoped<LockerService>();
         builder.Services.AddScoped<TicketService>();
         builder.Services.AddScoped<ActivityService>();
+        builder.Services.AddScoped<RmaService>();
         builder.Services.AddScoped<PingHistoryService>();
         builder.Services.AddScoped<PrinterEventService>();
         builder.Services.AddScoped<PrinterSetupService>();
+        builder.Services.AddSingleton<PrintNetCommandCatalog>();
         builder.Services.AddScoped<LantronixDeviceService>();
         builder.Services.AddSingleton<IPrinterSetupTelnetClient, PrinterSetupTelnetClient>();
         builder.Services.AddSingleton<ILantronixFuelClient, LantronixFuelClient>();
@@ -109,6 +118,8 @@ public class Program
 
         app.MapStaticAssets();
         app.MapControllers();
+        app.MapHealthChecks("/health/live");
+        app.MapHealthChecks("/health/ready");
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
 
@@ -121,12 +132,13 @@ public class Program
             }
 
             var divisionRepo = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+            var dataProtectionProvider = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>();
             foreach (var division in await divisionRepo.GetAllAsync())
             {
                 var options = new DbContextOptionsBuilder<TopekaDbContext>()
                     .UseSqlServer(division.ConnectionString, sql => sql.CommandTimeout(120))
                     .Options;
-                await using var divisionDb = new TopekaDbContext(options);
+                await using var divisionDb = new TopekaDbContext(options, dataProtectionProvider);
                 await DataSeeder.SeedDivisionAsync(divisionDb);
             }
         }

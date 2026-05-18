@@ -1,0 +1,719 @@
+@implements IAsyncDisposable
+@inject AppState State
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthProvider
+@inject ITenantContext TenantContext
+@inject AccessControlService Access
+@inject DivisionService Divisions
+@inject PrinterService Printers
+@inject IPrinterSetupTelnetClient Telnet
+@inject PrinterSetupSettings Settings
+@inject PrintNetCommandCatalog Catalog
+
+@if (State.PrinterCommandPaletteOpen)
+{
+    <div class="cmdk-backdrop" @onclick="CloseAsync">
+        <section class="cmdk cmdk--printer" role="dialog" aria-modal="true" aria-label="Printer telnet command palette" @onclick:stopPropagation="true">
+            <div class="cmdk__input">
+                <Icon Name="Key" Size="14" />
+                @if (_session == null)
+                {
+                    <input @ref="_input"
+                           value="@_printerQuery"
+                           @oninput="OnPrinterQueryChanged"
+                           @onkeydown="HandlePrinterKeyDown"
+                           placeholder="Choose printer for telnet session..."
+                           autocomplete="off" />
+                }
+                else
+                {
+                    <input @ref="_input"
+                           value="@_commandText"
+                           @oninput="OnCommandTextChanged"
+                           @onkeydown="HandleCommandKeyDown"
+                           placeholder="Search or type PrintNet command..."
+                           autocomplete="off" />
+                }
+                <kbd>ctrl `</kbd>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="cmdk__empty">Loading printer session.</div>
+            }
+            else if (!_authorized)
+            {
+                <div class="cmdk__empty">Printer telnet commands are limited to Admin and Super Admin.</div>
+            }
+            else if (!_tenantReady)
+            {
+                <div class="cmdk__empty">Enter a division before opening a printer telnet session.</div>
+            }
+            else if (_session == null)
+            {
+                @if (!string.IsNullOrWhiteSpace(_status))
+                {
+                    <div class="cmdk__notice">@_status</div>
+                }
+
+                @if (FilteredPrinters.Count == 0)
+                {
+                    <div class="cmdk__empty">No printers match this search.</div>
+                }
+                else
+                {
+                    <div class="cmdk__section">@TenantContext.DivisionId printers</div>
+                    @foreach (var row in FilteredPrinters.Select((Printer, Index) => new { Printer, Index }))
+                    {
+                        <button type="button"
+                                class="@RowClass(row.Index, _printerIndex)"
+                                aria-selected="@(row.Index == _printerIndex)"
+                                disabled="@_busy"
+                                @onclick="() => ConnectAsync(row.Printer)">
+                            <span class="cmdk__type @PrinterTone(row.Printer)">Prn</span>
+                            <span>@PrinterLabel(row.Printer)</span>
+                            <span class="cmdk__sub">@row.Printer.IpAddress · @row.Printer.Department · @row.Printer.Model</span>
+                        </button>
+                    }
+                }
+            }
+            else
+            {
+                <div class="cmdk__session">
+                    <div>
+                        <strong>@PrinterLabel(_connectedPrinter)</strong>
+                        <span>@_connectedPrinter?.IpAddress</span>
+                    </div>
+                    <label class="cmdk__toggle">
+                        <input type="checkbox" @bind="_allowProtected" />
+                        <span>Protected writes</span>
+                    </label>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_status))
+                {
+                    <div class="cmdk__notice">@_status</div>
+                }
+
+                <div class="cmdk__section">Quick actions</div>
+                @foreach (var action in QuickActions)
+                {
+                    <button type="button"
+                            class="cmdk__row"
+                            disabled="@_busy"
+                            @onclick="() => RunQuickActionAsync(action)">
+                        <span class="cmdk__type is-info">Act</span>
+                        <span>@action.Name</span>
+                        <span class="cmdk__sub">@action.Description</span>
+                    </button>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_commandText))
+                {
+                    var assessment = Catalog.Classify(_commandText);
+                    <div class="cmdk__assessment @AssessmentClass(assessment)">
+                        <span>@assessment.Access</span>
+                        <span>@assessment.Reason</span>
+                    </div>
+                }
+
+                @if (CommandRows.Count > 0)
+                {
+                    <div class="cmdk__section">PrintNet commands</div>
+                    @foreach (var row in CommandRows.Select((Command, Index) => new { Command, Index }))
+                    {
+                        <button type="button"
+                                class="@RowClass(row.Index, _commandIndex)"
+                                aria-selected="@(row.Index == _commandIndex)"
+                                disabled="@_busy"
+                                @onclick="() => UseCommandAsync(row.Command)">
+                            <span class="cmdk__type @CommandTone(row.Command.Access)">@CommandShort(row.Command.Access)</span>
+                            <span>@row.Command.Command</span>
+                            <span class="cmdk__sub">@row.Command.Description</span>
+                        </button>
+                    }
+                }
+
+                @if (_history.Count > 0)
+                {
+                    <div class="cmdk__section">Session output</div>
+                    <div class="cmdk__output">
+                        @foreach (var entry in _history)
+                        {
+                            <article class="cmdk__output-entry @(entry.Success ? "is-ok" : "is-failed")">
+                                <div>
+                                    <span class="mono">@entry.Command</span>
+                                    <span>@(entry.Success ? "success" : "failed") · @entry.Timestamp.LocalDateTime.ToString("HH:mm:ss")</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(entry.Output))
+                                {
+                                    <pre>@entry.Output.Trim()</pre>
+                                }
+                            </article>
+                        }
+                    </div>
+                }
+            }
+        </section>
+    </div>
+}
+
+@code {
+    ElementReference _input;
+    DotNetObjectReference<PrinterCommandPalette>? _ref;
+    Division? _division;
+    Printer? _connectedPrinter;
+    IPrinterSetupTelnetSession? _session;
+    bool _loaded;
+    bool _loading;
+    bool _busy;
+    bool _authorized;
+    bool _tenantReady;
+    bool _allowProtected;
+    bool _lastCommandWasListDiff;
+    string _printerQuery = "";
+    string _commandText = "";
+    string _status = "";
+    int _printerIndex;
+    int _commandIndex;
+    List<Printer> _printers = new();
+    List<PrinterCommandHistory> _history = new();
+    const int PrinterNameMaxLength = 128;
+    static readonly IReadOnlyList<PrinterQuickActionDefinition> QuickActions = new[]
+    {
+        new PrinterQuickActionDefinition(
+            PrinterQuickAction.SetNameFromDescription,
+            "Get and Set Printer Name",
+            "Reads sysinfo description and updates the portal printer name."),
+    };
+
+    List<Printer> FilteredPrinters => _printers
+        .Where(p => PrinterMatches(p, _printerQuery))
+        .OrderBy(p => p.Name)
+        .Take(18)
+        .ToList();
+
+    List<PrintNetCommandDefinition> CommandRows => Catalog.Commands
+        .Where(c => c.Access != PrintNetCommandAccess.Excluded)
+        .Where(c => CommandMatches(c, _commandText))
+        .OrderBy(c => c.Access)
+        .ThenBy(c => c.Command)
+        .Take(14)
+        .ToList();
+
+    protected override void OnInitialized()
+    {
+        State.OnChange += OnStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("topekaPrinterCommand.register", _ref);
+        }
+
+        if (State.PrinterCommandPaletteOpen)
+        {
+            if (!_loaded && !_loading)
+            {
+                await LoadAsync();
+            }
+
+            await JS.InvokeVoidAsync("topekaPrinterCommand.focus", _input);
+        }
+    }
+
+    void OnStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (State.PrinterCommandPaletteOpen && !_loaded && !_loading)
+            {
+                await LoadAsync();
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public void OpenFromKeyboard() => State.OpenPrinterCommandPalette();
+
+    async Task LoadAsync()
+    {
+        _loading = true;
+        _status = "";
+        StateHasChanged();
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var access = await Access.GetUserAccessAsync(userId);
+        _authorized = access?.Tier >= AccessTier.Admin;
+        var divisionId = TenantContext.DivisionId;
+        _tenantReady = TenantContext.IsResolved && !string.IsNullOrWhiteSpace(divisionId);
+
+        if (_authorized && _tenantReady)
+        {
+            _division = await Divisions.GetByIdAsync(divisionId!);
+            _printers = (await Printers.GetAllAsync()).ToList();
+            _tenantReady = _division != null;
+        }
+
+        _printerIndex = 0;
+        _commandIndex = 0;
+        _loaded = true;
+        _loading = false;
+        ClampPrinterSelection();
+    }
+
+    void OnPrinterQueryChanged(ChangeEventArgs args)
+    {
+        _printerQuery = args.Value?.ToString() ?? "";
+        _printerIndex = 0;
+        ClampPrinterSelection();
+    }
+
+    void OnCommandTextChanged(ChangeEventArgs args)
+    {
+        _commandText = args.Value?.ToString() ?? "";
+        _commandIndex = 0;
+        ClampCommandSelection();
+    }
+
+    async Task HandlePrinterKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+        else if (args.Key == "ArrowDown")
+        {
+            MovePrinterSelection(1);
+        }
+        else if (args.Key == "ArrowUp")
+        {
+            MovePrinterSelection(-1);
+        }
+        else if (args.Key == "Enter" && SelectedPrinter() is { } printer)
+        {
+            await ConnectAsync(printer);
+        }
+    }
+
+    async Task HandleCommandKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+        else if (args.Key == "ArrowDown")
+        {
+            MoveCommandSelection(1);
+        }
+        else if (args.Key == "ArrowUp")
+        {
+            MoveCommandSelection(-1);
+        }
+        else if (args.Key == "Enter")
+        {
+            if (!string.IsNullOrWhiteSpace(_commandText) && !IsCommandTemplate(_commandText))
+            {
+                await RunCommandAsync(_commandText);
+            }
+            else if (SelectedCommand() is { } definition)
+            {
+                await UseCommandAsync(definition);
+            }
+        }
+    }
+
+    async Task ConnectAsync(Printer printer)
+    {
+        if (_division == null || _busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _status = $"Opening telnet session to {PrinterLabel(printer)}.";
+        StateHasChanged();
+
+        var timeout = TimeSpan.FromMilliseconds(Math.Max(Settings.TimeoutMs, 1000));
+        var login = await Telnet.TryLoginAsync(printer.IpAddress, Settings.TelnetPort, "root", "", timeout);
+        if (!login.Success)
+        {
+            var password = PrinterSetupService.BuildDivisionPassword(_division);
+            if (!string.IsNullOrWhiteSpace(password))
+            {
+                login = await Telnet.TryLoginAsync(printer.IpAddress, Settings.TelnetPort, "root", password, timeout);
+            }
+        }
+
+        if (!login.Success || login.Session == null)
+        {
+            _status = login.ErrorMessage ?? "Telnet login failed.";
+            _busy = false;
+            return;
+        }
+
+        _session = login.Session;
+        _connectedPrinter = printer;
+        _commandText = "list sysinfo";
+        _status = "Session open. Safe read commands can run immediately.";
+        _history.Insert(0, new("connect", true, $"Connected to {printer.IpAddress}.", DateTimeOffset.UtcNow));
+        _busy = false;
+    }
+
+    async Task UseCommandAsync(PrintNetCommandDefinition definition)
+    {
+        _commandText = definition.Command;
+        _commandIndex = 0;
+
+        if (IsCommandTemplate(definition.Command))
+        {
+            _status = "Fill in the placeholders before running this command.";
+            return;
+        }
+
+        await RunCommandAsync(definition.Command);
+    }
+
+    async Task RunQuickActionAsync(PrinterQuickActionDefinition action)
+    {
+        switch (action.Action)
+        {
+            case PrinterQuickAction.SetNameFromDescription:
+                await ApplyPrinterDescriptionNameAsync();
+                break;
+        }
+    }
+
+    async Task ApplyPrinterDescriptionNameAsync()
+    {
+        if (_session == null || _connectedPrinter == null || _busy)
+        {
+            return;
+        }
+
+        var assessment = Catalog.Classify("list sysinfo");
+        if (!CanRun(assessment, out var blockReason))
+        {
+            _status = blockReason;
+            return;
+        }
+
+        _busy = true;
+        _status = "Reading printer sysinfo description.";
+        StateHasChanged();
+
+        try
+        {
+            var output = await _session.SendCommandAsync(assessment.NormalizedCommand);
+            var success = !LooksLikeFailure(output);
+            _history.Insert(0, new(assessment.NormalizedCommand, success, output, DateTimeOffset.UtcNow));
+
+            if (!success)
+            {
+                _status = "list sysinfo returned a failure response; printer name was not changed.";
+                return;
+            }
+
+            var rawPrinterName = PrinterSetupService.ParseSysInfoValue(output, "Description")?.Trim();
+            var printerName = NormalizePrinterName(rawPrinterName);
+            if (string.IsNullOrWhiteSpace(printerName))
+            {
+                _status = "No description value was found in sysinfo; printer name was not changed.";
+                return;
+            }
+
+            var printer = await Printers.GetByIdAsync(_connectedPrinter.Id);
+            if (printer == null)
+            {
+                _status = "Portal printer record was not found; printer name was not changed.";
+                return;
+            }
+
+            var previousName = PrinterLabel(printer);
+            if (string.Equals(printer.Name?.Trim(), printerName, StringComparison.Ordinal))
+            {
+                _status = $"Portal printer name is already {printerName}.";
+                _connectedPrinter = printer;
+                ReplacePrinterRow(printer);
+                return;
+            }
+
+            printer.Name = printerName;
+            await Printers.UpdateAsync(printer);
+            _connectedPrinter = printer;
+            ReplacePrinterRow(printer);
+            var lengthNote = rawPrinterName?.Length > PrinterNameMaxLength ? " Description was trimmed to 128 characters." : "";
+            _status = $"Updated portal printer name: {previousName} -> {printerName}.{lengthNote}";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _history.Insert(0, new(assessment.NormalizedCommand, false, ex.Message, DateTimeOffset.UtcNow));
+            _status = "Quick action failed.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    async Task RunCommandAsync(string command)
+    {
+        if (_session == null || _busy)
+        {
+            return;
+        }
+
+        var assessment = Catalog.Classify(command);
+        if (!CanRun(assessment, out var blockReason))
+        {
+            _status = blockReason;
+            return;
+        }
+
+        _busy = true;
+        _status = $"Running {assessment.NormalizedCommand}.";
+        StateHasChanged();
+
+        try
+        {
+            var output = await _session.SendCommandAsync(assessment.NormalizedCommand);
+            var success = !LooksLikeFailure(output);
+            _history.Insert(0, new(assessment.NormalizedCommand, success, output, DateTimeOffset.UtcNow));
+            _status = success ? "Command completed." : "Command returned a failure response.";
+            _lastCommandWasListDiff = assessment.NormalizedCommand == "list diff";
+            if (assessment.NormalizedCommand == "save")
+            {
+                _allowProtected = false;
+                _lastCommandWasListDiff = false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _history.Insert(0, new(assessment.NormalizedCommand, false, ex.Message, DateTimeOffset.UtcNow));
+            _status = "Command failed.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    void ReplacePrinterRow(Printer printer)
+    {
+        var index = _printers.FindIndex(p => p.Id == printer.Id);
+        if (index >= 0)
+        {
+            _printers[index] = printer;
+        }
+    }
+
+    bool CanRun(PrintNetCommandAssessment assessment, out string reason)
+    {
+        reason = "";
+        if (assessment.Access == PrintNetCommandAccess.Safe)
+        {
+            return true;
+        }
+
+        if (assessment.Access == PrintNetCommandAccess.Excluded)
+        {
+            reason = assessment.Reason;
+            return false;
+        }
+
+        if (!_allowProtected)
+        {
+            reason = "Protected writes require enabling the Protected writes gate.";
+            return false;
+        }
+
+        if (assessment.NormalizedCommand == "save" && !_lastCommandWasListDiff)
+        {
+            reason = "Run list diff before save so the pending changes are visible first.";
+            return false;
+        }
+
+        return true;
+    }
+
+    async Task CloseAsync()
+    {
+        _printerQuery = "";
+        _commandText = "";
+        _status = "";
+        _history.Clear();
+        _loaded = false;
+        _busy = false;
+        _allowProtected = false;
+        _lastCommandWasListDiff = false;
+        _connectedPrinter = null;
+        if (_session != null)
+        {
+            await _session.DisposeAsync();
+            _session = null;
+        }
+
+        State.ClosePrinterCommandPalette();
+    }
+
+    void MovePrinterSelection(int direction)
+    {
+        var count = FilteredPrinters.Count;
+        if (count == 0)
+        {
+            _printerIndex = 0;
+            return;
+        }
+
+        _printerIndex = (_printerIndex + direction + count) % count;
+    }
+
+    void MoveCommandSelection(int direction)
+    {
+        var count = CommandRows.Count;
+        if (count == 0)
+        {
+            _commandIndex = 0;
+            return;
+        }
+
+        _commandIndex = (_commandIndex + direction + count) % count;
+    }
+
+    Printer? SelectedPrinter()
+    {
+        var printers = FilteredPrinters;
+        if (printers.Count == 0)
+        {
+            return null;
+        }
+
+        ClampPrinterSelection(printers.Count);
+        return printers[_printerIndex];
+    }
+
+    PrintNetCommandDefinition? SelectedCommand()
+    {
+        var commands = CommandRows;
+        if (commands.Count == 0)
+        {
+            return null;
+        }
+
+        ClampCommandSelection(commands.Count);
+        return commands[_commandIndex];
+    }
+
+    void ClampPrinterSelection(int? count = null)
+    {
+        var itemCount = count ?? FilteredPrinters.Count;
+        _printerIndex = itemCount == 0 ? 0 : Math.Clamp(_printerIndex, 0, itemCount - 1);
+    }
+
+    void ClampCommandSelection(int? count = null)
+    {
+        var itemCount = count ?? CommandRows.Count;
+        _commandIndex = itemCount == 0 ? 0 : Math.Clamp(_commandIndex, 0, itemCount - 1);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        State.OnChange -= OnStateChanged;
+        _ref?.Dispose();
+        if (_session != null)
+        {
+            await _session.DisposeAsync();
+        }
+    }
+
+    static bool PrinterMatches(Printer printer, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        var haystack = $"{printer.Name} {printer.IpAddress} {printer.Department} {printer.Model}";
+        return haystack.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool CommandMatches(PrintNetCommandDefinition command, string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return command.Access == PrintNetCommandAccess.Safe;
+        }
+
+        var haystack = $"{command.Command} {command.Category} {command.Description}";
+        return haystack.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || CommandPaletteSearch.Score(query, command.Command, command.Category, command.Description, CommandShort(command.Access), haystack) > 0;
+    }
+
+    static bool IsCommandTemplate(string command) =>
+        command.Contains('[', StringComparison.Ordinal)
+        || command.Contains('<', StringComparison.Ordinal)
+        || command.Contains('|', StringComparison.Ordinal);
+
+    static bool LooksLikeFailure(string output) =>
+        output.Contains("invalid", StringComparison.OrdinalIgnoreCase)
+        || output.Contains("unknown", StringComparison.OrdinalIgnoreCase)
+        || output.Contains("failed", StringComparison.OrdinalIgnoreCase)
+        || output.Contains("error", StringComparison.OrdinalIgnoreCase)
+        || output.Contains("syntax", StringComparison.OrdinalIgnoreCase)
+        || output.Contains("usage", StringComparison.OrdinalIgnoreCase);
+
+    static string NormalizePrinterName(string? name)
+    {
+        var trimmed = name?.Trim() ?? "";
+        return trimmed.Length <= PrinterNameMaxLength ? trimmed : trimmed[..PrinterNameMaxLength];
+    }
+
+    static string PrinterLabel(Printer? printer) =>
+        printer == null ? "Printer" : string.IsNullOrWhiteSpace(printer.Name) ? printer.IpAddress : printer.Name;
+
+    static string PrinterTone(Printer printer) => printer.Status switch
+    {
+        PrinterStatus.Down => "is-critical",
+        PrinterStatus.Warn => "is-warning",
+        _ => "is-ok",
+    };
+
+    static string CommandShort(PrintNetCommandAccess access) => access switch
+    {
+        PrintNetCommandAccess.Protected => "Wr",
+        PrintNetCommandAccess.Excluded => "No",
+        _ => "Rd",
+    };
+
+    static string CommandTone(PrintNetCommandAccess access) => access switch
+    {
+        PrintNetCommandAccess.Protected => "is-warning",
+        PrintNetCommandAccess.Excluded => "is-critical",
+        _ => "is-ok",
+    };
+
+    static string AssessmentClass(PrintNetCommandAssessment assessment) => assessment.Access switch
+    {
+        PrintNetCommandAccess.Safe => "is-safe",
+        PrintNetCommandAccess.Protected => "is-protected",
+        _ => "is-excluded",
+    };
+
+    static string RowClass(int index, int selectedIndex) =>
+        index == selectedIndex ? "cmdk__row is-selected" : "cmdk__row";
+
+    enum PrinterQuickAction
+    {
+        SetNameFromDescription,
+    }
+
+    sealed record PrinterQuickActionDefinition(PrinterQuickAction Action, string Name, string Description);
+
+    sealed record PrinterCommandHistory(string Command, bool Success, string Output, DateTimeOffset Timestamp);
+}

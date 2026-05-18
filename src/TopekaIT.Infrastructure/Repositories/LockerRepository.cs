@@ -45,4 +45,73 @@ public class LockerRepository : ILockerRepository
         db.Lockers.Update(locker);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<(Locker? Locker, bool AddedOccupant)> AssignOccupantAsync(
+        string lockerId,
+        string userId,
+        bool isPrimary,
+        string actorId,
+        DateTimeOffset assignedAt,
+        CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+
+        var locker = await db.Lockers.FirstOrDefaultAsync(l => l.Id == lockerId, ct);
+        if (locker == null) return (null, false);
+
+        var activeAssignments = await db.LockerOccupants
+            .Where(o => o.UserId == userId && o.UnassignedAt == null)
+            .ToListAsync(ct);
+
+        var targetAssignment = activeAssignments.FirstOrDefault(o => o.LockerId == lockerId);
+        foreach (var otherAssignment in activeAssignments.Where(o => o.LockerId != lockerId))
+        {
+            otherAssignment.UnassignedAt = assignedAt;
+            otherAssignment.UnassignedBy = actorId;
+        }
+
+        var addedOccupant = false;
+        if (targetAssignment == null)
+        {
+            db.LockerOccupants.Add(new LockerOccupant
+            {
+                LockerId = lockerId,
+                UserId = userId,
+                IsPrimary = isPrimary,
+                AssignedAt = assignedAt,
+                AssignedBy = actorId,
+            });
+            addedOccupant = true;
+        }
+        else
+        {
+            targetAssignment.IsPrimary = isPrimary;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return (locker, addedOccupant);
+    }
+
+    public async Task<Locker?> UnassignOccupantAsync(
+        string lockerId,
+        string userId,
+        string actorId,
+        DateTimeOffset unassignedAt,
+        CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+
+        var locker = await db.Lockers.FirstOrDefaultAsync(l => l.Id == lockerId, ct);
+        if (locker == null) return null;
+
+        var occupant = await db.LockerOccupants
+            .FirstOrDefaultAsync(o => o.LockerId == lockerId && o.UserId == userId && o.UnassignedAt == null, ct);
+        if (occupant == null) return null;
+
+        occupant.UnassignedAt = unassignedAt;
+        occupant.UnassignedBy = actorId;
+
+        await db.SaveChangesAsync(ct);
+        return locker;
+    }
 }

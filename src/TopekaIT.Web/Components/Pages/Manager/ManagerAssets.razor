@@ -39,7 +39,6 @@
         </div>
     </div>
 
-    @* Scan dock — universal S/N lookup *@
     <div class="scan-dock">
         <span class="scan-dock-label">Scan / S/N</span>
         <input @ref="_scanInput" @bind="_scanValue" @bind:event="oninput"
@@ -60,7 +59,6 @@
         }
     </div>
 
-    @* Tab row *@
     <div class="tab-row">
         <button class="tab @(_tab == "lockers" ? "active" : "")" @onclick='() => _tab = "lockers"'>
             <Icon Name="Locker" Size="13" /> Lockers
@@ -131,7 +129,6 @@
                         </div>
 
                         <div class="locker-body">
-                            @* Occupant *@
                             <div class="locker-occupant">
                                 @if (occupantUser != null)
                                 {
@@ -147,7 +144,6 @@
                                 }
                             </div>
 
-                            @* Devices in this locker *@
                             <div class="locker-device-list">
                                 @{
                                     var saes     = lockerAssets.Where(a => a.Category == AssetCategory.SaeDevice).ToList();
@@ -214,7 +210,6 @@
     }
     else
     {
-        @* Table view for non-locker tabs *@
         <div class="toolbar">
             <div class="seg">
                 <button class="@(_statusFilter == "all" ? "active" : "")" @onclick='() => _statusFilter = "all"'>
@@ -238,7 +233,7 @@
         </div>
 
         <div class="card" style="margin-top:2px;">
-            <div class="asset-table-head" style="grid-template-columns:120px 90px 1fr 72px 160px 110px 140px;">
+            <div class="asset-table-head" style="grid-template-columns:150px 90px minmax(110px, .55fr) 72px 160px 110px 140px;">
                 <div>Tag / S/N</div>
                 <div>Type</div>
                 <div>Model</div>
@@ -260,16 +255,18 @@
                 {
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
                     <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags)"
-                         style="grid-template-columns:120px 90px 1fr 72px 160px 110px 140px;"
+                         style="grid-template-columns:150px 90px minmax(110px, .55fr) 72px 160px 110px 140px;"
                          @onclick="() => Open(a, null)">
-                        <div class="mono">@PrimaryTag(a)</div>
-                        <div>@Format.CategoryLabel(a.Category)</div>
                         <div>
-                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
-                            @if (!string.IsNullOrWhiteSpace(a.Serial))
+                            <div class="mono">@PrimaryTag(a)</div>
+                            @if (!string.IsNullOrWhiteSpace(a.Serial) && a.Serial != PrimaryTag(a))
                             {
                                 <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
                             }
+                        </div>
+                        <div>@Format.CategoryLabel(a.Category)</div>
+                        <div>
+                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
                         </div>
                         <div>
                             @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
@@ -320,13 +317,11 @@
     }
 </div>
 
-@* Modals *@
 <AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="() => _viewing = null" OnChanged="Load" />
 <AssetEditor Open="_createOpen" PrefillSerial="_prefillSerial" OnClose="CloseEditor" OnChanged="Load" />
 <ScanModal Open="_camScanOpen" OnClose="() => _camScanOpen = false" OnMatch="OnCamScanMatch" />
 <RfidScanModal Open="_rfidScanOpen" OnClose="() => _rfidScanOpen = false" OnMatch="OnRfidScanMatch" />
 
-@* Scanner pairing modal *@
 @if (_pairingScanner != null)
 {
     <div class="modal-backdrop" @onclick="() => _pairingScanner = null">
@@ -360,7 +355,6 @@
     </div>
 }
 
-@* Locker editor modal *@
 @if (_editingLocker != null)
 {
     <div class="modal-backdrop" @onclick="() => _editingLocker = null">
@@ -462,7 +456,14 @@
     async Task FocusScanDock()
     {
         if (!_canScanAssets) return;
-        try { await _scanInput.FocusAsync(); } catch { /* JS not yet ready */ }
+        try
+        {
+            await _scanInput.FocusAsync();
+        }
+        catch
+        {
+            // The element reference is not available until the scan dock has rendered.
+        }
     }
 
     async Task OnScanKey(KeyboardEventArgs e)
@@ -471,7 +472,7 @@
         var val = _scanValue.Trim();
         if (string.IsNullOrWhiteSpace(val)) return;
 
-        // Locker QR format: "LCK-{number}" or "locker:{number}"
+        // Locker QR labels accept both the printed short code and the older typed prefix format.
         var lockerNum = ExtractLockerNumber(val);
         if (lockerNum != null)
         {
@@ -611,8 +612,6 @@
         await Load();
     }
 
-    // -- Locker helpers --
-
     List<Locker> FilteredLockers()
     {
         IEnumerable<Locker> q = _lockers;
@@ -653,8 +652,6 @@
         if (assets.Any())                                          return "all-available";
         return "";
     }
-
-    // -- Table helpers --
 
     List<Asset> TabAssets() => _tab switch
     {

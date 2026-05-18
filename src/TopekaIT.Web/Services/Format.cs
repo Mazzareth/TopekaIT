@@ -5,8 +5,6 @@ namespace TopekaIT.Web.Services;
 
 public static class Format
 {
-    // ---- StatusFlags helpers ----
-
     public static string SimpleState(StatusFlags f)
     {
         if (f.HasFlag(StatusFlags.Missing))            return "Missing";
@@ -111,6 +109,18 @@ public static class Format
         return LocalDateEndExclusiveUtc(DateOnly.FromDateTime(value.Value));
     }
 
+    public static DateTimeOffset? LocalDateTimeUtc(DateTime? date, string? time, TimeOnly fallbackTime)
+    {
+        if (!date.HasValue) return null;
+
+        var localDate = DateOnly.FromDateTime(date.Value);
+        var localTime = TryParseLocalTime(time, out var parsedTime)
+            ? parsedTime
+            : fallbackTime;
+        var local = localDate.ToDateTime(localTime);
+        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUniversalTime();
+    }
+
     private static DateTimeOffset LocalDateStartUtc(DateOnly date)
     {
         var local = date.ToDateTime(TimeOnly.MinValue);
@@ -130,6 +140,14 @@ public static class Format
             CultureInfo.InvariantCulture,
             DateTimeStyles.None,
             out date);
+
+    private static bool TryParseLocalTime(string? value, out TimeOnly time)
+        => TimeOnly.TryParseExact(
+            value,
+            new[] { "HH:mm", "HH:mm:ss" },
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out time);
 
     public static string StatusLabel(TicketStatus s) => s switch
     {

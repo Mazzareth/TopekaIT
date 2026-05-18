@@ -3,7 +3,7 @@ namespace TopekaIT.Core.Domain.Entities;
 public class AuditSession
 {
     public string Id { get; set; } = "";
-    public string ConductedBy { get; set; } = "";  // UserId
+    public string ConductedBy { get; set; } = "";
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? Notes { get; set; }

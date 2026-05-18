@@ -6,6 +6,7 @@
 @inject IDivisionRepository DivisionRepo
 @inject NavigationManager Nav
 @inject AccessControlService Access
+@inject UserService Users
 
 @if (_ready)
 {
@@ -17,6 +18,7 @@
             @Body
         </main>
         <CommandPalette />
+        <PrinterCommandPalette />
         <ToastContainer />
     </div>
 }
@@ -35,6 +37,20 @@
         State.OnChange += Rerender;
 
         var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
+        var path = new Uri(Nav.Uri).AbsolutePath;
+        if (!string.IsNullOrWhiteSpace(userId)
+            && !path.StartsWith("/change-password", StringComparison.OrdinalIgnoreCase)
+            && !path.StartsWith("/auth/logout", StringComparison.OrdinalIgnoreCase))
+        {
+            var currentUser = await Users.GetByIdAsync(userId);
+            if (currentUser?.MustChangePassword == true)
+            {
+                Nav.NavigateTo("/change-password");
+                return;
+            }
+        }
+
         var divisionId = auth.User.FindFirst("division")?.Value;
         if (string.IsNullOrWhiteSpace(divisionId))
         {
@@ -51,8 +67,6 @@
         }
         else
         {
-            var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
-            var path = new Uri(Nav.Uri).AbsolutePath;
             if (await Access.HasPermissionAsync(userId, AccessPermissionKeys.AdminView)
                 && !path.StartsWith("/admin", StringComparison.OrdinalIgnoreCase))
             {

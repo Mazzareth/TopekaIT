@@ -28,7 +28,7 @@ public class AccountController : Controller
         return Redirect(tier switch
         {
             AccessTier.SuperAdmin => "/admin",
-            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Admin => "/it",
             AccessTier.Supervisor => "/manager",
             _ => "/worker",
         });
@@ -54,11 +54,17 @@ public class AccountController : Controller
             new("name", user.Name),
             new("avatar", user.Avatar),
             new("division", user.DivisionId ?? ""),
+            new("must_change_password", user.MustChangePassword ? "true" : "false"),
             new(ClaimTypes.Role, user.Role.ToString()),
         };
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         var principal = new ClaimsPrincipal(identity);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties { IsPersistent = true });
+
+        if (user.MustChangePassword)
+        {
+            return Redirect("/change-password");
+        }
 
         if (!string.IsNullOrEmpty(ReturnUrl) && Url.IsLocalUrl(ReturnUrl))
         {
@@ -67,7 +73,7 @@ public class AccountController : Controller
         return Redirect(user.Role switch
         {
             AccessTier.SuperAdmin => "/admin",
-            AccessTier.IT or AccessTier.Admin => "/it",
+            AccessTier.Admin => "/it",
             AccessTier.Supervisor => "/manager",
             _ => "/worker",
         });

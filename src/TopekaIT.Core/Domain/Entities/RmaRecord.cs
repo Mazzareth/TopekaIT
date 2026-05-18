@@ -17,7 +17,6 @@ public class RmaRecord
     public bool IsTagged { get; set; }
     public bool IsLost { get; set; }
     public DateTimeOffset? DateTagged { get; set; }
-    
-    // Navigation property if needed
+
     public Asset? Asset { get; set; }
 }

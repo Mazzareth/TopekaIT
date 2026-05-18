@@ -4,6 +4,7 @@ using System.Text;
 using Lextm.SharpSnmpLib;
 using Lextm.SharpSnmpLib.Messaging;
 using Lextm.SharpSnmpLib.Security;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TopekaIT.Core.Domain.Entities;
@@ -20,6 +21,7 @@ namespace TopekaIT.Web.Services;
 public class PrinterSnmpTrapSinkService : BackgroundService
 {
     private readonly IDbContextFactory<MasterDbContext> _masterFactory;
+    private readonly IDataProtectionProvider _dataProtectionProvider;
     private readonly ILogger<PrinterSnmpTrapSinkService> _logger;
     private readonly bool _enabled;
     private readonly int _port;
@@ -35,10 +37,12 @@ public class PrinterSnmpTrapSinkService : BackgroundService
 
     public PrinterSnmpTrapSinkService(
         IDbContextFactory<MasterDbContext> masterFactory,
+        IDataProtectionProvider dataProtectionProvider,
         ILogger<PrinterSnmpTrapSinkService> logger,
         IConfiguration configuration)
     {
         _masterFactory = masterFactory;
+        _dataProtectionProvider = dataProtectionProvider;
         _logger = logger;
         _enabled = configuration.GetValue("PrinterSnmpTrapSink:Enabled", true);
         _port = configuration.GetValue("PrinterSnmpTrapSink:Port", 162);
@@ -169,7 +173,7 @@ public class PrinterSnmpTrapSinkService : BackgroundService
 
         try
         {
-            var eventRepo = new PrinterEventRepository(new DirectDivisionDbContextFactory(route.ConnectionString));
+            var eventRepo = new PrinterEventRepository(new DirectDivisionDbContextFactory(route.ConnectionString, _dataProtectionProvider));
             await eventRepo.AddAsync(ev, ct);
             _logger.LogInformation("Captured SNMP trap event for {PrinterId}: {EventType} {Message}", route.PrinterId, eventType, rawMessage);
         }
@@ -209,7 +213,7 @@ public class PrinterSnmpTrapSinkService : BackgroundService
 
             foreach (var division in divisions)
             {
-                var factory = new DirectDivisionDbContextFactory(division.ConnectionString);
+                var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
                 var printers = await new PrinterRepository(factory).GetAllAsync(ct);
                 foreach (var printer in printers.Where(p => PrinterModels.SupportsLogging(p.Model) && !string.IsNullOrWhiteSpace(p.IpAddress)))
                 {

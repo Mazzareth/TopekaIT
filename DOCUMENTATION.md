@@ -4,7 +4,7 @@ This document provides a comprehensive overview of the `6IA-IT-Portal` solution.
 
 ## Project Structure
 
-The solution (`6IA-IT-Portal.slnx`) is divided into three main projects:
+The solution (`6IA-IT-Portal.slnx`) is divided into four main projects:
 
 ### 1. TopekaIT.Core (`src/TopekaIT.Core`)
 This is the heart of the application, containing all domain rules and business logic.
@@ -22,10 +22,13 @@ This layer handles external concerns, primarily data persistence.
 ### 3. TopekaIT.Web (`src/TopekaIT.Web`)
 This is the user interface and web host for the portal.
 - **Components**: Shared Blazor components and `Layout` elements.
-- **Pages**: Role-specific UI views organized by function: `Admin`, `IT`, `Manager`, and `Worker`.
+- **Pages**: Role-specific UI views organized by function: `Admin`, `IT`, `Manager`, and `Worker`. User-facing access tiers are `Super Admin`, `Admin`, `Supervisor`, and `Worker`; legacy `IT` data is normalized to `Admin`.
 - **Controllers**: API endpoints for client-side or external interactions.
 - **Services**: Web-specific services (e.g., hosted background services, UI state management).
 - **wwwroot**: Static assets including JavaScript (`js`), CSS, and images.
+
+### 4. TopekaIT.DeploymentChecker (`src/TopekaIT.DeploymentChecker`)
+This is a local WPF helper for checking local development/deployment status and running deployment support actions. It is not part of the Blazor web runtime, but it is included in the solution and should be built/tested with repo-wide verification.
 
 ## Architecture & Principles
 - **Clean Architecture**: Domain rules live purely in `Core`. Persistence details (EF Core) are strictly contained within `Infrastructure`. Web hosting and UI concerns are isolated to `Web`.
@@ -39,6 +42,12 @@ This is the user interface and web host for the portal.
 - **Build**: `dotnet build 6IA-IT-Portal.slnx`
 - **Run Application**: `dotnet run --project src/TopekaIT.Web/TopekaIT.Web.csproj`
 - **Run Tests**: `dotnet test` (Tests should be placed in the `tests/` directory and follow the `SubjectUnder_ExpectedBehavior` naming convention).
+- **Health Checks**: `/health/live` and `/health/ready` are mapped by the web host for quick operational checks.
+- **Printer Telnet Palette**: `Ctrl+\`` opens the PrintNet command palette inside a resolved division. It is limited to Admin/Super Admin users and only runs commands approved by the PrintNet command catalog.
+
+### Human-Visible IDs
+
+Going forward, records shown directly to managers should use a short prefix plus short identifier pattern, for example `T-0001`, `p-01`, `u-001`, or `ev-abc123`. Existing mixed IDs can remain for now where migrations would add risk, but new manager-facing records should avoid full GUIDs unless the GUID is strictly internal.
 
 ### Database Migrations Workflow
 
@@ -68,3 +77,5 @@ dotnet ef migrations add <Name> --context TopekaDbContext --output-dir Data/Migr
 - Do not commit production credentials.
 - Use `appsettings.Development.json` for local environments.
 - Use environment variables or user secrets for sensitive configurations.
+- Rotate any credential that was previously committed, even after the file is removed from the repository.
+- Current LAN deployment remains HTTP-compatible; authentication cookies use `HttpOnly`, `SameSite=Lax`, and `SecurePolicy=SameAsRequest` until HTTPS/cert deployment is ready.

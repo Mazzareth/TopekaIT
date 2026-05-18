@@ -5,6 +5,7 @@ public class AppState
     public string Theme { get; private set; } = "light";
     public bool NavCollapsed { get; private set; }
     public bool CommandPaletteOpen { get; private set; }
+    public bool PrinterCommandPaletteOpen { get; private set; }
 
     public List<Toast> Toasts { get; } = new();
 
@@ -26,6 +27,7 @@ public class AppState
     public void OpenCommandPalette()
     {
         if (CommandPaletteOpen) return;
+        PrinterCommandPaletteOpen = false;
         CommandPaletteOpen = true;
         NotifyChanged();
     }
@@ -39,7 +41,23 @@ public class AppState
 
     public void ToggleCommandPalette()
     {
+        PrinterCommandPaletteOpen = false;
         CommandPaletteOpen = !CommandPaletteOpen;
+        NotifyChanged();
+    }
+
+    public void OpenPrinterCommandPalette()
+    {
+        if (PrinterCommandPaletteOpen) return;
+        CommandPaletteOpen = false;
+        PrinterCommandPaletteOpen = true;
+        NotifyChanged();
+    }
+
+    public void ClosePrinterCommandPalette()
+    {
+        if (!PrinterCommandPaletteOpen) return;
+        PrinterCommandPaletteOpen = false;
         NotifyChanged();
     }
 

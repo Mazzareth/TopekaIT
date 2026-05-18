@@ -1,5 +1,11 @@
 # IT Portal — Implementation Plan
 
+## Current Remediation Track — May 14, 2026
+
+The active rollout is the multi-division remediation pass, not a new A-H feature batch. It standardizes user-facing roles to `Super Admin`, `Admin`, `Supervisor`, and `Worker`; fixes supervisor request visibility; narrows worker ticket asset selection; improves users/access search; retires the fake QR visual; hardens password and locker-combo handling; adds retention and health endpoints; and adds an Admin/Super Admin PrintNet telnet command palette based on the provided PrintNet manual.
+
+For this pass, use `todo.md` as the worker assignment ledger. Each agent is scoped to one numbered task and reports blockers to the Coordinator.
+
 Eight features total. A–D are device/ticket workflow improvements. E–H are the manager layer (Aubrey/Alex priority).
 
 Features build loosely in order: A and B are independent. C depends on B being stable. D is independent. E–H are all independent of A–D but share the autocomplete pattern introduced in B.

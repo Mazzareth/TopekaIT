@@ -430,8 +430,8 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("LockCombo")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("LockSerial")
                         .HasMaxLength(64)

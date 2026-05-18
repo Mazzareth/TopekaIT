@@ -354,7 +354,7 @@
             <div class="snapshot">
                 <div class="metric">
                     <strong>4 workspaces</strong>
-                    <span>Worker, Supervisor, IT/Admin, and Super Admin views.</span>
+                    <span>Worker, Supervisor, Admin, and Super Admin views.</span>
                 </div>
                 <div class="metric">
                     <strong>Live ops focus</strong>
@@ -374,13 +374,13 @@
                 <strong>Current state:</strong> the application has implemented user-facing workflows
                 for request tracking, printer monitoring, asset management, locker and loaner handling,
                 admin reporting, and Lantronix device polling. This handout describes the application
-                as of May 8, 2026 from the current project files.
+                as of May 14, 2026 from the current project files.
             </div>
         </div>
 
         <div class="footer">
             <span>Prepared for non-technical review</span>
-            <span>May 8, 2026</span>
+            <span>May 14, 2026</span>
         </div>
     </section>
 
@@ -411,14 +411,14 @@
                         <td>Look up employees, review crew requests, manage locker visibility, inspect assets, issue loaners, and watch devices needing attention.</td>
                     </tr>
                     <tr>
-                        <td><strong>IT and Admin</strong></td>
+                        <td><strong>Admin</strong></td>
                         <td>Operations</td>
-                        <td>Run the control room, work the ticket queue, maintain printers, manage users, inspect assets, and configure access.</td>
+                        <td>Run the control room, work the ticket queue, maintain printers, manage users, inspect assets, configure access, and run approved printer telnet commands.</td>
                     </tr>
                     <tr>
                         <td><strong>Super Admin</strong></td>
                         <td>Administration</td>
-                        <td>Create and enter divisions, run cross-division printer reports, update division settings, and review Lantronix devices.</td>
+                        <td>Create and enter divisions, run cross-division printer reports, update division settings, review Lantronix devices, and support division printer command sessions.</td>
                     </tr>
                 </tbody>
             </table>
@@ -489,9 +489,10 @@
                     <p>Printer pages are health-first, with attention on down printers, warnings, latency, and current alerts.</p>
                     <ul>
                         <li>Workers and managers can view printer status and report a printer issue.</li>
-                        <li>IT can add, edit, and remove printers when permitted.</li>
+                        <li>Admin users can add, edit, and remove printers when permitted.</li>
                         <li>Printer models are catalog-backed, with T8000 as the default model.</li>
                         <li>Auto setup supports test-first bulk discovery and run-all configuration.</li>
+                        <li>Approved PrintNet telnet commands are searchable from a protected Ctrl-` palette.</li>
                         <li>Printer error logs keep friendly messages plus raw detail when needed.</li>
                     </ul>
                     <div class="route">Main views: Printer Status, Printer Admin, Printer Detail</div>
@@ -502,9 +503,9 @@
                     <p>User management covers account basics plus operational fields needed by supervisors and IT.</p>
                     <ul>
                         <li>Accounts track name, username, position, division, locker number, audit status, and last active time.</li>
-                        <li>Admins can reset passwords when allowed.</li>
+                        <li>Admins can reset passwords when allowed and first-login password changes can be required.</li>
                         <li>Role tiers control default access.</li>
-                        <li>The access catalog allows per-user permission overrides.</li>
+                        <li>The access catalog is organized by category and tier, with per-user permission overrides.</li>
                     </ul>
                     <div class="route">Main views: Users, Workers, Access Catalog</div>
                 </div>
@@ -568,7 +569,7 @@
 
                 <div class="card slate">
                     <h3>IT Control Room</h3>
-                    <p>IT gets a high-signal operations dashboard across tickets, printers, assets, and recent activity.</p>
+                    <p>Admins get a high-signal operations dashboard across tickets, printers, assets, and recent activity.</p>
                     <ul>
                         <li>Scope controls for 1 hour, 24 hours, 7 days, and 30 days.</li>
                         <li>Open ticket count, urgent/high priority counts, printer attention, assets out, and average close time.</li>
@@ -630,6 +631,8 @@
                         <li>Printer health is checked on a recurring cadence.</li>
                         <li>Ping history powers printer latency and trend displays.</li>
                         <li>SNMP trap and printer log ingestion support alert and error views.</li>
+                        <li>Retention cleanup trims older printer events, ping samples, and Lantronix samples while preserving active alert state.</li>
+                        <li>Health endpoints at /health/live and /health/ready support basic operational checks.</li>
                         <li>Lantronix polling stores samples for charts and recent readings.</li>
                     </ul>
                 </div>
@@ -667,7 +670,7 @@
                     <span class="dot warn"></span>
                     <div>
                         <h3>Needs live-data confirmation</h3>
-                        <p>Before broad rollout, verify real division users, real printer alert behavior, real asset records, role permissions, Lantronix device readings, and final server configuration with production-like data.</p>
+                        <p>Before broad rollout, verify real division users, real printer alert behavior, real asset records, role permissions, Lantronix device readings, printer telnet command behavior, and final server configuration with production-like data.</p>
                     </div>
                 </div>
                 <div class="status-row">

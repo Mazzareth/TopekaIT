@@ -12,7 +12,7 @@ public class AssetService
     private readonly IAssetRepository _repo;
     private readonly ActivityService _activity;
 
-    // Flags that are mutually exclusive as "primary location/state"
+    // Only one primary location or workflow state should be set at a time.
     private static readonly StatusFlags[] PrimaryFlags =
     [
         StatusFlags.InLocker, StatusFlags.InCC, StatusFlags.WithHolder,
@@ -155,13 +155,12 @@ public class AssetService
         }
     }
 
-    /// <summary>Set a StatusFlags primary flag, clearing conflicting primary flags first.</summary>
     public async Task SetFlagsAsync(string assetId, StatusFlags flagsToSet, StatusFlags flagsToClear, string actorName, CancellationToken ct = default)
     {
         var a = await _repo.GetByIdAsync(assetId, ct);
         if (a == null) return;
 
-        // If setting a primary flag, clear all other primaries
+        // External callers may set modifiers and primary flags in the same call; primary flags still remain exclusive.
         foreach (var primary in PrimaryFlags)
         {
             if (flagsToSet.HasFlag(primary))
@@ -317,10 +316,6 @@ public class AssetService
     public Task<IEnumerable<Asset>> GetSparePoolAsync(CancellationToken ct = default) => _repo.GetSparePoolAsync(ct);
     public Task<IEnumerable<LoanRecord>> GetActiveLoansAsync(CancellationToken ct = default) => _repo.GetActiveLoansAsync(ct);
 
-    /// <summary>
-    /// Derives a simple three-state label from StatusFlags for the Supervisor view.
-    /// Returns: "Available", "In Use", "Loaned", or "Attention".
-    /// </summary>
     public static string GetSimpleState(StatusFlags flags)
     {
         if (flags.HasFlag(StatusFlags.InRMA) ||
@@ -338,8 +333,6 @@ public class AssetService
 
         return "Available";
     }
-
-    // -- helpers --
 
     private static void SetPrimaryFlag(Asset a, StatusFlags newPrimary)
     {

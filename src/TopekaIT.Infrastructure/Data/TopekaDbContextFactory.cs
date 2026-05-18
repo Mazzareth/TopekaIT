@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -12,6 +13,6 @@ public class TopekaDbContextFactory : IDesignTimeDbContextFactory<TopekaDbContex
                 sql => sql.CommandTimeout(120))
             .Options;
 
-        return new TopekaDbContext(options);
+        return new TopekaDbContext(options, new EphemeralDataProtectionProvider());
     }
 }

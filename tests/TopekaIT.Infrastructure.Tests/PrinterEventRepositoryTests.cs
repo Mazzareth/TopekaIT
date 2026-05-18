@@ -17,7 +17,7 @@ public class PrinterEventRepositoryTests
             .UseInMemoryDatabase($"printer-incidents-{Guid.NewGuid()}")
             .Options;
 
-        await using (var db = new TopekaDbContext(options))
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
         {
             db.Printers.AddRange(
                 Printer("recent", "Recent Printer"),
@@ -45,7 +45,8 @@ public class PrinterEventRepositoryTests
         var repo = new PrinterEventRepository(
             new TestDivisionDbContextFactory(options),
             new TestDivisionRepository(),
-            new TestTenantContext());
+            new TestTenantContext(),
+            TestDataProtection.Provider);
 
         var incidents = await repo.GetActiveIncidentsAsync();
         var historicalErrors = await repo.GetErrorsAsync(0, now.AddDays(-7), now.AddDays(-4));
@@ -58,12 +59,113 @@ public class PrinterEventRepositoryTests
         Assert.Equal("old", historicalError.PrinterId);
     }
 
+    [Fact]
+    public async Task PurgeEventsOlderThanAsync_RemovesOnlyRawEventsAndKeepsAlertStates()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"printer-event-retention-{Guid.NewGuid()}")
+            .Options;
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            db.Printers.Add(Printer("recent", "Recent Printer"));
+            db.PrinterEvents.AddRange(
+                new PrinterEvent { Id = 1, PrinterId = "recent", Timestamp = now.AddDays(-31), EventType = "Error", RawMessage = "old", Severity = "Error" },
+                new PrinterEvent { Id = 2, PrinterId = "recent", Timestamp = now.AddDays(-1), EventType = "Error", RawMessage = "recent", Severity = "Error" });
+            db.PrinterAlertStates.Add(Alert(1, "recent", "ACTIVE_ALERT", now));
+            await db.SaveChangesAsync();
+        }
+
+        var repo = new PrinterEventRepository(new TestDivisionDbContextFactory(options));
+
+        var purged = await repo.PurgeEventsOlderThanAsync(now.AddDays(-30));
+
+        await using var verify = new TopekaDbContext(options, TestDataProtection.Provider);
+        Assert.Equal(1, purged);
+        Assert.Single(verify.PrinterEvents);
+        Assert.Single(verify.PrinterAlertStates);
+    }
+
+    [Fact]
+    public async Task GetByPrinterAsync_AppliesDateRangeBeforeLimit()
+    {
+        var now = new DateTimeOffset(2026, 5, 14, 18, 0, 0, TimeSpan.Zero);
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"printer-event-range-{Guid.NewGuid()}")
+            .Options;
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            db.Printers.AddRange(
+                Printer("target", "Target Printer"),
+                Printer("other", "Other Printer"));
+            db.PrinterEvents.AddRange(
+                Event(1, "target", now.AddHours(-3), "outside old"),
+                Event(2, "target", now.AddMinutes(-90), "first in range"),
+                Event(3, "target", now.AddMinutes(-45), "second in range"),
+                Event(4, "target", now.AddMinutes(-10), "outside recent"),
+                Event(5, "other", now.AddMinutes(-60), "other printer"));
+            await db.SaveChangesAsync();
+        }
+
+        var repo = new PrinterEventRepository(new TestDivisionDbContextFactory(options));
+
+        var events = await repo.GetByPrinterAsync("target", 0, now.AddHours(-2), now.AddMinutes(-30));
+        var limited = await repo.GetByPrinterAsync("target", 1, now.AddHours(-2), now.AddMinutes(-30));
+
+        Assert.Equal(new long[] { 3, 2 }, events.Select(e => e.Id));
+        var limitedEvent = Assert.Single(limited);
+        Assert.Equal(3, limitedEvent.Id);
+    }
+
+    [Fact]
+    public async Task GetLogsAsync_ReturnsSelectedPrintersWithinDateRange()
+    {
+        var now = new DateTimeOffset(2026, 5, 14, 18, 0, 0, TimeSpan.Zero);
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"printer-log-export-{Guid.NewGuid()}")
+            .Options;
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            db.Printers.AddRange(
+                Printer("p1", "Dock Printer"),
+                Printer("p2", "Freezer Printer"),
+                Printer("p3", "Office Printer"));
+            db.PrinterEvents.AddRange(
+                Event(1, "p1", now.AddMinutes(-90), "old enough"),
+                Event(2, "p1", now.AddMinutes(-20), "dock message"),
+                Event(3, "p2", now.AddMinutes(-10), "freezer message"),
+                Event(4, "p3", now.AddMinutes(-5), "not selected"));
+            await db.SaveChangesAsync();
+        }
+
+        var repo = new PrinterEventRepository(new TestDivisionDbContextFactory(options));
+
+        var logs = await repo.GetLogsAsync(new[] { "p1", "p2" }, now.AddMinutes(-30), now);
+
+        Assert.Equal(new long[] { 3, 2 }, logs.Select(e => e.Id));
+        Assert.Contains(logs, e => e.PrinterName == "Dock Printer" && e.RawMessage == "dock message");
+        Assert.Contains(logs, e => e.PrinterName == "Freezer Printer" && e.RawMessage == "freezer message");
+    }
+
     private static Printer Printer(string id, string name) => new()
     {
         Id = id,
         Name = name,
         Department = "Dock",
         IpAddress = $"10.0.0.{id.Length}",
+    };
+
+    private static PrinterEvent Event(long id, string printerId, DateTimeOffset timestamp, string message) => new()
+    {
+        Id = id,
+        PrinterId = printerId,
+        Timestamp = timestamp,
+        EventType = "Info",
+        RawMessage = message,
+        Severity = "Info",
     };
 
     private static PrinterAlertState Alert(long id, string printerId, string alertKey, DateTimeOffset lastSeenAt, bool suppressed = false) => new()
@@ -92,7 +194,7 @@ public class PrinterEventRepositoryTests
         }
 
         public Task<TopekaDbContext> CreateDbContextAsync(CancellationToken ct = default) =>
-            Task.FromResult(new TopekaDbContext(_options));
+            Task.FromResult(new TopekaDbContext(_options, TestDataProtection.Provider));
     }
 
     private sealed class TestDivisionRepository : IDivisionRepository

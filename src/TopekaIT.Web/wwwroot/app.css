@@ -1,4 +1,4 @@
-/* Local IT — utilitarian control panel */
+/* Local IT control panel theme. */
 :root {
   --bg: #f6f6f4;
   --bg-raised: #fbfaf6;
@@ -92,7 +92,7 @@ input:focus, textarea:focus, select:focus {
 textarea { resize: vertical; min-height: 80px; font-family: inherit; }
 a { color: inherit; text-decoration: none; }
 
-/* ---------- App shell ---------- */
+/* App shell. */
 .app {
   display: grid;
   grid-template-columns: 200px 1fr;
@@ -236,7 +236,7 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: 0.05em;
 }
 
-/* ---------- Sidebar ---------- */
+/* Sidebar navigation. */
 .sidebar {
   background: var(--panel);
   border-right: 1px solid var(--border);
@@ -308,7 +308,7 @@ a { color: inherit; text-decoration: none; }
 }
 .app.nav-collapsed .theme-toggle { flex-direction: column; }
 
-/* ---------- Main ---------- */
+/* Main content layout. */
 .main {
   overflow-y: auto;
   padding: 20px 24px 60px;
@@ -338,7 +338,7 @@ a { color: inherit; text-decoration: none; }
 }
 .page-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
-/* ---------- Buttons ---------- */
+/* Buttons. */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 30px;
@@ -373,7 +373,7 @@ a { color: inherit; text-decoration: none; }
 .btn-danger:hover { background: var(--down-bg); border-color: var(--down); color: var(--down); }
 .btn-sm { padding: 4px 8px; font-size: 12px; }
 
-/* ---------- Panels / cards ---------- */
+/* Panels and cards. */
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -390,7 +390,7 @@ a { color: inherit; text-decoration: none; }
 .panel-body { padding: 16px; }
 .panel-body.pad-0 { padding: 0; }
 
-/* ---------- Stat cards ---------- */
+/* Stat cards. */
 .stat-row {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
   margin-bottom: 16px;
@@ -425,7 +425,7 @@ a { color: inherit; text-decoration: none; }
 .stat.down .stat-value { color: var(--down); }
 .stat.warn .stat-value { color: var(--warn); }
 
-/* ---------- Status pills ---------- */
+/* Status pills. */
 .pill {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 8px;
@@ -451,7 +451,7 @@ a { color: inherit; text-decoration: none; }
 
 [data-theme="dark"] .pill.pill-accent { color: var(--text); background: var(--accent-bg); border-color: var(--accent); }
 
-/* ---------- Tables ---------- */
+/* Tables. */
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -480,7 +480,7 @@ a { color: inherit; text-decoration: none; }
 .table tr.clickable:hover td { background: var(--bg-sunken); }
 .table .mono { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
 
-/* ---------- Printer grid ---------- */
+/* Printer grid. */
 .printer-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -572,7 +572,7 @@ a { color: inherit; text-decoration: none; }
 [data-theme="dark"] .ink-bar.k { --col: #666; }
 .ink-bar.low::after { background: var(--down); }
 
-/* ---------- Forms ---------- */
+/* Forms. */
 .form-row { display: grid; gap: 6px; margin-bottom: 14px; }
 .form-row label {
   font-size: 12px;
@@ -625,7 +625,7 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
-/* ---------- Inline editing ---------- */
+/* Inline editing. */
 .inline-input {
   background: var(--bg-raised);
   border: 1px solid var(--border);
@@ -641,7 +641,7 @@ a { color: inherit; text-decoration: none; }
   box-shadow: 0 0 0 3px var(--accent-bg);
 }
 
-/* ---------- Modal ---------- */
+/* Modals. */
 .modal-backdrop {
   position: fixed; inset: 0;
   background: rgba(20,18,14,0.4);
@@ -680,7 +680,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-raised);
 }
 
-/* ---------- Login ---------- */
+/* Login layout. */
 .login-wrap {
   min-height: 100vh;
   display: grid; place-items: center;
@@ -753,7 +753,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em;
 }
 
-/* ---------- Misc ---------- */
+/* Shared utilities. */
 .empty {
   padding: 32px 16px;
   text-align: center;
@@ -851,6 +851,10 @@ a { color: inherit; text-decoration: none; }
 .printer-error-log-filter {
   align-items: end;
 }
+.printer-export-filter,
+.printer-detail-log-filter {
+  align-items: end;
+}
 .filter-field {
   display: flex;
   flex-direction: column;
@@ -866,9 +870,50 @@ a { color: inherit; text-decoration: none; }
   width: auto;
   min-width: 150px;
 }
+.printer-log-time {
+  width: auto;
+  min-width: 110px;
+}
 .printer-log-search {
   flex: 1;
   min-width: 220px;
+}
+.printer-log-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.printer-export-all {
+  min-height: 31px;
+  padding-bottom: 2px;
+}
+.printer-export-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+.printer-export-option {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+}
+.printer-export-option span:not(.mono) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.printer-export-option .mono {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 
 .checkbox {
@@ -879,7 +924,7 @@ a { color: inherit; text-decoration: none; }
 }
 .checkbox input { width: auto; }
 
-/* toast */
+/* Toast notifications. */
 .toast-wrap {
   position: fixed; bottom: 20px; right: 20px;
   display: flex; flex-direction: column; gap: 8px;
@@ -903,7 +948,7 @@ a { color: inherit; text-decoration: none; }
   to { opacity: 1; transform: none; }
 }
 
-/* QR */
+/* QR preview. */
 .qr {
   display: inline-grid;
   grid-template-columns: repeat(21, 1fr);
@@ -921,7 +966,7 @@ a { color: inherit; text-decoration: none; }
 .qr > div.off { background: transparent; }
 .qr-big { width: 220px; height: 220px; }
 
-/* ticket row */
+/* Ticket rows. */
 .ticket-row {
   display: grid;
   grid-template-columns: 80px 1fr 180px 140px 100px;
@@ -939,15 +984,15 @@ a { color: inherit; text-decoration: none; }
 .ticket-who { font-size: 12px; color: var(--text-dim); }
 .ticket-when { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
-/* split */
+/* Split layout. */
 .split { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
 
-/* dark mode scrollbars */
+/* Dark mode scrollbars. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* Activity feed */
+/* Activity feed. */
 .feed { display: flex; flex-direction: column; }
 .feed-item {
   display: grid; grid-template-columns: 28px 1fr auto; gap: 10px;
@@ -967,7 +1012,7 @@ a { color: inherit; text-decoration: none; }
 .feed-text .mono { font-family: var(--mono); font-size: 12px; }
 .feed-time { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 
-/* Scanner overlay */
+/* Scanner overlay. */
 .scanner {
   width: 100%; aspect-ratio: 1;
   background: #0a0908;
@@ -1016,7 +1061,7 @@ a { color: inherit; text-decoration: none; }
 }
 .chart-bars > div.hi { background: var(--accent); }
 
-/* ---------- Redesign operations surfaces ---------- */
+/* Operations surfaces. */
 .ops-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1157,7 +1202,7 @@ a { color: inherit; text-decoration: none; }
   }
 }
 
-/* form validation */
+/* Form validation. */
 .invalid { outline: 1px solid var(--down); }
 .validation-message { color: var(--down); font-size: 12px; }
 
@@ -1173,7 +1218,7 @@ a { color: inherit; text-decoration: none; }
 #blazor-error-ui[style*="display: block"] { display: flex !important; gap: 12px; align-items: center; }
 #blazor-error-ui .dismiss { cursor: pointer; font-weight: bold; }
 
-/* ---------- Page wrapper ---------- */
+/* Page wrapper. */
 .page { max-width: 1280px; }
 h1 {
   font-size: 22px; font-weight: 600;
@@ -1181,17 +1226,17 @@ h1 {
   margin: 0;
 }
 
-/* ---------- Mono text (global) ---------- */
+/* Global mono text. */
 .mono { font-family: var(--mono); }
 
-/* ---------- Stat grid (responsive) ---------- */
+/* Responsive stat grid. */
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
-/* ---------- Card (softer alternative to .panel) ---------- */
+/* Softer card treatment for content that does not need panel chrome. */
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1212,10 +1257,10 @@ h1 {
 }
 .card-link:hover { color: var(--accent); }
 
-/* ---------- Ticket list container ---------- */
+/* Ticket list container. */
 .ticket-list { display: flex; flex-direction: column; }
 
-/* ---------- Worker home quick-action tiles ---------- */
+/* Worker home quick-action tiles. */
 .action-tile {
   display: flex; align-items: center; gap: 12px;
   padding: 14px;
@@ -1237,7 +1282,7 @@ h1 {
 .at-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 [data-theme="dark"] .action-tile:hover svg { color: var(--accent); }
 
-/* ---------- Segmented filter counts ---------- */
+/* Segmented filter counts. */
 .seg button .count {
   display: inline-block;
   margin-left: 4px;
@@ -1314,7 +1359,7 @@ h1 {
   background: var(--down-bg);
 }
 
-/* ---------- Asset / admin row tables ---------- */
+/* Asset and admin row tables. */
 .asset-table-head {
   display: grid;
   grid-template-columns: 1fr 1.5fr 110px 1.1fr 100px 140px;
@@ -1500,7 +1545,7 @@ h1 {
   }
 }
 
-/* ---------- Printer alert readability ---------- */
+/* Printer alert readability. */
 .admin-report-controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1694,7 +1739,7 @@ h1 {
   }
 }
 
-/* ---------- Login page text blocks ---------- */
+/* Login page text blocks. */
 .login-title {
   font-weight: 600; font-size: 17px;
   letter-spacing: -0.01em;
@@ -1723,7 +1768,7 @@ h1 {
   font-size: 13px;
 }
 
-/* ---------- ApexCharts dark mode overrides ---------- */
+/* ApexCharts dark mode overrides. */
 [data-theme="dark"] .apexcharts-tooltip {
   background: var(--panel) !important;
   color: var(--text) !important;
@@ -1751,18 +1796,14 @@ h1 {
   border-bottom-color: var(--border) !important;
 }
 
-/* ---------- Full-width button modifier ---------- */
+/* Full-width button modifier. */
 .btn-block {
   width: 100%;
   justify-content: center;
   padding: 9px 12px;
 }
 
-/* =============================================
-   ASSET REDESIGN — Phase 2
-   ============================================= */
-
-/* Scan dock — universal barcode / S/N entry bar */
+/* Asset scan dock shared by barcode and serial entry. */
 .scan-dock {
   display: flex;
   align-items: center;
@@ -1796,7 +1837,7 @@ h1 {
   white-space: nowrap;
 }
 
-/* Simple state pills for Manager view */
+/* Manager asset state pills. */
 .state-pill {
   display: inline-flex;
   align-items: center;
@@ -1818,7 +1859,7 @@ h1 {
 .state-attention { color: var(--warn); background: var(--warn-bg); }
 .state-missing   { color: var(--down); background: var(--down-bg); }
 
-/* Locker card grid — Manager view */
+/* Manager locker card grid. */
 .locker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -1937,7 +1978,7 @@ h1 {
   flex: 1;
 }
 
-/* IT Console — 3-pane workspace */
+/* IT asset console workspace. */
 .asset-kpi-strip {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -2120,10 +2161,7 @@ h1 {
   .locker-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 }
 
-/* =============================================
-   REFRESH DESIGN SYSTEM V1
-   Shared tokens, shell, command palette, drawer, and dashboard primitives.
-   ============================================= */
+/* Refreshed design tokens and shared shell primitives. */
 :root {
   --bg: #F2EDE3;
   --bg-2: #ECE6D8;
@@ -3129,6 +3167,10 @@ button.activity-row {
   box-shadow: var(--shadow-3);
 }
 
+.cmdk--printer {
+  width: min(820px, calc(100vw - 32px));
+}
+
 .cmdk__input {
   position: sticky;
   top: 0;
@@ -3170,8 +3212,13 @@ button.activity-row {
   text-align: left;
 }
 
-.cmdk__row:hover {
+.cmdk__row:hover,
+.cmdk__row.is-selected {
   background: var(--surface-2);
+}
+
+.cmdk__row.is-selected {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .cmdk__type {
@@ -3211,6 +3258,96 @@ button.activity-row {
   padding: 28px 16px;
   color: var(--ink-3);
   text-align: center;
+}
+
+.cmdk__notice,
+.cmdk__assessment,
+.cmdk__session {
+  margin: 10px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sharp);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+}
+
+.cmdk__session {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cmdk__session strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.cmdk__session span {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+.cmdk__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.cmdk__assessment {
+  display: flex;
+  gap: 10px;
+}
+
+.cmdk__assessment span:first-child {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.cmdk__assessment.is-safe { border-color: color-mix(in oklab, var(--ok) 35%, transparent); }
+.cmdk__assessment.is-protected { border-color: color-mix(in oklab, var(--warning) 35%, transparent); }
+.cmdk__assessment.is-excluded { border-color: color-mix(in oklab, var(--critical) 35%, transparent); }
+
+.cmdk__output {
+  display: grid;
+  gap: 8px;
+  padding: 0 14px 14px;
+}
+
+.cmdk__output-entry {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sharp);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.cmdk__output-entry > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.cmdk__output-entry.is-ok > div { color: var(--ok); }
+.cmdk__output-entry.is-failed > div { color: var(--critical); }
+
+.cmdk__output-entry pre {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 960px) {

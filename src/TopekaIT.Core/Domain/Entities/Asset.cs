@@ -15,11 +15,10 @@ public class Asset
     public string Model { get; set; } = "";
     public int Quantity { get; set; } = 1;
 
-    // Legacy status — kept for read compatibility during transition; use Flags going forward
+    // Kept for read compatibility during the transition to Flags.
     public AssetStatus Status { get; set; }
     public DateTimeOffset? StatusChangedAt { get; set; }
 
-    // New multi-bit status
     public StatusFlags Flags { get; set; }
 
     public string? HolderId { get; set; }
@@ -27,18 +26,17 @@ public class Asset
     public DateTimeOffset? DueAt { get; set; }
     public string Notes { get; set; } = "";
 
-    // SAE / Scanner fields
     public bool IsSAE { get; set; }
-    public string? ScannerType { get; set; }        // legacy — migrated to Scanner asset records
-    public ScannerKind? ScannerKind { get; set; }   // for Category == Scanner
-    public string? PairedAssetId { get; set; }      // Scanner ↔ SAE pairing (FK to Asset.Id)
+    // Legacy value retained for older scanner records migrated before category-specific assets.
+    public string? ScannerType { get; set; }
+    public ScannerKind? ScannerKind { get; set; }
+    // Scanner-to-SAE pairing uses Asset.Id because both sides live in the same aggregate.
+    public string? PairedAssetId { get; set; }
 
-    // Location
     public string? LockerId { get; set; }
     public DateTimeOffset? LastSeenAt { get; set; }
-    public string? LastSeenLocation { get; set; }   // free-text or locker number
+    public string? LastSeenLocation { get; set; }
 
-    // Computed health (0-100); recalculated by service on significant events
     public int HealthScore { get; set; } = 100;
 
     public ICollection<RmaRecord> RmaRecords { get; set; } = new List<RmaRecord>();

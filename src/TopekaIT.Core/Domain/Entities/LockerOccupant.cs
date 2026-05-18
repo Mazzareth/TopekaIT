@@ -3,11 +3,12 @@ namespace TopekaIT.Core.Domain.Entities;
 public class LockerOccupant
 {
     public string LockerId { get; set; } = "";
-    public string UserId { get; set; } = "";        // cross-DB reference to MasterDbContext.Users
+    // Users live in the master database, so this remains an id reference rather than a navigation property.
+    public string UserId { get; set; } = "";
     public bool IsPrimary { get; set; } = true;
     public DateTimeOffset AssignedAt { get; set; }
-    public string? AssignedBy { get; set; }         // UserId
-    public DateTimeOffset? UnassignedAt { get; set; }  // null = still active
+    public string? AssignedBy { get; set; }
+    public DateTimeOffset? UnassignedAt { get; set; }
     public string? UnassignedBy { get; set; }
 
     public Locker Locker { get; set; } = null!;

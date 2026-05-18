@@ -58,57 +58,28 @@ public class LockerService
 
     public async Task AssignOccupantAsync(string lockerId, string userId, bool isPrimary, string actorId, CancellationToken ct = default)
     {
-        var allLockers = await _repo.GetAllAsync(ct);
-        foreach (var otherLocker in allLockers.Where(l => l.Id != lockerId))
-        {
-            var otherAssignment = otherLocker.Occupants
-                .FirstOrDefault(o => o.UserId == userId && o.UnassignedAt == null);
-            if (otherAssignment == null) continue;
+        var (locker, addedOccupant) = await _repo.AssignOccupantAsync(
+            lockerId,
+            userId,
+            isPrimary,
+            actorId,
+            DateTimeOffset.UtcNow,
+            ct);
+        if (locker == null || !addedOccupant) return;
 
-            otherAssignment.UnassignedAt = DateTimeOffset.UtcNow;
-            otherAssignment.UnassignedBy = actorId;
-            await _repo.UpdateAsync(otherLocker, ct);
-        }
-
-        var locker = allLockers.FirstOrDefault(l => l.Id == lockerId)
-            ?? await _repo.GetByIdAsync(lockerId, ct);
-        if (locker == null) return;
-
-        var existing = locker.Occupants
-            .FirstOrDefault(o => o.UserId == userId && o.UnassignedAt == null);
-        if (existing != null)
-        {
-            existing.IsPrimary = isPrimary;
-            await _repo.UpdateAsync(locker, ct);
-            return;
-        }
-
-        locker.Occupants.Add(new LockerOccupant
-        {
-            LockerId   = lockerId,
-            UserId     = userId,
-            IsPrimary  = isPrimary,
-            AssignedAt = DateTimeOffset.UtcNow,
-            AssignedBy = actorId,
-        });
-
-        await _repo.UpdateAsync(locker, ct);
         await _activity.PushAsync("locker_assign", $"User {userId} assigned to locker {locker.Number} by {actorId}", ct);
     }
 
     public async Task UnassignOccupantAsync(string lockerId, string userId, string actorId, CancellationToken ct = default)
     {
-        var locker = await _repo.GetByIdAsync(lockerId, ct);
+        var locker = await _repo.UnassignOccupantAsync(
+            lockerId,
+            userId,
+            actorId,
+            DateTimeOffset.UtcNow,
+            ct);
         if (locker == null) return;
 
-        var occupant = locker.Occupants
-            .FirstOrDefault(o => o.UserId == userId && o.UnassignedAt == null);
-        if (occupant == null) return;
-
-        occupant.UnassignedAt = DateTimeOffset.UtcNow;
-        occupant.UnassignedBy = actorId;
-
-        await _repo.UpdateAsync(locker, ct);
         await _activity.PushAsync("locker_unassign", $"User {userId} removed from locker {locker.Number} by {actorId}", ct);
     }
 
@@ -123,7 +94,6 @@ public class LockerService
         await _repo.UpdateAsync(locker, ct);
     }
 
-    /// <summary>Returns lockers whose audit cadence has lapsed and are overdue for inspection.</summary>
     public async Task<IEnumerable<Locker>> GetAuditOverdueAsync(CancellationToken ct = default)
     {
         var all = await _repo.GetAllAsync(ct);

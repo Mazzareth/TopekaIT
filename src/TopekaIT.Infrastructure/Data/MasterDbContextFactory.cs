@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -12,6 +13,6 @@ public class MasterDbContextFactory : IDesignTimeDbContextFactory<MasterDbContex
                 sql => sql.CommandTimeout(120))
             .Options;
 
-        return new MasterDbContext(options);
+        return new MasterDbContext(options, new EphemeralDataProtectionProvider());
     }
 }

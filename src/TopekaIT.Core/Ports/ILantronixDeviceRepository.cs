@@ -14,4 +14,5 @@ public interface ILantronixDeviceRepository
         CancellationToken ct = default);
     Task<IReadOnlyList<LantronixPollSample>> GetRecentSamplesAsync(string deviceId, int count, CancellationToken ct = default);
     Task RecordPollAsync(LantronixDevice device, LantronixPollSample sample, CancellationToken ct = default);
+    Task<int> PurgeSamplesOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
 }

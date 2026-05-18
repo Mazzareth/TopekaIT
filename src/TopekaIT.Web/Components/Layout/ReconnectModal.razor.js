@@ -1,4 +1,3 @@
-// Set up event handlers
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
 
@@ -24,14 +23,10 @@ async function retry() {
     document.removeEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
 
     try {
-        // Reconnect will asynchronously return:
-        // - true to mean success
-        // - false to mean we reached the server, but it rejected the connection (e.g., unknown circuit ID)
-        // - exception to mean we didn't reach the server (this can be sync or async)
+        // Blazor returns false when the server rejects the old circuit and throws when the server cannot be reached.
         const successful = await Blazor.reconnect();
         if (!successful) {
-            // We have been able to reach the server, but the circuit is no longer available.
-            // We'll reload the page so the user can continue using the app as quickly as possible.
+            // A rejected circuit cannot keep local component state, so try resume before falling back to a reload.
             const resumeSuccessful = await Blazor.resumeCircuit();
             if (!resumeSuccessful) {
                 location.reload();
@@ -40,7 +35,7 @@ async function retry() {
             }
         }
     } catch (err) {
-        // We got an exception, server is currently unavailable
+        // When the server is unavailable, defer retries until the tab is visible again.
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
     }
 }

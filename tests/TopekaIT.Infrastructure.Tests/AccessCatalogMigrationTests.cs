@@ -18,7 +18,7 @@ public class AccessCatalogMigrationTests
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ModelOnly;Trusted_Connection=True;")
             .Options;
 
-        using var db = new MasterDbContext(options);
+        using var db = new MasterDbContext(options, TestDataProtection.Provider);
 
         Assert.NotNull(db.Model.FindEntityType(typeof(UserPermissionOverride)));
     }
@@ -30,7 +30,7 @@ public class AccessCatalogMigrationTests
             .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ModelOnly;Trusted_Connection=True;")
             .Options;
 
-        using var db = new TopekaDbContext(options);
+        using var db = new TopekaDbContext(options, TestDataProtection.Provider);
 
         Assert.Null(db.Model.FindEntityType(typeof(UserPermissionOverride)));
     }
@@ -42,6 +42,15 @@ public class AccessCatalogMigrationTests
 
         Assert.Contains(operations.OfType<SqlOperation>(), op => op.Sql.Contains("SET [Role] = N'Supervisor'", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(operations.OfType<CreateTableOperation>(), op => op.Name == "UserPermissionOverrides");
+    }
+
+    [Fact]
+    public void NormalizeItRolesMigration_MigratesItRolesToAdmin()
+    {
+        var operations = BuildUpOperations(new NormalizeItRolesToAdmin());
+
+        Assert.Contains(operations.OfType<SqlOperation>(), op => op.Sql.Contains("SET [Role] = N'Admin'", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(operations.OfType<SqlOperation>(), op => op.Sql.Contains("[Role] = N'IT'", StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<MigrationOperation> BuildUpOperations(Migration migration)

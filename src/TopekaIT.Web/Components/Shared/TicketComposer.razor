@@ -22,6 +22,8 @@
     string? _reporterName;
     List<Printer> _printers = new();
     List<Asset> _assets = new();
+    string _userId = "";
+    bool _limitAssetsToAssigned;
     bool _loaded;
     bool _canCreate;
 
@@ -34,12 +36,13 @@
             _assets = (await AssetService.GetAllAsync()).ToList();
             var auth = await AuthProvider.GetAuthenticationStateAsync();
             _reporterName = auth.User.FindFirst("name")?.Value ?? auth.User.Identity?.Name;
-            var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
-            _canCreate = await Access.HasPermissionAsync(userId, AccessPermissionKeys.TicketsCreate);
+            _userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+            var access = await Access.GetUserAccessAsync(_userId);
+            _canCreate = access?.Has(AccessPermissionKeys.TicketsCreate) == true;
+            _limitAssetsToAssigned = access?.Tier == AccessTier.Worker;
         }
         if (Open)
         {
-            // Reset fields on each open
             if (string.IsNullOrEmpty(_title) && string.IsNullOrEmpty(_desc))
             {
                 _title = PresetTitle ?? "";
@@ -70,6 +73,15 @@
         }
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        if (kind == AssetKind.Asset && _limitAssetsToAssigned)
+        {
+            var selectedAsset = _assets.FirstOrDefault(a => a.Id == id);
+            if (selectedAsset == null || !string.Equals(selectedAsset.HolderId, userId, StringComparison.OrdinalIgnoreCase))
+            {
+                State.PushToast("You can only open requests for devices assigned to you.", "down");
+                return;
+            }
+        }
         var ticket = await TicketService.CreateAsync(_title, _desc, id, kind, userId);
         State.PushToast($"Request {ticket.Id} submitted", "up");
         await OnSubmitted.InvokeAsync(ticket);
@@ -95,6 +107,14 @@
             ? $"{label} · {model} x{asset.Quantity}"
             : $"{label} · {model}";
     }
+
+    IEnumerable<Asset> VisibleAssets(AssetCategory category)
+    {
+        var source = _assets.Where(a => a.Category == category);
+        return _limitAssetsToAssigned
+            ? source.Where(a => string.Equals(a.HolderId, _userId, StringComparison.OrdinalIgnoreCase))
+            : source;
+    }
 }
 
 <Modal Open="Open" OnClose="Close">
@@ -115,19 +135,19 @@
                     }
                 </optgroup>
                 <optgroup label="SAE Devices">
-                    @foreach (var a in _assets.Where(a => a.Category == AssetCategory.SaeDevice))
+                    @foreach (var a in VisibleAssets(AssetCategory.SaeDevice))
                     {
                         <option value="@($"asset:{a.Id}")">@AssetOption(a)</option>
                     }
                 </optgroup>
                 <optgroup label="POD TC77s">
-                    @foreach (var a in _assets.Where(a => a.Category == AssetCategory.PodTc77))
+                    @foreach (var a in VisibleAssets(AssetCategory.PodTc77))
                     {
                         <option value="@($"asset:{a.Id}")">@AssetOption(a)</option>
                     }
                 </optgroup>
                 <optgroup label="Batteries">
-                    @foreach (var a in _assets.Where(a => a.Category == AssetCategory.Battery))
+                    @foreach (var a in VisibleAssets(AssetCategory.Battery))
                     {
                         <option value="@($"asset:{a.Id}")">@AssetOption(a)</option>
                     }

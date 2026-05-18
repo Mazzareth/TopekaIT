@@ -14,17 +14,20 @@ public class PrinterSetupService
     private readonly IPrinterRepository _printerRepository;
     private readonly IPrinterModelRepository _printerModelRepository;
     private readonly PrinterSetupSettings _settings;
+    private readonly PrintNetCommandCatalog _commandCatalog;
 
     public PrinterSetupService(
         IPrinterSetupTelnetClient telnetClient,
         IPrinterRepository printerRepository,
         IPrinterModelRepository printerModelRepository,
-        PrinterSetupSettings settings)
+        PrinterSetupSettings settings,
+        PrintNetCommandCatalog commandCatalog)
     {
         _telnetClient = telnetClient;
         _printerRepository = printerRepository;
         _printerModelRepository = printerModelRepository;
         _settings = settings;
+        _commandCatalog = commandCatalog;
     }
 
     public async Task<IReadOnlyList<PrinterSetupTestResult>> TestAsync(
@@ -97,14 +100,17 @@ public class PrinterSetupService
 
     public static PrinterDetectedInfo ParseDetectedInfo(string sysInfoOutput, string ptrCfgOutput)
     {
-        var name = FirstValue(sysInfoOutput, "Printer Name", "System Name", "Name", "sysName", "Hostname", "Host Name");
+        var name = ParseSysInfoValue(sysInfoOutput, "Printer Name", "System Name", "Description", "Name", "sysName", "Hostname", "Host Name");
         var model = FirstValue(ptrCfgOutput, "Printer Model", "Model", "Printer Type", "Product", "Type")
-            ?? FirstValue(sysInfoOutput, "Printer Model", "Model", "Product", "Type");
+            ?? ParseSysInfoValue(sysInfoOutput, "Printer Model", "Model Name", "Model", "Product", "Type");
 
         model ??= FindModelToken(ptrCfgOutput) ?? FindModelToken(sysInfoOutput);
 
         return new PrinterDetectedInfo(name ?? "", model ?? "");
     }
+
+    public static string? ParseSysInfoValue(string sysInfoOutput, params string[] keys) =>
+        FirstValue(sysInfoOutput, keys);
 
     public static IReadOnlyList<string> ParseIpAddresses(string input) =>
         input.Split(new[] { '\r', '\n', ',', ';', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -175,6 +181,12 @@ public class PrinterSetupService
 
         foreach (var command in commands)
         {
+            var commandAssessment = _commandCatalog.Classify(command);
+            if (commandAssessment.Access != PrintNetCommandAccess.Protected)
+            {
+                return $"Command blocked by PrintNet catalog: {command}";
+            }
+
             var output = await session.SendCommandAsync(command, ct);
             if (LooksLikeCommandFailure(output))
             {

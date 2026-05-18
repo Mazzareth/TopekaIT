@@ -82,4 +82,15 @@ public class LantronixDeviceRepository : ILantronixDeviceRepository
         db.LantronixPollSamples.Add(sample);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<int> PurgeSamplesOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var oldSamples = await db.LantronixPollSamples
+            .Where(s => s.Timestamp < cutoff)
+            .ToListAsync(ct);
+        db.LantronixPollSamples.RemoveRange(oldSamples);
+        await db.SaveChangesAsync(ct);
+        return oldSamples.Count;
+    }
 }

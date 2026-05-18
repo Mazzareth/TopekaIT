@@ -38,7 +38,6 @@
         </div>
     </div>
 
-    @* 6-KPI strip *@
     <div class="asset-kpi-strip">
         <div class="asset-kpi">
             <div class="kpi-n">Total SAE</div>
@@ -68,12 +67,9 @@
         </div>
     </div>
 
-    @* 3-pane workspace *@
     <div class="asset-workspace @(_selected != null ? "with-inspector" : "")">
 
-        @* Left: filter rail *@
         <div class="asset-filter-rail">
-            @* Search *@
             <div>
                 <div class="filter-rail-label">Search</div>
                 <label class="field" style="width:100%;height:auto;padding:6px 8px;">
@@ -82,7 +78,6 @@
                 </label>
             </div>
 
-            @* Category *@
             <div>
                 <div class="filter-rail-label">Category</div>
                 <label class="filter-check">
@@ -99,7 +94,6 @@
                 </label>
             </div>
 
-            @* State *@
             <div>
                 <div class="filter-rail-label">State</div>
                 <label class="filter-check">
@@ -113,7 +107,6 @@
                 </label>
             </div>
 
-            @* Quick counts *@
             <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border);">
                 <div class="filter-rail-label">Showing</div>
                 <div style="font-size:13px;font-variant-numeric:tabular-nums;">
@@ -122,16 +115,14 @@
             </div>
         </div>
 
-        @* Centre: table *@
         <div class="asset-table-body">
-            <div class="asset-table-head" style="grid-template-columns:120px 70px 1fr 80px 160px 110px 80px;">
+            <div class="asset-table-head" style="grid-template-columns:150px 70px minmax(110px, .55fr) 80px 160px 110px;">
                 <div>Tag / S/N</div>
                 <div>Cat</div>
                 <div>Model</div>
                 <div>RFID</div>
                 <div>Holder</div>
                 <div>State</div>
-                <div>Health</div>
             </div>
             @if (!Filtered().Any())
             {
@@ -144,16 +135,18 @@
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
                     var isSelected = _selected?.Id == a.Id;
                     <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags) @(isSelected ? "active" : "")"
-                         style="grid-template-columns:120px 70px 1fr 80px 160px 110px 80px;"
+                         style="grid-template-columns:150px 70px minmax(110px, .55fr) 80px 160px 110px;"
                          @onclick="() => Select(a)">
-                        <div class="mono">@PrimaryTag(a)</div>
-                        <div style="color:var(--text-faint);font-size:12px;">@Format.CategoryLabel(a.Category)</div>
                         <div>
-                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
+                            <div class="mono">@PrimaryTag(a)</div>
                             @if (!string.IsNullOrWhiteSpace(a.Serial) && a.Serial != PrimaryTag(a))
                             {
                                 <span style="color:var(--text-faint);font-size:11px;">S/N @a.Serial</span>
                             }
+                        </div>
+                        <div style="color:var(--text-faint);font-size:12px;">@Format.CategoryLabel(a.Category)</div>
+                        <div>
+                            <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
                         </div>
                         <div>
                             @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
@@ -177,17 +170,11 @@
                                 <span class="dot"></span>@Format.SimpleState(a.Flags)
                             </span>
                         </div>
-                        <div>
-                            <span class="mono @Format.HealthScoreCss(a.HealthScore)" style="font-size:13px;font-weight:600;">
-                                @a.HealthScore
-                            </span>
-                        </div>
                     </div>
                 }
             }
         </div>
 
-        @* Right: inspector *@
         @if (_selected != null)
         {
             var sel = _selected;
@@ -207,16 +194,6 @@
                     </button>
                 </div>
 
-                @* Health *@
-                <div class="inspector-section">
-                    <div class="inspector-label">Health Score</div>
-                    <div class="health-ring-row">
-                        <div class="health-score-num @Format.HealthScoreCss(sel.HealthScore)">@sel.HealthScore</div>
-                        <div style="font-size:12px;color:var(--text-dim);">/ 100</div>
-                    </div>
-                </div>
-
-                @* Status flags — raw toggle UI *@
                 <div class="inspector-section">
                     <div class="inspector-label">Status Flags</div>
                     <div>
@@ -235,7 +212,6 @@
                     </div>
                 </div>
 
-                @* Active issue tags *@
                 @if (sel.IssueTags.Any(t => t.ResolvedAt == null))
                 {
                     <div class="inspector-section">
@@ -256,7 +232,6 @@
                     </div>
                 }
 
-                @* Holder / assignment *@
                 <div class="inspector-section">
                     <div class="inspector-label">Holder</div>
                     @if (selHolder != null)
@@ -273,7 +248,6 @@
                     }
                 </div>
 
-                @* Scanner pairing (for SAE) *@
                 @if (sel.Category == AssetCategory.SaeDevice)
                 {
                     var paired = _assets.FirstOrDefault(a => a.PairedAssetId == sel.Id && a.Category == AssetCategory.Scanner);
@@ -294,7 +268,6 @@
                     </div>
                 }
 
-                @* Notes *@
                 @if (!string.IsNullOrWhiteSpace(sel.Notes))
                 {
                     <div class="inspector-section">
@@ -303,7 +276,6 @@
                     </div>
                 }
 
-                @* Quick actions *@
                 <div class="inspector-section" style="display:flex;flex-direction:column;gap:6px;">
                     <div class="inspector-label">Actions</div>
                     <button class="btn btn-sm" @onclick="() => OpenDetail(sel, null)">
@@ -352,7 +324,8 @@
     bool _showSae      = true;
     bool _showTc77     = true;
     bool _showScanner  = true;
-    bool _showBattery  = false;  // batteries less relevant in IT device view
+    // Batteries stay opt-in here so the IT console opens focused on serialized devices.
+    bool _showBattery  = false;
     bool _showAvailable = true;
     bool _showInUse     = true;
     bool _showAttention = true;
@@ -394,7 +367,6 @@
     {
         IEnumerable<Asset> q = _assets;
 
-        // Category filter
         q = q.Where(a => a.Category switch
         {
             AssetCategory.SaeDevice => _showSae,
@@ -404,7 +376,6 @@
             _                       => true,
         });
 
-        // State filter
         q = q.Where(a =>
         {
             var isAttention  = Format.IsAttentionFlags(a.Flags);
@@ -413,7 +384,6 @@
             return (isAttention && _showAttention) || (isInUse && _showInUse) || (isAvailable && _showAvailable);
         });
 
-        // Search
         if (!string.IsNullOrWhiteSpace(_search))
         {
             var s = _search.Trim();

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using TopekaIT.Core.Domain.Entities;
 using TopekaIT.Infrastructure.Data.Configurations;
@@ -6,7 +7,15 @@ namespace TopekaIT.Infrastructure.Data;
 
 public class MasterDbContext : DbContext
 {
-    public MasterDbContext(DbContextOptions<MasterDbContext> options) : base(options) { }
+    private readonly IDataProtectionProvider _dataProtectionProvider;
+
+    public MasterDbContext(
+        DbContextOptions<MasterDbContext> options,
+        IDataProtectionProvider dataProtectionProvider) : base(options)
+    {
+        _dataProtectionProvider = dataProtectionProvider
+            ?? throw new ArgumentNullException(nameof(dataProtectionProvider));
+    }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserPermissionOverride> UserPermissionOverrides => Set<UserPermissionOverride>();
@@ -23,6 +32,7 @@ public class MasterDbContext : DbContext
                 || type == typeof(DivisionConfig)
                 || type == typeof(LantronixDeviceConfig)
                 || type == typeof(LantronixPollSampleConfig));
+        ComboProtection.ApplyLegacyUserLockerProtection(mb, _dataProtectionProvider);
         base.OnModelCreating(mb);
     }
 }

@@ -16,17 +16,17 @@ public class PrinterSnmpService
     private readonly string _community;
     private readonly int _timeoutMs;
 
-    // Standard MIB-II OIDs
+    // Standard MIB-II OIDs.
     private static readonly ObjectIdentifier OidSysDescr = new("1.3.6.1.2.1.1.1.0");
     private static readonly ObjectIdentifier OidSysName = new("1.3.6.1.2.1.1.5.0");
     private static readonly ObjectIdentifier OidSysContact = new("1.3.6.1.2.1.1.4.0");
     private static readonly ObjectIdentifier OidSysLocation = new("1.3.6.1.2.1.1.6.0");
 
-    // Zebra enterprise MIB OIDs
+    // Zebra enterprise MIB OIDs.
     private static readonly ObjectIdentifier OidZebraSerial = new("1.3.6.1.4.1.10642.1.3.0");
     private static readonly ObjectIdentifier OidZebraFirmware = new("1.3.6.1.4.1.10642.1.10.0");
 
-    // Standard dot3 MIB for MAC address
+    // Standard dot3 MIB for MAC address.
     private static readonly ObjectIdentifier OidPhysAddress = new("1.3.6.1.2.1.2.2.1.6.1");
 
     public PrinterSnmpService(ILogger<PrinterSnmpService> logger, IConfiguration configuration)
