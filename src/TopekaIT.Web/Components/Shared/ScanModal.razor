@@ -1,72 +1,17 @@
-@using TopekaIT.Core.Services
-@inject AssetService AssetService
+<ManualAssetLookupModal Open="Open"
+                        OnClose="OnClose"
+                        OnMatch="OnMatch"
+                        IconName="Scan"
+                        Title="Scan asset tag"
+                        TitleStyle="display: flex; gap: 8px; align-items: center;"
+                        Label="Scan or enter tag / serial / IMEI"
+                        Placeholder="WD-0042, serial:12345, or scanned QR text"
+                        SubmitText="Use tag"
+                        ShowCancel="true"
+                        ErrorStyle="font-size: 12px; color: var(--down); margin-top: 4px;" />
 
 @code {
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<Asset> OnMatch { get; set; }
-
-    string _manual = "";
-    string? _lastError;
-    bool _wasOpen;
-
-    protected override void OnParametersSet()
-    {
-        if (Open && !_wasOpen)
-        {
-            _lastError = null;
-            _manual = "";
-        }
-        _wasOpen = Open;
-    }
-
-    async Task SubmitManual()
-    {
-        if (string.IsNullOrWhiteSpace(_manual)) return;
-        var match = await AssetService.FindByScanAsync(_manual);
-        if (match != null)
-        {
-            await OnMatch.InvokeAsync(match);
-        }
-        else
-        {
-            _lastError = $"No asset found matching '{_manual.Trim()}'";
-        }
-    }
-
-    async Task Close()
-    {
-        await OnClose.InvokeAsync();
-    }
-}
-
-<Modal Open="Open" OnClose="Close">
-    <Title>
-        <span style="display: flex; gap: 8px; align-items: center;">
-            <Icon Name="Scan" Size="16" /> Scan asset tag
-        </span>
-    </Title>
-    <ChildContent>
-        <div class="form-row">
-            <label>Scan or enter tag / serial / IMEI</label>
-            <input @bind="_manual" @bind:event="oninput" placeholder="WD-0042, serial:12345, or scanned QR text" @onkeydown="OnKey" autofocus autocomplete="off" />
-        </div>
-        @if (!string.IsNullOrEmpty(_lastError))
-        {
-            <div style="font-size: 12px; color: var(--down); margin-top: 4px;">@_lastError</div>
-        }
-    </ChildContent>
-    <Footer>
-        <button class="btn btn-ghost" @onclick="Close">Cancel</button>
-        <button class="btn btn-primary" @onclick="SubmitManual" disabled="@string.IsNullOrWhiteSpace(_manual)">
-            <Icon Name="Check" Size="14" /> Use tag
-        </button>
-    </Footer>
-</Modal>
-
-@code {
-    void OnKey(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter") _ = SubmitManual();
-    }
 }

@@ -1,0 +1,98 @@
+@inject AssetService AssetService
+
+<Modal Open="Open" OnClose="Close">
+    <Title>
+        <span class="@TitleClass" style="@TitleStyle">
+            <Icon Name="@IconName" Size="16" /> @Title
+        </span>
+    </Title>
+    <ChildContent>
+        <div class="form-row">
+            <label>@Label</label>
+            <input @bind="_manual"
+                   @bind:event="oninput"
+                   @onkeydown="OnKey"
+                   placeholder="@Placeholder"
+                   autocomplete="off"
+                   spellcheck="@Spellcheck"
+                   autofocus />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="@ErrorClass" style="@ErrorStyle">@_error</div>
+        }
+    </ChildContent>
+    <Footer>
+        @if (ShowCancel)
+        {
+            <button class="btn btn-ghost" @onclick="Close">Cancel</button>
+        }
+        <button class="btn btn-primary" @onclick="Submit" disabled="@string.IsNullOrWhiteSpace(_manual)">
+            <Icon Name="Check" Size="14" /> @SubmitText
+        </button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Asset> OnMatch { get; set; }
+    [Parameter] public string IconName { get; set; } = "Scan";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? TitleClass { get; set; }
+    [Parameter] public string? TitleStyle { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Placeholder { get; set; } = "";
+    [Parameter] public string SubmitText { get; set; } = "Select asset";
+    [Parameter] public bool ShowCancel { get; set; }
+    [Parameter] public string? ErrorClass { get; set; }
+    [Parameter] public string? ErrorStyle { get; set; }
+    [Parameter] public string Spellcheck { get; set; } = "false";
+    [Parameter] public Func<string, string> NotFoundMessage { get; set; } = value => $"No asset found matching '{value}'";
+
+    string _manual = "";
+    string? _error;
+    bool _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _manual = "";
+            _error = null;
+        }
+
+        _wasOpen = Open;
+    }
+
+    async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_manual))
+        {
+            return;
+        }
+
+        _error = null;
+        var match = await AssetService.FindByScanAsync(_manual);
+        if (match != null)
+        {
+            await OnMatch.InvokeAsync(match);
+            return;
+        }
+
+        _error = NotFoundMessage(_manual.Trim());
+    }
+
+    async Task Close()
+    {
+        await OnClose.InvokeAsync();
+    }
+
+    void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _ = Submit();
+        }
+    }
+}

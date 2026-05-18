@@ -41,19 +41,4 @@ public class LantronixDeviceRepositoryTests
         Assert.Equal(1, purged);
         Assert.Single(verify.LantronixPollSamples);
     }
-
-    private sealed class TestMasterDbContextFactory : IDbContextFactory<MasterDbContext>
-    {
-        private readonly DbContextOptions<MasterDbContext> _options;
-
-        public TestMasterDbContextFactory(DbContextOptions<MasterDbContext> options)
-        {
-            _options = options;
-        }
-
-        public MasterDbContext CreateDbContext() => new(_options, TestDataProtection.Provider);
-
-        public Task<MasterDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult(new MasterDbContext(_options, TestDataProtection.Provider));
-    }
 }

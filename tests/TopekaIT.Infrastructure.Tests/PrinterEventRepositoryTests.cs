@@ -183,20 +183,6 @@ public class PrinterEventRepositoryTests
         OccurrenceCount = 1,
         BlipSuppressed = suppressed,
     };
-
-    private sealed class TestDivisionDbContextFactory : IDivisionDbContextFactory
-    {
-        private readonly DbContextOptions<TopekaDbContext> _options;
-
-        public TestDivisionDbContextFactory(DbContextOptions<TopekaDbContext> options)
-        {
-            _options = options;
-        }
-
-        public Task<TopekaDbContext> CreateDbContextAsync(CancellationToken ct = default) =>
-            Task.FromResult(new TopekaDbContext(_options, TestDataProtection.Provider));
-    }
-
     private sealed class TestDivisionRepository : IDivisionRepository
     {
         private static readonly Division TestDivision = new()

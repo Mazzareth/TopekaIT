@@ -3,7 +3,6 @@ namespace TopekaIT.Web.Services;
 public class AppState
 {
     public string Theme { get; private set; } = "light";
-    public bool NavCollapsed { get; private set; }
     public bool CommandPaletteOpen { get; private set; }
     public bool PrinterCommandPaletteOpen { get; private set; }
 
@@ -15,12 +14,6 @@ public class AppState
     {
         if (Theme == theme) return;
         Theme = theme;
-        NotifyChanged();
-    }
-
-    public void ToggleNav()
-    {
-        NavCollapsed = !NavCollapsed;
         NotifyChanged();
     }
 
@@ -36,13 +29,6 @@ public class AppState
     {
         if (!CommandPaletteOpen) return;
         CommandPaletteOpen = false;
-        NotifyChanged();
-    }
-
-    public void ToggleCommandPalette()
-    {
-        PrinterCommandPaletteOpen = false;
-        CommandPaletteOpen = !CommandPaletteOpen;
         NotifyChanged();
     }
 

@@ -36,21 +36,8 @@ public class PrinterCommandPaletteSourceTests
     }
 
     private static string ReadRepoFile(params string[] relativePath) =>
-        File.ReadAllText(RepoPath(relativePath));
+        RepositorySource.Read(relativePath);
 
     private static string RepoPath(params string[] relativePath)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "6IA-IT-Portal.slnx")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir == null)
-        {
-            throw new DirectoryNotFoundException("Could not locate repository root.");
-        }
-
-        return Path.Combine(new[] { dir.FullName }.Concat(relativePath).ToArray());
-    }
+        => RepositorySource.Path(relativePath);
 }

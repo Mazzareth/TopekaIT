@@ -132,17 +132,4 @@ public class LockerRepositoryTests
         Number = number,
         IsActive = true,
     };
-
-    private sealed class TestDivisionDbContextFactory : IDivisionDbContextFactory
-    {
-        private readonly DbContextOptions<TopekaDbContext> _options;
-
-        public TestDivisionDbContextFactory(DbContextOptions<TopekaDbContext> options)
-        {
-            _options = options;
-        }
-
-        public Task<TopekaDbContext> CreateDbContextAsync(CancellationToken ct = default) =>
-            Task.FromResult(new TopekaDbContext(_options, TestDataProtection.Provider));
-    }
 }

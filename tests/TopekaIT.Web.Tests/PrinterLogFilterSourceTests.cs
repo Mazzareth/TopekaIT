@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace TopekaIT.Web.Tests;
@@ -27,27 +26,5 @@ public class PrinterLogFilterSourceTests
     }
 
     private static string ReadRepoFile(params string[] relativePath) =>
-        File.ReadAllText(RepoPath(relativePath, SourceFile()));
-
-    private static string SourceFile([CallerFilePath] string sourceFile = "") => sourceFile;
-
-    private static string RepoPath(string[] relativePath, string sourceFile)
-    {
-        var sourceDirectory = Path.GetDirectoryName(sourceFile) ?? "";
-        foreach (var start in new[] { sourceDirectory, Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-        {
-            var dir = new DirectoryInfo(start);
-            while (dir != null && !File.Exists(Path.Combine(dir.FullName, "6IA-IT-Portal.slnx")))
-            {
-                dir = dir.Parent;
-            }
-
-            if (dir != null)
-            {
-                return Path.Combine(new[] { dir.FullName }.Concat(relativePath).ToArray());
-            }
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
+        RepositorySource.Read(relativePath);
 }

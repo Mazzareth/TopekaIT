@@ -89,6 +89,7 @@ public class Program
             return settings;
         });
         builder.Services.AddSingleton<PrinterSnmpService>();
+        builder.Services.AddSingleton<PrinterRouteResolver>();
 
         builder.Services.AddScoped<AppState>();
 

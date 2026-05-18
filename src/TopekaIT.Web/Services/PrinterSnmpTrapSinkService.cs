@@ -5,11 +5,9 @@ using Lextm.SharpSnmpLib;
 using Lextm.SharpSnmpLib.Messaging;
 using Lextm.SharpSnmpLib.Security;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TopekaIT.Core.Domain.Entities;
 using TopekaIT.Core.Services;
-using TopekaIT.Infrastructure.Data;
 using TopekaIT.Infrastructure.Repositories;
 using TopekaIT.Infrastructure.Tenant;
 
@@ -20,28 +18,23 @@ namespace TopekaIT.Web.Services;
 /// </summary>
 public class PrinterSnmpTrapSinkService : BackgroundService
 {
-    private readonly IDbContextFactory<MasterDbContext> _masterFactory;
+    private readonly PrinterRouteResolver _printerRoutes;
     private readonly IDataProtectionProvider _dataProtectionProvider;
     private readonly ILogger<PrinterSnmpTrapSinkService> _logger;
     private readonly bool _enabled;
     private readonly int _port;
     private readonly string _community;
     private readonly int _timeoutMs;
-    private readonly SemaphoreSlim _mapLock = new(1, 1);
-    private volatile IReadOnlyDictionary<string, PrinterRoute> _printerMap =
-        new Dictionary<string, PrinterRoute>(StringComparer.OrdinalIgnoreCase);
-    private DateTimeOffset _printerMapRefreshedAt;
-    private static readonly TimeSpan PrinterMapRefreshInterval = TimeSpan.FromMinutes(5);
     private static readonly string PrtAlertEntryPrefix = "1.3.6.1.2.1.43.18.1.1";
     private static readonly string PrtAlertIndexPrefix = $"{PrtAlertEntryPrefix}.1.";
 
     public PrinterSnmpTrapSinkService(
-        IDbContextFactory<MasterDbContext> masterFactory,
+        PrinterRouteResolver printerRoutes,
         IDataProtectionProvider dataProtectionProvider,
         ILogger<PrinterSnmpTrapSinkService> logger,
         IConfiguration configuration)
     {
-        _masterFactory = masterFactory;
+        _printerRoutes = printerRoutes;
         _dataProtectionProvider = dataProtectionProvider;
         _logger = logger;
         _enabled = configuration.GetValue("PrinterSnmpTrapSink:Enabled", true);
@@ -113,7 +106,7 @@ public class PrinterSnmpTrapSinkService : BackgroundService
 
     private async Task HandleTrapAsync(UdpReceiveResult result, CancellationToken ct)
     {
-        var remoteIp = NormalizeIpAddress(result.RemoteEndPoint.Address);
+        var remoteIp = PrinterIpNormalizer.Normalize(result.RemoteEndPoint.Address);
 
         try
         {
@@ -184,51 +177,7 @@ public class PrinterSnmpTrapSinkService : BackgroundService
     }
 
     private async Task<PrinterRoute?> ResolvePrinterAsync(string ip, CancellationToken ct)
-    {
-        await RefreshPrinterMapIfNeededAsync(ct);
-        var map = _printerMap;
-        return map.TryGetValue(ip, out var route) ? route : null;
-    }
-
-    private async Task RefreshPrinterMapIfNeededAsync(CancellationToken ct)
-    {
-        var map = _printerMap;
-        if (map.Count > 0 && DateTimeOffset.UtcNow - _printerMapRefreshedAt < PrinterMapRefreshInterval)
-        {
-            return;
-        }
-
-        await _mapLock.WaitAsync(ct);
-        try
-        {
-            var mapInner = _printerMap;
-            if (mapInner.Count > 0 && DateTimeOffset.UtcNow - _printerMapRefreshedAt < PrinterMapRefreshInterval)
-            {
-                return;
-            }
-
-            var next = new Dictionary<string, PrinterRoute>(StringComparer.OrdinalIgnoreCase);
-            await using var masterDb = await _masterFactory.CreateDbContextAsync(ct);
-            var divisions = await masterDb.Divisions.AsNoTracking().ToListAsync(ct);
-
-            foreach (var division in divisions)
-            {
-                var factory = new DirectDivisionDbContextFactory(division.ConnectionString, _dataProtectionProvider);
-                var printers = await new PrinterRepository(factory).GetAllAsync(ct);
-                foreach (var printer in printers.Where(p => PrinterModels.SupportsLogging(p.Model) && !string.IsNullOrWhiteSpace(p.IpAddress)))
-                {
-                    next[NormalizeIpAddress(printer.IpAddress)] = new PrinterRoute(printer.Id, division.ConnectionString);
-                }
-            }
-
-            _printerMapRefreshedAt = DateTimeOffset.UtcNow;
-            _printerMap = next;
-        }
-        finally
-        {
-            _mapLock.Release();
-        }
-    }
+        => await _printerRoutes.ResolveAsync(ip, ct);
 
     private async Task<PrinterAlertRow?> TryQueryPrinterAlertRowAsync(ISnmpMessage message, string remoteIp, CancellationToken ct)
     {
@@ -529,25 +478,6 @@ public class PrinterSnmpTrapSinkService : BackgroundService
         return ("Info", "Info");
     }
 
-    private static string NormalizeIpAddress(IPAddress? address)
-    {
-        if (address == null)
-        {
-            return "unknown";
-        }
-
-        return address.IsIPv4MappedToIPv6
-            ? address.MapToIPv4().ToString()
-            : address.ToString();
-    }
-
-    private static string NormalizeIpAddress(string ip)
-    {
-        return IPAddress.TryParse(ip, out var address)
-            ? NormalizeIpAddress(address)
-            : ip.Trim();
-    }
-
     private sealed class PrinterAlertRow
     {
         public string RowSuffix { get; init; } = "";
@@ -793,6 +723,4 @@ public class PrinterSnmpTrapSinkService : BackgroundService
             Time = Time,
         };
     }
-
-    private sealed record PrinterRoute(string PrinterId, string ConnectionString);
 }
