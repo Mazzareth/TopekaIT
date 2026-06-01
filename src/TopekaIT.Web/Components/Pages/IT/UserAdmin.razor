@@ -156,6 +156,9 @@
                         @if (_canResetPasswords && CanManageRow(row))
                         {
                             <button class="btn btn-sm" @onclick="() => ResetPassword(row)" title="Reset password"><Icon Name="Key" Size="12" /></button>
+                            <button class="btn btn-sm" @onclick="() => OpenStationPin(row)" title="Set station PIN">
+                                <span class="mono">PIN</span>
+                            </button>
                         }
                         @if (_canEditAccess && CanManageRow(row))
                         {
@@ -317,6 +320,41 @@
     </Footer>
 </Modal>
 
+<Modal Open="@_showStationPin" OnClose="CloseStationPinModal">
+    <Title>Station PIN</Title>
+    <ChildContent>
+        <p style="margin-top: 0; color: var(--text-dim); font-size: 0.9rem;">
+            Set or clear the 6-digit station PIN for <strong>@_stationPinRow?.Name</strong>.
+        </p>
+        <div class="form-row">
+            <label>PIN</label>
+            <input class="inline-input mono"
+                   inputmode="numeric"
+                   maxlength="6"
+                   autocomplete="off"
+                   @bind="_stationPinInput"
+                   @bind:event="oninput"
+                   placeholder="@StationPinPlaceholder" />
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_stationPinError))
+        {
+            <div class="form-error">@_stationPinError</div>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_stationPinRow?.HasStationPin == true)
+        {
+            <button class="btn" @onclick="ClearStationPin">
+                <Icon Name="X" Size="14" /> Clear PIN
+            </button>
+        }
+        <button class="btn" @onclick="CloseStationPinModal">Cancel</button>
+        <button class="btn btn-accent" @onclick="ConfirmStationPin">
+            <Icon Name="Key" Size="14" /> Save PIN
+        </button>
+    </Footer>
+</Modal>
+
 @code {
     List<UserRow> _rows = new();
     List<Division> _divisions = new();
@@ -350,6 +388,11 @@
     string _resetUserName = "";
     string _copyFeedback = "";
 
+    bool _showStationPin;
+    UserRow? _stationPinRow;
+    string _stationPinInput = "";
+    string _stationPinError = "";
+
     const string AllDivisionsFilter = "__all";
     const string GlobalDivisionFilter = "__global";
 
@@ -357,6 +400,7 @@
     string UserGridStyle => _actorTier == AccessTier.SuperAdmin
         ? "grid-template-columns: 40px 1fr 1fr 120px 100px 90px 105px 70px 100px 210px;"
         : "grid-template-columns: 40px 1fr 1fr 100px 90px 105px 70px 100px 210px;";
+    string StationPinPlaceholder => _stationPinRow?.HasStationPin == true ? "PIN already set" : "6 digits";
     bool CanSeeMultipleDivisions => _actorTier == AccessTier.SuperAdmin;
     bool AllVisibleSelected
     {
@@ -418,6 +462,7 @@
             Audit = u.Audit,
             DivisionId = u.DivisionId,
             LastActiveAt = u.LastActiveAt,
+            HasStationPin = !string.IsNullOrWhiteSpace(u.StationPinHash),
         }).ToList();
 
         foreach (var unsaved in unsavedNewRows)
@@ -651,6 +696,59 @@
         _copyFeedback = "";
     }
 
+    void OpenStationPin(UserRow row)
+    {
+        if (!_canResetPasswords || !CanManageRow(row)) return;
+        _stationPinRow = row;
+        _stationPinInput = "";
+        _stationPinError = "";
+        _showStationPin = true;
+    }
+
+    void CloseStationPinModal()
+    {
+        _showStationPin = false;
+        _stationPinRow = null;
+        _stationPinInput = "";
+        _stationPinError = "";
+    }
+
+    async Task ConfirmStationPin()
+    {
+        if (_stationPinRow == null) return;
+        if (!_canResetPasswords || !CanManageRow(_stationPinRow)) return;
+
+        var pin = _stationPinInput.Trim();
+        if (pin.Length != 6 || !pin.All(char.IsDigit))
+        {
+            _stationPinError = "PIN must be exactly 6 numeric digits.";
+            return;
+        }
+
+        try
+        {
+            await UserService.SetStationPinAsync(_stationPinRow.Id, pin);
+            State.PushToast($"Station PIN set for {_stationPinRow.Name}", "up");
+            CloseStationPinModal();
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            _stationPinError = ex.Message;
+        }
+    }
+
+    async Task ClearStationPin()
+    {
+        if (_stationPinRow == null) return;
+        if (!_canResetPasswords || !CanManageRow(_stationPinRow)) return;
+
+        await UserService.ClearStationPinAsync(_stationPinRow.Id);
+        State.PushToast($"Station PIN cleared for {_stationPinRow.Name}", "");
+        CloseStationPinModal();
+        await Load();
+    }
+
     bool CanEditRow(UserRow row)
         => row.IsNew ? _canCreateUsers : _canEditUsers && CanManageRow(row);
 
@@ -795,6 +893,7 @@
         public string? LockerNumber { get; set; }
         public DateTimeOffset? LastActiveAt { get; set; }
         public bool Audit { get; set; }
+        public bool HasStationPin { get; set; }
         public AccessTier Role { get; set; }
         public string Avatar { get; set; } = "";
         public bool IsNew { get; set; }

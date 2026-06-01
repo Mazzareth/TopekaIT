@@ -127,11 +127,14 @@
         if (Has(AccessPermissionKeys.AssetsViewItConsole))
         {
             _primary.Add(new("assets", "Assets", "Watch", "/it/assets"));
+            _primary.Add(new("rma", "RMA Flow", "Flag", "/it/rma"));
         }
         else if (Has(AccessPermissionKeys.AssetsViewSupervisorConsole))
         {
             _primary.Add(new("assets", "Assets", "Watch", "/manager/assets"));
+            _primary.Add(new("rma", "RMA Flow", "Flag", "/manager/rma"));
         }
+        AddIf(_primary, AccessPermissionKeys.AssetsViewSupervisorConsole, "station", "Station", "Scan", "/station/equipment");
     }
 
     void AddUsersNav()

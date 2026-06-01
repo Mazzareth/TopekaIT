@@ -11,6 +11,9 @@ public class User
     public string PasswordSalt { get; set; } = "";
     public int PasswordIterations { get; set; } = 100_000;
     public bool MustChangePassword { get; set; }
+    public string? StationPinHash { get; set; }
+    public string? StationPinSalt { get; set; }
+    public int StationPinIterations { get; set; }
     public AccessTier Role { get; set; }
     public string Avatar { get; set; } = "";
 

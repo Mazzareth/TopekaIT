@@ -14,6 +14,13 @@ public class AuditEntryConfig : IEntityTypeConfiguration<AuditEntry>
         b.Property(x => x.SessionId).HasMaxLength(16).IsRequired();
         b.Property(x => x.AssetId).HasMaxLength(16).IsRequired();
         b.Property(x => x.LockerId).HasMaxLength(16);
+        b.Property(x => x.ExpectedHolderId).HasMaxLength(16);
+        b.Property(x => x.ExpectedLockerId).HasMaxLength(16);
+        b.Property(x => x.ActualHolderId).HasMaxLength(16);
+        b.Property(x => x.ActualLockerId).HasMaxLength(16);
+        b.Property(x => x.ScanValue).HasMaxLength(128);
+        b.Property(x => x.Result).HasConversion<string>().HasMaxLength(32);
+        b.Property(x => x.DiscrepancyReason).HasMaxLength(512);
         b.Property(x => x.DiscrepancyNote).HasMaxLength(512);
 
         b.HasOne(x => x.Session)

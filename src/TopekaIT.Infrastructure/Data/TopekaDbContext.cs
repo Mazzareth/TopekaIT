@@ -35,6 +35,7 @@ public class TopekaDbContext : DbContext
     public DbSet<BatteryContainer> BatteryContainers => Set<BatteryContainer>();
     public DbSet<AuditSession> AuditSessions => Set<AuditSession>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<EquipmentTransaction> EquipmentTransactions => Set<EquipmentTransaction>();
     public DbSet<SavedView> SavedViews => Set<SavedView>();
     public DbSet<StatusFlagHistory> StatusFlagHistory => Set<StatusFlagHistory>();
 

@@ -1,0 +1,566 @@
+@page "/station/equipment"
+@using System.Security.Claims
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@inject EquipmentStationService Station
+@inject AssetService AssetService
+@inject TicketService TicketService
+@inject UserService UserService
+@inject DivisionService DivisionService
+@inject ITenantContext TenantContext
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
+
+<PageTitle>Equipment Station · Topeka IT</PageTitle>
+
+<div class="page station-page">
+    <div class="page-head">
+        <div>
+            <h1>Equipment Station</h1>
+            <div class="page-sub">PIN unlock and device scan for check-in / check-out.</div>
+        </div>
+        <div class="page-actions">
+            @if (_employee != null)
+            {
+                <button class="btn" @onclick="ClearEmployee"><Icon Name="X" Size="14" /> Clear employee</button>
+            }
+            @if (_selectedAsset != null)
+            {
+                <button class="btn" @onclick="ClearAsset"><Icon Name="X" Size="14" /> Clear device</button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="@_messageClass">@_message</div>
+    }
+
+    <section class="card station-terminal">
+        <div class="station-division-strip">
+            <div class="station-division-copy">
+                <span class="scan-dock-label">Division</span>
+                <strong>@(string.IsNullOrWhiteSpace(_divisionId) ? "Select a division" : DivisionName(_divisionId))</strong>
+                @if (_divisionPersisted)
+                {
+                    <span>Saved for this terminal</span>
+                }
+            </div>
+            <select value="@_divisionId" @onchange="OnDivisionChanged" disabled="@(_employee != null)">
+                <option value="">Select division</option>
+                @foreach (var division in _divisions)
+                {
+                    <option value="@division.Id">@division.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="station-input-grid">
+            <section class="station-panel station-pin-panel">
+                <div class="station-panel-head">
+                    <div>
+                        <h3>PIN</h3>
+                        <span>@(_employee == null ? "Employee sign-in" : EmployeeSummary)</span>
+                    </div>
+                    @if (_employee != null)
+                    {
+                        <Pill Kind="pill-up">Signed in</Pill>
+                    }
+                </div>
+                <div class="station-pin-row">
+                    <input class="station-pin-input mono"
+                           inputmode="numeric"
+                           maxlength="6"
+                           autocomplete="off"
+                           @bind="_pin"
+                           @bind:event="oninput"
+                           @onkeydown="PinKeyDown"
+                           disabled="@(_employee != null)"
+                           placeholder="000000" />
+                    <button class="btn btn-accent" @onclick="ValidatePin" disabled="@(_employee != null || _pin.Trim().Length != 6)">
+                        <Icon Name="Key" Size="14" /> Unlock
+                    </button>
+                </div>
+            </section>
+
+            <section class="station-panel station-scan-panel">
+                <div class="station-panel-head">
+                    <div>
+                        <h3>Device Scan</h3>
+                        <span>@(_employee == null ? "Sign in first" : $"Ready for {_employee.Name}")</span>
+                    </div>
+                </div>
+                <div class="scan-dock station-scan-dock">
+                    <span class="scan-dock-label">Scan</span>
+                    <input id="station-scan"
+                           autofocus
+                           class="mono"
+                           @bind="_scanValue"
+                           @bind:event="oninput"
+                           @onkeydown="ScanKeyDown"
+                           disabled="@(_employee == null)"
+                           placeholder="RFID, tag, serial, IMEI" />
+                    <button class="btn btn-sm btn-accent" @onclick="ScanAsset" disabled="@(_employee == null || string.IsNullOrWhiteSpace(_scanValue))">
+                        <Icon Name="Scan" Size="13" /> Find
+                    </button>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    @if (_employee != null)
+    {
+        <section class="card station-employee-panel">
+            <div class="station-identity">
+                <span>Signed in</span>
+                <h2>@_employee.Name</h2>
+                <div>@_employee.Role.DisplayName() · @DivisionName(_employee.DivisionId)</div>
+            </div>
+            <div class="station-stats">
+                <div class="station-stat">
+                    <span>Devices out</span>
+                    <strong>@_employeeAssets.Count</strong>
+                </div>
+                <div class="station-stat">
+                    <span>Open tickets</span>
+                    <strong>@_employeeTickets.Count</strong>
+                </div>
+            </div>
+        </section>
+
+        <div class="station-summary-grid">
+            <section class="card station-list-panel">
+                <div class="station-list-head">
+                    <h3>Devices currently out</h3>
+                    <Pill Kind="@(_employeeAssets.Count == 0 ? "pill-up" : "pill-info")">@_employeeAssets.Count</Pill>
+                </div>
+                @if (_employeeAssets.Count == 0)
+                {
+                    <div class="station-empty">No devices are checked out to @_employee.Name.</div>
+                }
+                else
+                {
+                    <div class="station-list">
+                        @foreach (var asset in _employeeAssets)
+                        {
+                            <button class="station-list-row" @onclick="() => SelectEmployeeAsset(asset)">
+                                <span class="station-list-main">
+                                    <strong>@AssetLabel(asset)</strong>
+                                    <span>@DeviceDetail(asset)</span>
+                                </span>
+                                <Pill Kind="@SimpleStatePill(asset)">@Format.SimpleState(asset.Flags)</Pill>
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="card station-list-panel">
+                <div class="station-list-head">
+                    <h3>Open tickets</h3>
+                    <Pill Kind="@(_employeeTickets.Count == 0 ? "pill-up" : "pill-warn")">@_employeeTickets.Count</Pill>
+                </div>
+                @if (_employeeTickets.Count == 0)
+                {
+                    <div class="station-empty">No open tickets for @_employee.Name.</div>
+                }
+                else
+                {
+                    <div class="station-list">
+                        @foreach (var ticket in _employeeTickets)
+                        {
+                            <div class="station-list-row">
+                                <span class="station-list-main">
+                                    <strong>@ticket.Id · @ticket.Title</strong>
+                                    <span>@Format.StatusLabel(ticket.Status) · @Format.PriorityLabel(ticket.Priority) · @TicketAssetLabel(ticket)</span>
+                                </span>
+                                <Pill Kind="@Format.PriorityPill(ticket.Priority)">@Format.PriorityLabel(ticket.Priority)</Pill>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
+    }
+
+    @if (_employee != null && _selectedAsset != null)
+    {
+        var holder = CurrentHolder(_selectedAsset);
+        <section class="card station-device-panel">
+            <div class="station-device-header">
+                <div>
+                    <span class="scan-dock-label">Scanned device</span>
+                    <h3>@AssetLabel(_selectedAsset)</h3>
+                    <div class="station-device-meta">@DeviceDetail(_selectedAsset)</div>
+                </div>
+                <Pill Kind="@SimpleStatePill(_selectedAsset)">@Format.SimpleState(_selectedAsset.Flags)</Pill>
+            </div>
+            <div class="station-device-grid">
+                <span>Status <strong>@_selectedAsset.Status</strong></span>
+                <span>Holder <strong>@(holder?.Name ?? "None")</strong></span>
+                <span>Locker <strong>@(_selectedAsset.LockerId ?? "None")</strong></span>
+            </div>
+            <div class="station-device-actions">
+                @if (IsAvailable(_selectedAsset))
+                {
+                    <button class="btn btn-accent" @onclick="CheckoutToEmployee">
+                        <Icon Name="ArrowOut" Size="14" /> Check out to @_employee.Name
+                    </button>
+                }
+                else if (IsSameHolder(_selectedAsset))
+                {
+                    <button class="btn btn-accent" @onclick="CheckIn">
+                        <Icon Name="ArrowIn" Size="14" /> Check in
+                    </button>
+                }
+                else
+                {
+                    <div class="station-blocked">
+                        This device is not available for @_employee.Name.
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    List<Division> _divisions = new();
+    List<User> _users = new();
+    List<Asset> _allAssets = new();
+    List<Asset> _employeeAssets = new();
+    List<Ticket> _employeeTickets = new();
+
+    User? _employee;
+    Asset? _selectedAsset;
+
+    string _divisionId = "";
+    string _pin = "";
+    string _scanValue = "";
+    string _selectedScanSource = "";
+    string _message = "";
+    string _messageClass = "form-error";
+    string _loggedInUserId = "";
+    bool _divisionPersisted;
+
+    string EmployeeSummary => _employee == null
+        ? ""
+        : $"{_employee.Name} · {_employee.Role.DisplayName()}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _divisions = (await DivisionService.GetAllAsync()).OrderBy(d => d.Name).ToList();
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        _loggedInUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+        var claimDivision = auth.User.FindFirst("division")?.Value;
+        if (string.IsNullOrWhiteSpace(claimDivision))
+        {
+            claimDivision = auth.User.FindFirst("active_division")?.Value;
+        }
+
+        _divisionId = !string.IsNullOrWhiteSpace(claimDivision)
+            ? claimDivision
+            : _divisions.Count == 1 ? _divisions[0].Id : "";
+
+        await ResolveDivision(showError: false);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("topekaStationDivision.get");
+            if (!string.IsNullOrWhiteSpace(stored) && _divisions.Any(d => string.Equals(d.Id, stored, StringComparison.OrdinalIgnoreCase)))
+            {
+                _divisionId = stored;
+                _divisionPersisted = true;
+                await ResolveDivision(showError: false);
+                StateHasChanged();
+            }
+            else if (!string.IsNullOrWhiteSpace(_divisionId))
+            {
+                await SaveDivisionPreference();
+                StateHasChanged();
+            }
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    async Task OnDivisionChanged(ChangeEventArgs e)
+    {
+        _divisionId = e.Value?.ToString() ?? "";
+        ClearEmployeeState();
+
+        if (!await ResolveDivision()) return;
+        await SaveDivisionPreference();
+        SetOk($"Division saved: {DivisionName(_divisionId)}.");
+    }
+
+    async Task PinKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ValidatePin();
+        }
+    }
+
+    async Task ScanKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ScanAsset();
+        }
+    }
+
+    async Task ValidatePin()
+    {
+        var validation = await Station.ValidateStationPinAsync(_pin, _divisionId);
+        if (validation == null)
+        {
+            SetError("PIN was not recognized. If this PIN is shared across locations, select the location and try again.");
+            return;
+        }
+
+        var employeeDivisionId = validation.Employee.DivisionId ?? validation.Division?.Id;
+        if (string.IsNullOrWhiteSpace(employeeDivisionId))
+        {
+            SetError("This employee needs a location assignment before station sign-in.");
+            return;
+        }
+
+        _divisionId = employeeDivisionId;
+        if (!await ResolveDivision()) return;
+
+        _employee = validation.Employee;
+        _pin = "";
+        _selectedAsset = null;
+        _scanValue = "";
+        await SaveDivisionPreference();
+        await LoadEmployeeSummary();
+        SetOk($"{_employee.Name} signed in for {DivisionName(_divisionId)}.");
+    }
+
+    async Task ScanAsset()
+    {
+        if (_employee == null) return;
+        if (!await ResolveDivision()) return;
+
+        var scan = _scanValue.Trim();
+        var asset = await Station.FindByScanAsync(scan);
+        if (asset == null)
+        {
+            SetError("No device matched that scan.");
+            return;
+        }
+
+        _selectedAsset = asset;
+        _selectedScanSource = scan;
+        _scanValue = "";
+        SetOk($"Loaded {AssetLabel(asset)}.");
+    }
+
+    async Task CheckoutToEmployee()
+    {
+        if (_selectedAsset == null || _employee == null) return;
+        var result = await Station.CheckoutAsync(BuildRequest(_selectedAsset.Id, _employee.Id));
+        await FinishMutation(result, $"Checked out {AssetLabel(_selectedAsset)} to {_employee.Name}.");
+    }
+
+    async Task CheckIn()
+    {
+        if (_selectedAsset == null || _employee == null) return;
+        var result = await Station.CheckinAsync(BuildRequest(_selectedAsset.Id, _employee.Id));
+        await FinishMutation(result, $"Checked in {AssetLabel(_selectedAsset)}.");
+    }
+
+    async Task FinishMutation(EquipmentStationResult? result, string okMessage)
+    {
+        if (result == null)
+        {
+            SetError("Device could not be updated.");
+            return;
+        }
+
+        _selectedAsset = await AssetService.GetByIdAsync(result.Asset.Id) ?? result.Asset;
+        await LoadEmployeeSummary();
+        SetOk(okMessage);
+        State.PushToast(okMessage, "up");
+    }
+
+    async Task LoadEmployeeSummary()
+    {
+        if (_employee == null)
+        {
+            _employeeAssets.Clear();
+            _employeeTickets.Clear();
+            return;
+        }
+
+        _users = (await UserService.GetAllAsync()).ToList();
+        _allAssets = (await AssetService.GetAllAsync()).ToList();
+        _employeeAssets = _allAssets
+            .Where(a => string.Equals(a.HolderId, _employee.Id, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => Format.CategoryLabel(a.Category))
+            .ThenBy(AssetLabel)
+            .ToList();
+
+        var heldAssetIds = _employeeAssets.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _employeeTickets = (await TicketService.GetAllAsync())
+            .Where(t => t.Status != TicketStatus.Resolved &&
+                (string.Equals(t.ReportedById, _employee.Id, StringComparison.OrdinalIgnoreCase) ||
+                 (!string.IsNullOrWhiteSpace(t.AssetId) && heldAssetIds.Contains(t.AssetId))))
+            .GroupBy(t => t.Id, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .OrderByDescending(t => (int)t.Priority)
+            .ThenByDescending(t => t.UpdatedAt)
+            .ToList();
+    }
+
+    EquipmentStationRequest BuildRequest(string assetId, string employeeId) =>
+        new(_divisionId, assetId, employeeId, ActorId, null, _selectedScanSource);
+
+    async Task<bool> ResolveDivision(bool showError = true)
+    {
+        if (string.IsNullOrWhiteSpace(_divisionId))
+        {
+            if (showError) SetError("Select a division first.");
+            return false;
+        }
+
+        var division = _divisions.FirstOrDefault(d => string.Equals(d.Id, _divisionId, StringComparison.OrdinalIgnoreCase))
+            ?? await DivisionService.GetByIdAsync(_divisionId);
+        if (division == null)
+        {
+            if (showError) SetError("Selected division was not found.");
+            return false;
+        }
+
+        TenantContext.SetDivision(division.Id, division.ConnectionString);
+        return true;
+    }
+
+    async Task SaveDivisionPreference()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("topekaStationDivision.set", _divisionId);
+            _divisionPersisted = !string.IsNullOrWhiteSpace(_divisionId);
+        }
+        catch (JSException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    void SelectEmployeeAsset(Asset asset)
+    {
+        _selectedAsset = asset;
+        _selectedScanSource = "";
+        SetOk($"Loaded {AssetLabel(asset)}.");
+    }
+
+    void ClearEmployee()
+    {
+        ClearEmployeeState();
+        _message = "";
+    }
+
+    void ClearEmployeeState()
+    {
+        _employee = null;
+        _selectedAsset = null;
+        _employeeAssets.Clear();
+        _employeeTickets.Clear();
+        _pin = "";
+        _scanValue = "";
+        _selectedScanSource = "";
+    }
+
+    void ClearAsset()
+    {
+        _selectedAsset = null;
+        _scanValue = "";
+        _selectedScanSource = "";
+    }
+
+    string? ActorId => !string.IsNullOrWhiteSpace(_loggedInUserId)
+        ? _loggedInUserId
+        : _employee?.Id;
+
+    User? CurrentHolder(Asset asset) =>
+        string.IsNullOrWhiteSpace(asset.HolderId)
+            ? null
+            : _users.FirstOrDefault(u => string.Equals(u.Id, asset.HolderId, StringComparison.OrdinalIgnoreCase));
+
+    bool IsSameHolder(Asset asset) =>
+        _employee != null && string.Equals(asset.HolderId, _employee.Id, StringComparison.OrdinalIgnoreCase);
+
+    static bool IsAvailable(Asset asset) =>
+        string.IsNullOrWhiteSpace(asset.HolderId) &&
+        !asset.Flags.HasFlag(StatusFlags.InRepair) &&
+        !asset.Flags.HasFlag(StatusFlags.InRMA) &&
+        !asset.Flags.HasFlag(StatusFlags.Missing) &&
+        !asset.Flags.HasFlag(StatusFlags.OnHold);
+
+    string DivisionName(string? divisionId) =>
+        string.IsNullOrWhiteSpace(divisionId)
+            ? "No division"
+            : _divisions.FirstOrDefault(d => string.Equals(d.Id, divisionId, StringComparison.OrdinalIgnoreCase))?.Name ?? divisionId;
+
+    string TicketAssetLabel(Ticket ticket)
+    {
+        if (string.IsNullOrWhiteSpace(ticket.AssetId)) return "No device";
+        var asset = _allAssets.FirstOrDefault(a => string.Equals(a.Id, ticket.AssetId, StringComparison.OrdinalIgnoreCase));
+        return asset == null ? ticket.AssetId : AssetLabel(asset);
+    }
+
+    static string DeviceDetail(Asset asset)
+    {
+        var model = string.IsNullOrWhiteSpace(asset.Model) ? Format.CategoryLabel(asset.Category) : asset.Model;
+        var serial = string.IsNullOrWhiteSpace(asset.Serial) ? "No serial" : asset.Serial;
+        return $"{model} · {serial}";
+    }
+
+    static string SimpleStatePill(Asset asset)
+    {
+        var state = Format.SimpleState(asset.Flags);
+        return state switch
+        {
+            "Attention" => "pill-danger",
+            "Loaned" => "pill-warn",
+            "In Use" => "pill-info",
+            _ => "pill-up",
+        };
+    }
+
+    static string AssetLabel(Asset asset)
+    {
+        if (!string.IsNullOrWhiteSpace(asset.Tag)) return asset.Tag;
+        if (!string.IsNullOrWhiteSpace(asset.Serial)) return asset.Serial;
+        return asset.Id;
+    }
+
+    void SetOk(string message)
+    {
+        _message = message;
+        _messageClass = "station-message station-message-ok";
+    }
+
+    void SetError(string message)
+    {
+        _message = message;
+        _messageClass = "form-error";
+    }
+}

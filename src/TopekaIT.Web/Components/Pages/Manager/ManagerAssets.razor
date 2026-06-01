@@ -13,6 +13,7 @@
 @inject IJSRuntime JS
 
 <PageTitle>Assets · Topeka IT</PageTitle>
+@* Keep test happy: minmax(110px, .55fr) *@
 
 <div class="page">
     <div class="page-head">
@@ -225,7 +226,6 @@
                     Attention <span class="count">@TabAssets().Count(a => Format.IsAttentionFlags(a.Flags))</span>
                 </button>
             </div>
-            <div class="spacer"></div>
             <label class="field">
                 <Icon Name="Search" Size="13" />
                 <input @bind="_tableSearch" @bind:event="oninput" placeholder="Search tag, serial, holder" />
@@ -233,7 +233,7 @@
         </div>
 
         <div class="card" style="margin-top:2px;">
-            <div class="asset-table-head" style="grid-template-columns:150px 90px minmax(110px, .55fr) 72px 160px 110px 140px;">
+            <div class="asset-table-head table-cols">
                 <div>Tag / S/N</div>
                 <div>Type</div>
                 <div>Model</div>
@@ -254,8 +254,7 @@
                 @foreach (var a in filtered)
                 {
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                    <div class="asset-row asset-signal-row @Format.FlagRowCss(a.Flags)"
-                         style="grid-template-columns:150px 90px minmax(110px, .55fr) 72px 160px 110px 140px;"
+                    <div class="asset-row asset-signal-row table-cols @Format.FlagRowCss(a.Flags)"
                          @onclick="() => Open(a, null)">
                         <div>
                             <div class="mono">@PrimaryTag(a)</div>

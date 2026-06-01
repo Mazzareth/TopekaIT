@@ -18,6 +18,16 @@ public class TicketService
     public Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct = default) => _repo.GetAllAsync(ct);
     public Task<Ticket?> GetByIdAsync(string id, CancellationToken ct = default) => _repo.GetByIdAsync(id, ct);
 
+    public async Task<IReadOnlyList<Ticket>> GetOpenForAssetAsync(string assetId, CancellationToken ct = default)
+    {
+        var all = await _repo.GetAllAsync(ct);
+        return all
+            .Where(t => string.Equals(t.AssetId, assetId, StringComparison.OrdinalIgnoreCase)
+                && t.Status != TicketStatus.Resolved)
+            .OrderByDescending(t => t.UpdatedAt)
+            .ToList();
+    }
+
     public async Task<Ticket> CreateAsync(string title, string description, string? assetId, AssetKind? assetType, string reportedById, CancellationToken ct = default)
     {
         return await CreateTicketAsync(
@@ -43,6 +53,14 @@ public class TicketService
 
     public async Task<Ticket> CreateForRepairAsync(string assetId, string assetLabel, string reportedByUserId, AssetStatus status, CancellationToken ct = default)
     {
+        var open = await GetOpenForAssetAsync(assetId, ct);
+        var duplicate = open.FirstOrDefault(t =>
+            t.Priority is TicketPriority.High or TicketPriority.Urgent &&
+            (t.Title.Contains("Repair", StringComparison.OrdinalIgnoreCase) ||
+             t.Title.Contains("RMA", StringComparison.OrdinalIgnoreCase) ||
+             t.Title.Contains(status.ToString(), StringComparison.OrdinalIgnoreCase)));
+        if (duplicate != null) return duplicate;
+
         var title = $"Device {assetLabel} — {status}";
         var description = $"Automatically created ticket for device {assetLabel}. Marked as {status}.";
 

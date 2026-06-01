@@ -1,0 +1,291 @@
+/* Locker Workspace & Inspector Split-Pane */
+.locker-workspace {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    overflow: hidden;
+    min-height: 600px;
+    box-shadow: var(--shadow);
+    transition: grid-template-columns 0.3s var(--easing);
+}
+
+.locker-workspace.with-inspector {
+    grid-template-columns: 1fr 380px;
+}
+
+.locker-main-area {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+/* Polished Locker Cards Grid */
+.locker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+    margin-top: 10px;
+}
+
+.locker-card {
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border-left: 4px solid var(--border-subtle);
+    transition: all 0.25s var(--easing);
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+}
+
+.locker-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-md);
+}
+
+.locker-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.locker-card.has-attention {
+    border-left-color: var(--warn);
+    background: linear-gradient(to bottom, var(--panel), color-mix(in srgb, var(--warn) 3%, var(--panel)));
+}
+
+.locker-card.has-missing {
+    border-left-color: var(--down);
+    background: linear-gradient(to bottom, var(--panel), color-mix(in srgb, var(--down) 3%, var(--panel)));
+}
+
+.locker-card.all-available {
+    border-left-color: var(--up);
+    background: linear-gradient(to bottom, var(--panel), color-mix(in srgb, var(--up) 3%, var(--panel)));
+}
+
+.locker-card.has-inuse {
+    border-left-color: var(--info);
+    background: linear-gradient(to bottom, var(--panel), color-mix(in srgb, var(--info) 3%, var(--panel)));
+}
+
+/* Locker Inspector Panel */
+.locker-inspector {
+    border-left: 1px solid var(--border-subtle);
+    background: var(--bg-raised);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    animation: inspector-in 0.25s var(--easing);
+    position: relative;
+}
+
+@keyframes inspector-in {
+    from {
+        opacity: 0;
+        transform: translateX(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.inspector-head {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.inspector-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.inspector-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inspector-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.inspector-section {
+    background: var(--panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.inspector-section-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 6px;
+}
+
+/* Combo Reveal Eye Toggle Field */
+.input-with-reveal {
+    display: flex;
+    position: relative;
+    align-items: center;
+}
+
+.input-with-reveal input {
+    width: 100%;
+    padding-right: 36px;
+}
+
+.reveal-btn {
+    position: absolute;
+    right: 8px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.reveal-btn:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+/* Collapsible Form Panels details/summary */
+.collapsible-form-panel {
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    margin-top: 12px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.collapsible-form-panel[open] {
+    border-style: solid;
+    background: var(--panel);
+}
+
+.collapsible-summary {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.collapsible-summary:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+
+.collapsible-content {
+    padding: 12px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Sleek Autocomplete Results Dropdown */
+.autocomplete-results {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--panel);
+    box-shadow: var(--shadow-md);
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.autocomplete-item:hover {
+    background: var(--bg-hover);
+}
+
+.autocomplete-item-text {
+    display: flex;
+    flex-direction: column;
+}
+
+.autocomplete-item-title {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.autocomplete-item-sub {
+    font-size: 11px;
+    color: var(--text-faint);
+}
+
+/* Device Lists inside Inspector */
+.locker-device-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.locker-device-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--border-subtle);
+}
+
+.locker-device-row:first-child {
+    border-top: none;
+}
+
+/* Responsive Inspector Overrides */
+@media (max-width: 960px) {
+    .locker-workspace.with-inspector {
+        grid-template-columns: 1fr;
+    }
+    
+    .locker-inspector {
+        border-left: none;
+        border-top: 1px solid var(--border-subtle);
+    }
+}

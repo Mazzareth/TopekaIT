@@ -1,0 +1,289 @@
+.station-page {
+    max-width: none;
+}
+
+.station-terminal,
+.station-employee-panel,
+.station-list-panel,
+.station-device-panel {
+    padding: 16px;
+}
+
+.station-division-strip {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 320px);
+    gap: 12px;
+    align-items: end;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+
+.station-division-copy {
+    display: grid;
+    gap: 4px;
+}
+
+.station-division-copy strong {
+    font-size: 17px;
+}
+
+.station-division-copy span:last-child {
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.station-input-grid,
+.station-summary-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.8fr) minmax(360px, 1.2fr);
+    gap: 16px;
+    align-items: start;
+}
+
+.station-panel {
+    min-width: 0;
+}
+
+.station-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.station-panel-head h3,
+.station-list-head h3,
+.station-device-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.station-panel-head span,
+.station-device-meta,
+.station-list-main span {
+    display: block;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.station-pin-row,
+.station-scan-dock {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.station-pin-input {
+    flex: 1;
+    min-width: 140px;
+    font-size: 28px;
+    letter-spacing: 0;
+    text-align: center;
+}
+
+.station-scan-dock {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin: 0;
+}
+
+.station-scan-dock input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    outline: none;
+}
+
+.scan-dock-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.station-message {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 14px;
+    font-size: 13px;
+}
+
+.station-message-ok {
+    color: var(--up);
+    background: color-mix(in srgb, var(--up) 10%, var(--panel));
+    border-color: color-mix(in srgb, var(--up) 24%, var(--border-subtle));
+}
+
+.station-employee-panel {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: center;
+    margin-top: 16px;
+}
+
+.station-identity {
+    display: grid;
+    gap: 3px;
+}
+
+.station-identity span {
+    color: var(--text-faint);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.station-identity h2 {
+    margin: 0;
+    font-size: 24px;
+}
+
+.station-identity div {
+    color: var(--text-dim);
+    font-size: 13px;
+}
+
+.station-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.station-stat {
+    min-width: 120px;
+    padding: 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+}
+
+.station-stat span {
+    display: block;
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.station-stat strong {
+    display: block;
+    margin-top: 4px;
+    font-size: 24px;
+}
+
+.station-summary-grid,
+.station-device-panel {
+    margin-top: 16px;
+}
+
+.station-list-head,
+.station-device-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.station-empty {
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 12px;
+    border: 1px dashed var(--border-subtle);
+    border-radius: var(--radius);
+}
+
+.station-list {
+    display: grid;
+    gap: 8px;
+}
+
+.station-list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    color: var(--text);
+    text-align: left;
+}
+
+button.station-list-row {
+    cursor: pointer;
+}
+
+button.station-list-row:hover {
+    border-color: var(--accent);
+}
+
+.station-list-main {
+    min-width: 0;
+}
+
+.station-list-main strong {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.station-device-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.station-device-grid span {
+    padding: 10px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg-raised);
+    color: var(--text-dim);
+    font-size: 12px;
+}
+
+.station-device-grid strong {
+    display: block;
+    color: var(--text);
+    font-size: 14px;
+    margin-top: 3px;
+}
+
+.station-device-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.station-blocked {
+    color: var(--text-dim);
+    font-size: 13px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+}
+
+@media (max-width: 900px) {
+    .station-division-strip,
+    .station-input-grid,
+    .station-summary-grid,
+    .station-device-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .station-employee-panel,
+    .station-stats,
+    .station-pin-row {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

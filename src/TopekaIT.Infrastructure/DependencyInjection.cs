@@ -38,6 +38,8 @@ public static class DependencyInjection
         services.AddScoped<IPrinterEventRepository, PrinterEventRepository>();
         services.AddScoped<ILockerRepository, LockerRepository>();
         services.AddScoped<IRmaRecordRepository, RmaRecordRepository>();
+        services.AddScoped<IEquipmentTransactionRepository, EquipmentTransactionRepository>();
+        services.AddScoped<IAuditRepository, AuditRepository>();
 
         return services;
     }

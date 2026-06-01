@@ -75,6 +75,8 @@ public class Program
         builder.Services.AddScoped<TicketService>();
         builder.Services.AddScoped<ActivityService>();
         builder.Services.AddScoped<RmaService>();
+        builder.Services.AddScoped<EquipmentStationService>();
+        builder.Services.AddScoped<AuditService>();
         builder.Services.AddScoped<PingHistoryService>();
         builder.Services.AddScoped<PrinterEventService>();
         builder.Services.AddScoped<PrinterSetupService>();

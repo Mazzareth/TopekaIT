@@ -1,0 +1,869 @@
+@page "/it/rma"
+@page "/manager/rma"
+@attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewSupervisorConsole)]
+@using System.Security.Claims
+@using TopekaIT.Core.Domain.Entities
+@using TopekaIT.Core.Domain.Enums
+@using TopekaIT.Core.Services
+@inject RmaService RmaService
+@inject AssetService AssetService
+@inject EquipmentStationService Station
+@inject ActivityService ActivityService
+@inject AppState State
+@inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
+@inject ITenantContext TenantContext
+
+<PageTitle>RMA Flow · Topeka IT</PageTitle>
+
+<div class="page">
+    <div class="page-head">
+        <div>
+            <h1>RMA Flow</h1>
+            <div class="page-sub">Scan devices into local DST/RMA repair and track what is out.</div>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-accent" @onclick="OpenRmaDeviceFlow">
+                <Icon Name="Scan" Size="14" /> RMA Device
+            </button>
+        </div>
+    </div>
+
+    @if (_showRmaIntake)
+    {
+        <section class="card rma-intake-card">
+            <div class="rma-intake-head">
+                <div>
+                    <span class="scan-dock-label">RMA intake</span>
+                    <h2>Scan the device going to DST</h2>
+                    <p>Tap NFC/RFID, scan the asset tag, or type the serial number.</p>
+                </div>
+                <button class="btn btn-sm btn-ghost" @onclick="ResetRmaIntake">
+                    <Icon Name="X" Size="12" /> Close
+                </button>
+            </div>
+
+            <div class="rma-scan-row">
+                <span class="scan-dock-label">Device</span>
+                <input id="rma-device-scan"
+                       class="mono"
+                       autocomplete="off"
+                       @bind="_rmaScanValue"
+                       @bind:event="oninput"
+                       @onkeydown="RmaScanKeyDown"
+                       placeholder="RFID, asset tag, serial, IMEI" />
+                <button class="btn btn-accent" @onclick="ScanRmaDevice" disabled="@string.IsNullOrWhiteSpace(_rmaScanValue)">
+                    <Icon Name="Search" Size="14" /> Find Device
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_rmaIntakeMessage))
+            {
+                <div class="@_rmaIntakeMessageClass">@_rmaIntakeMessage</div>
+            }
+
+            @if (_rmaScanAsset != null)
+            {
+                <div class="rma-intake-device">
+                    <div class="rma-device-main">
+                        <span class="scan-dock-label">Matched device</span>
+                        <strong>@AssetLabel(_rmaScanAsset)</strong>
+                        <span>@DeviceDetail(_rmaScanAsset)</span>
+                    </div>
+                    <div class="rma-device-ids">
+                        <span>Asset tag <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.Tag) ? "None" : _rmaScanAsset.Tag)</strong></span>
+                        <span>Serial <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.Serial) ? "None" : _rmaScanAsset.Serial)</strong></span>
+                        <span>NFC/RFID <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.RfidTagId) ? "Not linked" : _rmaScanAsset.RfidTagId)</strong></span>
+                    </div>
+                    <button class="btn btn-accent rma-send-button" @onclick="SendScannedDeviceToRma" disabled="@_rmaSubmitting">
+                        <Icon Name="Flag" Size="14" /> @(_rmaSubmitting ? "Opening RMA..." : "Send to RMA")
+                    </button>
+                </div>
+            }
+
+            @if (_lastRmaRecord != null)
+            {
+                <div class="rma-intake-complete">
+                    <Icon Name="Check" Size="16" />
+                    <div>
+                        <strong>RMA opened for @(_lastRmaRecord.AssetTag).</strong>
+                        <span>Give the device to local DST. Ticket @(_lastRmaTicket?.Id ?? "was opened") is attached for repair tracking.</span>
+                    </div>
+                </div>
+            }
+        </section>
+    }
+
+    <!-- KPI Metric Strip -->
+    <div class="health-strip">
+        <div class="health-cell @(GetFilterActiveCount(RmaFilter.Active) > 0 ? "active" : "")">
+            <span class="mono">@GetFilterActiveCount(RmaFilter.Active)</span>
+            <span>Active RMAs</span>
+        </div>
+        <div class="health-cell @(GetFilterActiveCount(RmaFilter.PendingHandoff) > 0 ? "warn" : "")">
+            <span class="mono">@GetFilterActiveCount(RmaFilter.PendingHandoff)</span>
+            <span>Pending Handoff</span>
+        </div>
+        <div class="health-cell @(GetFilterActiveCount(RmaFilter.VendorRepair) > 0 ? "active" : "")">
+            <span class="mono">@GetFilterActiveCount(RmaFilter.VendorRepair)</span>
+            <span>With DST/RMA</span>
+        </div>
+        <div class="health-cell @(GetFilterActiveCount(RmaFilter.Overdue) > 0 ? "down" : "")">
+            <span class="mono">@GetFilterActiveCount(RmaFilter.Overdue)</span>
+            <span>Overdue Returns</span>
+        </div>
+    </div>
+
+    <!-- Main Workspace Grid -->
+    <div class="rma-workspace">
+        <!-- Left Panel: Grid & Filters -->
+        <div class="rma-list-pane">
+            <div class="toolbar">
+                <div class="seg">
+                    <button class="@(_activeFilter == RmaFilter.Active ? "active" : "")" @onclick="() => SetFilter(RmaFilter.Active)">
+                        Active <span class="count">@GetFilterActiveCount(RmaFilter.Active)</span>
+                    </button>
+                    <button class="@(_activeFilter == RmaFilter.PendingHandoff ? "active" : "")" @onclick="() => SetFilter(RmaFilter.PendingHandoff)">
+                        Pending <span class="count">@GetFilterActiveCount(RmaFilter.PendingHandoff)</span>
+                    </button>
+                    <button class="@(_activeFilter == RmaFilter.VendorRepair ? "active" : "")" @onclick="() => SetFilter(RmaFilter.VendorRepair)">
+                        With DST <span class="count">@GetFilterActiveCount(RmaFilter.VendorRepair)</span>
+                    </button>
+                    <button class="@(_activeFilter == RmaFilter.Overdue ? "active" : "")" @onclick="() => SetFilter(RmaFilter.Overdue)">
+                        Overdue <span class="count">@GetFilterActiveCount(RmaFilter.Overdue)</span>
+                    </button>
+                    <button class="@(_activeFilter == RmaFilter.Completed ? "active" : "")" @onclick="() => SetFilter(RmaFilter.Completed)">
+                        Completed
+                    </button>
+                </div>
+
+                <div class="field" style="margin-left: auto; width: 220px;">
+                    <input class="inline-input search-input" @bind="_searchQuery" @bind:event="oninput" placeholder="Search tag, serial..." />
+                </div>
+            </div>
+
+            <div class="card table-container">
+                <div class="asset-table-head" style="grid-template-columns: 1.2fr 1fr 1.2fr 1fr 1fr 90px;">
+                    <div>Asset</div>
+                    <div>DST / Section</div>
+                    <div>Date Submitted</div>
+                    <div>DST Handoff</div>
+                    <div>Return Expected</div>
+                    <div style="text-align: right;">Status</div>
+                </div>
+
+                @if (GetFilteredRecords().Count == 0)
+                {
+                    <div class="empty-state-container">
+                        <Icon Name="Flag" Size="32" />
+                        <h3>No RMA records found</h3>
+                        <p>There are no assets matching the selected filters and search query.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var rma in GetFilteredRecords())
+                    {
+                        var isSelected = _selectedRma?.Id == rma.Id;
+                        <div class="asset-row clickable-row @(isSelected ? "selected" : "")" 
+                             @onclick="() => SelectRma(rma)"
+                             style="grid-template-columns: 1.2fr 1fr 1.2fr 1fr 1fr 90px;">
+                            <div class="asset-desc">
+                                <span class="asset-tag font-medium">@(string.IsNullOrWhiteSpace(rma.AssetTag) ? "No Tag" : rma.AssetTag)</span>
+                                @if (rma.Asset != null && !string.IsNullOrWhiteSpace(rma.Asset.Serial))
+                                {
+                                    <span class="asset-sub">S/N: @rma.Asset.Serial</span>
+                                }
+                                @if (rma.Asset != null && !string.IsNullOrWhiteSpace(rma.Asset.RfidTagId))
+                                {
+                                    <span class="asset-sub">RFID: @rma.Asset.RfidTagId</span>
+                                }
+                            </div>
+                            <div class="vendor-section text-dim">@(string.IsNullOrWhiteSpace(rma.Section) ? "Local DST" : rma.Section)</div>
+                            <div class="date-submitted">@(rma.DateSubmitted?.ToString("M/d/yyyy") ?? "N/A")</div>
+                            <div class="handoff-date text-dim">@(rma.ItHandOffDate?.ToString("M/d/yyyy") ?? "—")</div>
+                            <div class="return-date @(IsOverdue(rma) ? "text-danger font-medium" : "text-dim")">
+                                @(rma.TentativeReturnDate?.ToString("M/d/yyyy") ?? "—")
+                            </div>
+                            <div style="text-align: right;">
+                                @if (rma.IsReceived)
+                                {
+                                    <span class="pill-badge pill-up">Complete</span>
+                                }
+                                else if (rma.ItHandOffDate != null)
+                                {
+                                    <span class="pill-badge pill-active">With DST</span>
+                                }
+                                else
+                                {
+                                    <span class="pill-badge pill-warn">Pending</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Right Panel: Stepper & Details Inspector -->
+        <div class="rma-inspector-pane">
+            @if (_selectedRma == null)
+            {
+                <div class="inspector-empty-state">
+                    <Icon Name="Flag" Size="24" />
+                    <span>Select an RMA from the list to track timeline and take actions.</span>
+                </div>
+            }
+            else
+            {
+                <div class="inspector-card">
+                    <div class="inspector-head">
+                        <h3>RMA Details</h3>
+                        <button class="btn-close" @onclick="DeselectRma">
+                            <Icon Name="X" Size="14" />
+                        </button>
+                    </div>
+
+                    <div class="asset-summary-box">
+                        <div class="asset-summary-row">
+                            <div class="summary-cell">
+                                <span class="summary-lbl">Asset Tag</span>
+                                <span class="summary-val font-mono">@(_selectedRma.AssetTag)</span>
+                            </div>
+                            <div class="summary-cell">
+                                <span class="summary-lbl">Serial</span>
+                                <span class="summary-val font-mono">@(_selectedRma.Asset?.Serial ?? "N/A")</span>
+                            </div>
+                        </div>
+                        <div class="asset-summary-row">
+                            <div class="summary-cell">
+                                <span class="summary-lbl">Model</span>
+                                <span class="summary-val">@(_selectedRma.Asset?.Model ?? "N/A")</span>
+                            </div>
+                            <div class="summary-cell">
+                                <span class="summary-lbl">DST / Section</span>
+                                <span class="summary-val">@(string.IsNullOrWhiteSpace(_selectedRma.Section) ? "Local DST" : _selectedRma.Section)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive Timeline Stepper -->
+                    <div class="timeline-container">
+                        <h4 class="section-title">Timeline & Status</h4>
+                        <div class="timeline">
+                            <!-- Step 1: Submitted -->
+                            <div class="timeline-item completed">
+                                <div class="timeline-badge">
+                                    <Icon Name="Check" Size="12" />
+                                </div>
+                                <div class="timeline-panel">
+                                    <div class="timeline-header">
+                                        <span class="timeline-title">Submitted for RMA</span>
+                                        <span class="timeline-date">@(_selectedRma.DateSubmitted?.ToString("M/d/yyyy h:mm tt") ?? "Unknown")</span>
+                                    </div>
+                                    <div class="timeline-body">
+                                        Asset tagged and registered in local IT RMA pipeline.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: IT Handoff -->
+                            <div class="timeline-item @(GetStepClass(2))">
+                                <div class="timeline-badge">
+                                    @if (_selectedRma.ItHandOffDate != null)
+                                    {
+                                        <Icon Name="Check" Size="12" />
+                                    }
+                                    else
+                                    {
+                                        <span>2</span>
+                                    }
+                                </div>
+                                <div class="timeline-panel">
+                                    <div class="timeline-header">
+                                        <span class="timeline-title">Handoff to Local DST</span>
+                                        @if (_selectedRma.ItHandOffDate != null)
+                                        {
+                                            <span class="timeline-date">@(_selectedRma.ItHandOffDate.Value.ToString("M/d/yyyy h:mm tt"))</span>
+                                        }
+                                    </div>
+                                    <div class="timeline-body">
+                                        @if (_selectedRma.ItHandOffDate != null)
+                                        {
+                                            <span>Device handed to local DST for RMA repair routing.</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-dim">Pending physical handoff to local DST.</span>
+                                            @if (!_selectedRma.IsReceived)
+                                            {
+                                                <button class="btn btn-sm btn-accent mt-2 animate-bounce-subtle" @onclick="MarkHandoff">
+                                                    <Icon Name="Check" Size="12" /> Confirm DST Handoff
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Vendor Progress -->
+                            <div class="timeline-item @(GetStepClass(3))">
+                                <div class="timeline-badge">
+                                    @if (_selectedRma.IsReceived)
+                                    {
+                                        <Icon Name="Check" Size="12" />
+                                    }
+                                    else
+                                    {
+                                        <span>3</span>
+                                    }
+                                </div>
+                                <div class="timeline-panel">
+                                    <div class="timeline-header">
+                                        <span class="timeline-title">DST / RMA Repair Progress</span>
+                                        @if (_selectedRma.TentativeReturnDate != null)
+                                        {
+                                            <span class="timeline-date @(IsOverdue(_selectedRma) ? "text-danger" : "")">
+                                                Expected: @(_selectedRma.TentativeReturnDate.Value.ToString("d"))
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="timeline-body">
+                                        @if (_selectedRma.IsReceived)
+                                        {
+                                            <span>Completed. Vendor repair completed and unit returned.</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-dim">Local DST or repair center work is in progress.</span>
+                                            @if (_showRescheduleForm)
+                                            {
+                                                <div class="inline-edit-box mt-2">
+                                                    <input type="date" @bind-value="_newReturnDate" @bind-value:format="yyyy-MM-dd" class="inline-input btn-sm" />
+                                                    <div class="actions">
+                                                        <button class="btn btn-sm btn-primary" @onclick="SaveReschedule">Save</button>
+                                                        <button class="btn btn-sm" @onclick="() => _showRescheduleForm = false">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-ghost mt-2" @onclick="() => { _newReturnDate = _selectedRma.TentativeReturnDate?.DateTime ?? DateTime.Today; _showRescheduleForm = true; }">
+                                                    <Icon Name="Clock" Size="12" /> Reschedule Return Date
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 4: Resolved & Checked In -->
+                            <div class="timeline-item @(GetStepClass(4))">
+                                <div class="timeline-badge">
+                                    @if (_selectedRma.IsReceived)
+                                    {
+                                        <Icon Name="Check" Size="12" />
+                                    }
+                                    else
+                                    {
+                                        <span>4</span>
+                                    }
+                                </div>
+                                <div class="timeline-panel">
+                                    <div class="timeline-header">
+                                        <span class="timeline-title">Resolved & Checked In</span>
+                                        @if (_selectedRma.IsReceived)
+                                        {
+                                            <span class="timeline-date">@(_selectedRma.ReceivedDate?.ToString("M/d/yyyy h:mm tt"))</span>
+                                        }
+                                    </div>
+                                    <div class="timeline-body">
+                                        @if (_selectedRma.IsReceived)
+                                        {
+                                            <span>RMA successfully resolved and asset returned to warehouse stock.</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-dim">Requires physical receipt inspection and resolution notes.</span>
+                                            @if (_showCompleteForm)
+                                            {
+                                                <div class="inline-complete-box mt-2">
+                                                    <div class="form-row">
+                                                        <label>Return Asset Condition</label>
+                                                        <select class="inline-input" @bind="_returnedStatus">
+                                                            <option value="@AssetStatus.In">Available (In)</option>
+                                                            <option value="@AssetStatus.Spare">Spare</option>
+                                                            <option value="@AssetStatus.Holding">Holding</option>
+                                                            <option value="@AssetStatus.Repair">Still Needs Internal Repair</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="form-row mt-2">
+                                                        <label>Resolution Comments</label>
+                                                        <textarea class="inline-input" rows="2" @bind="_completionComments" placeholder="Add any details about repair, parts swapped, or warranty results..."></textarea>
+                                                    </div>
+                                                    <div class="actions mt-3">
+                                                        <button class="btn btn-sm btn-primary" @onclick="SaveCompleteRma" style="flex: 1;">Resolve & Check In</button>
+                                                        <button class="btn btn-sm" @onclick="() => _showCompleteForm = false">Cancel</button>
+                                                    </div>
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn btn-sm btn-accent mt-2" @onclick='() => { _completionComments = ""; _showCompleteForm = true; }'>
+                                                    <Icon Name="Check" Size="12" /> Complete RMA & Check In
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RMA Comments/Notes log -->
+                    @if (!string.IsNullOrWhiteSpace(_selectedRma.Comments))
+                    {
+                        <div class="comments-log mt-4">
+                            <h4 class="section-title">Notes / Comments</h4>
+                            <div class="comments-content">
+                                @((MarkupString)_selectedRma.Comments.Replace("\n", "<br/>"))
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    enum RmaFilter
+    {
+        Active,
+        PendingHandoff,
+        VendorRepair,
+        Overdue,
+        Completed
+    }
+
+    List<RmaRecord> _records = new();
+    RmaFilter _activeFilter = RmaFilter.Active;
+    string _searchQuery = "";
+    RmaRecord? _selectedRma;
+    bool _showRmaIntake;
+    bool _rmaSubmitting;
+    string _rmaScanValue = "";
+    string _rmaIntakeMessage = "";
+    string _rmaIntakeMessageClass = "station-message station-message-ok";
+    Asset? _rmaScanAsset;
+    RmaRecord? _lastRmaRecord;
+    Ticket? _lastRmaTicket;
+
+    // Reschedule form variables
+    bool _showRescheduleForm;
+    DateTime _newReturnDate = DateTime.Today;
+
+    // Completion form variables
+    bool _showCompleteForm;
+    AssetStatus _returnedStatus = AssetStatus.Spare;
+    string _completionComments = "";
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "search")]
+    public string? QuerySearch { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRecords();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_records.Count == 0)
+        {
+            await LoadRecords();
+        }
+
+        if (!string.IsNullOrWhiteSpace(QuerySearch))
+        {
+            _searchQuery = QuerySearch;
+            
+            var match = _records.FirstOrDefault(r => 
+                r.AssetTag.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase) ||
+                r.AssetId.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase) ||
+                (r.Asset != null && r.Asset.Serial != null && r.Asset.Serial.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase)) ||
+                (r.Asset != null && r.Asset.RfidTagId != null && r.Asset.RfidTagId.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase))
+            );
+
+            if (match != null)
+            {
+                if (match.IsReceived)
+                {
+                    _activeFilter = RmaFilter.Completed;
+                }
+                else
+                {
+                    if (match.ItHandOffDate == null)
+                    {
+                        _activeFilter = RmaFilter.PendingHandoff;
+                    }
+                    else
+                    {
+                        _activeFilter = RmaFilter.VendorRepair;
+                    }
+                }
+                SelectRma(match);
+            }
+        }
+    }
+
+    async Task LoadRecords()
+    {
+        _records = (await RmaService.GetAllAsync()).ToList();
+        
+        // Re-bind selected RMA reference to pick up database updates
+        if (_selectedRma != null)
+        {
+            _selectedRma = _records.FirstOrDefault(r => r.Id == _selectedRma.Id);
+        }
+    }
+
+    void SetFilter(RmaFilter filter)
+    {
+        _activeFilter = filter;
+        DeselectRma();
+    }
+
+    void SelectRma(RmaRecord record)
+    {
+        _selectedRma = record;
+        _showRescheduleForm = false;
+        _showCompleteForm = false;
+    }
+
+    void DeselectRma()
+    {
+        _selectedRma = null;
+        _showRescheduleForm = false;
+        _showCompleteForm = false;
+    }
+
+    int GetFilterActiveCount(RmaFilter filter)
+    {
+        var query = _records.AsEnumerable();
+        switch (filter)
+        {
+            case RmaFilter.Active:
+                query = query.Where(r => !r.IsReceived);
+                break;
+            case RmaFilter.PendingHandoff:
+                query = query.Where(r => !r.IsReceived && r.ItHandOffDate == null);
+                break;
+            case RmaFilter.VendorRepair:
+                query = query.Where(r => !r.IsReceived && r.ItHandOffDate != null);
+                break;
+            case RmaFilter.Overdue:
+                var today = DateTimeOffset.UtcNow;
+                query = query.Where(r => !r.IsReceived && r.TentativeReturnDate.HasValue && r.TentativeReturnDate.Value < today);
+                break;
+            case RmaFilter.Completed:
+                query = query.Where(r => r.IsReceived);
+                break;
+        }
+        return query.Count();
+    }
+
+    IReadOnlyList<RmaRecord> GetFilteredRecords()
+    {
+        var query = _records.AsEnumerable();
+        switch (_activeFilter)
+        {
+            case RmaFilter.Active:
+                query = query.Where(r => !r.IsReceived);
+                break;
+            case RmaFilter.PendingHandoff:
+                query = query.Where(r => !r.IsReceived && r.ItHandOffDate == null);
+                break;
+            case RmaFilter.VendorRepair:
+                query = query.Where(r => !r.IsReceived && r.ItHandOffDate != null);
+                break;
+            case RmaFilter.Overdue:
+                var today = DateTimeOffset.UtcNow;
+                query = query.Where(r => !r.IsReceived && r.TentativeReturnDate.HasValue && r.TentativeReturnDate.Value < today);
+                break;
+            case RmaFilter.Completed:
+                query = query.Where(r => r.IsReceived);
+                break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            query = query.Where(r => 
+                r.AssetTag.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) || 
+                (r.Asset != null && r.Asset.Serial != null && r.Asset.Serial.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                (r.Asset != null && r.Asset.RfidTagId != null && r.Asset.RfidTagId.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                r.AssetId.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                r.Section.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                (r.Comments != null && r.Comments.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+            );
+        }
+
+        return query.ToList();
+    }
+
+    bool IsOverdue(RmaRecord record)
+    {
+        if (record.IsReceived) return false;
+        if (!record.TentativeReturnDate.HasValue) return false;
+        return record.TentativeReturnDate.Value < DateTimeOffset.UtcNow;
+    }
+
+    string GetStepClass(int step)
+    {
+        if (_selectedRma == null) return "";
+        switch (step)
+        {
+            case 2: // IT Handoff
+                if (_selectedRma.ItHandOffDate != null) return "completed";
+                return "active";
+            case 3: // Vendor Progress
+                if (_selectedRma.IsReceived) return "completed";
+                if (_selectedRma.ItHandOffDate != null) return "active";
+                return "pending";
+            case 4: // Resolved & Complete
+                if (_selectedRma.IsReceived) return "completed";
+                if (_selectedRma.ItHandOffDate != null) return "pending"; // reachable
+                return "pending";
+            default:
+                return "pending";
+        }
+    }
+
+    void OpenRmaDeviceFlow()
+    {
+        _showRmaIntake = true;
+        _rmaIntakeMessage = "";
+        _lastRmaRecord = null;
+        _lastRmaTicket = null;
+    }
+
+    void ResetRmaIntake()
+    {
+        _showRmaIntake = false;
+        _rmaScanValue = "";
+        _rmaScanAsset = null;
+        _rmaIntakeMessage = "";
+        _lastRmaRecord = null;
+        _lastRmaTicket = null;
+    }
+
+    async Task RmaScanKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ScanRmaDevice();
+        }
+    }
+
+    async Task ScanRmaDevice()
+    {
+        _lastRmaRecord = null;
+        _lastRmaTicket = null;
+
+        var scan = _rmaScanValue.Trim();
+        if (string.IsNullOrWhiteSpace(scan))
+        {
+            SetRmaIntakeError("Scan or enter a serial, asset tag, or NFC/RFID value.");
+            return;
+        }
+
+        var asset = await AssetService.FindByScanAsync(scan);
+        if (asset == null)
+        {
+            _rmaScanAsset = null;
+            SetRmaIntakeError("No device matched that scan.");
+            return;
+        }
+
+        _rmaScanAsset = asset;
+        SetRmaIntakeOk($"Loaded {AssetLabel(asset)}. Confirm to send it to local DST/RMA.");
+    }
+
+    async Task SendScannedDeviceToRma()
+    {
+        if (_rmaScanAsset == null || _rmaSubmitting) return;
+
+        var divisionId = TenantContext.DivisionId;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            divisionId = auth.User.FindFirst("active_division")?.Value;
+        }
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            divisionId = auth.User.FindFirst("division")?.Value;
+        }
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            SetRmaIntakeError("Select a division before sending a device to RMA.");
+            return;
+        }
+
+        var actorId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "it";
+        var actorName = auth.User.FindFirst("name")?.Value ?? auth.User.Identity?.Name ?? "IT Staff";
+        var scanSource = _rmaScanValue.Trim();
+        var notes = $"RMA intake started by {actorName}. Give the device to local DST for RMA repair.";
+
+        _rmaSubmitting = true;
+        try
+        {
+            var request = new EquipmentStationRequest(
+                divisionId,
+                _rmaScanAsset.Id,
+                actorId,
+                actorId,
+                notes,
+                scanSource);
+
+            var result = await Station.SendToDstRmaAsync(request, "Local DST");
+            if (result == null)
+            {
+                SetRmaIntakeError("RMA could not be opened for this device.");
+                return;
+            }
+
+            _rmaScanAsset = result.Asset;
+            _lastRmaTicket = result.Ticket;
+            _lastRmaRecord = result.RmaRecord;
+            if (_lastRmaRecord == null)
+            {
+                SetRmaIntakeError("RMA record was not returned for this device.");
+                return;
+            }
+
+            if (_lastRmaRecord.ItHandOffDate == null)
+            {
+                _lastRmaRecord.ItHandOffDate = DateTimeOffset.UtcNow;
+                AppendRmaComment(_lastRmaRecord, $"[{DateTimeOffset.UtcNow:g}]: Sent to local DST by {actorName}. Ticket {_lastRmaTicket?.Id ?? "opened"} for RMA repair tracking.");
+                await RmaService.UpdateRmaAsync(_lastRmaRecord);
+            }
+
+            await ActivityService.PushAsync("rma_intake", $"{AssetLabel(result.Asset)} sent to local DST by {actorName}");
+            State.PushToast("RMA opened. Give the device to local DST.", "up");
+
+            _activeFilter = RmaFilter.VendorRepair;
+            _searchQuery = AssetLabel(result.Asset);
+            await LoadRecords();
+            _selectedRma = _records.FirstOrDefault(r => string.Equals(r.Id, _lastRmaRecord.Id, StringComparison.OrdinalIgnoreCase));
+            _lastRmaRecord = _selectedRma ?? _lastRmaRecord;
+            SetRmaIntakeOk($"Ticket {_lastRmaTicket?.Id ?? "opened"} and RMA {_lastRmaRecord.Id} are ready.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            SetRmaIntakeError(ex.Message);
+        }
+        finally
+        {
+            _rmaSubmitting = false;
+        }
+    }
+
+    async Task MarkHandoff()
+    {
+        if (_selectedRma == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "IT Staff";
+
+        _selectedRma.ItHandOffDate = DateTimeOffset.UtcNow;
+        var log = $"[{DateTimeOffset.UtcNow:g}]: Marked physically handed off to local DST by {actor}.";
+        _selectedRma.Comments = string.IsNullOrWhiteSpace(_selectedRma.Comments) 
+            ? log 
+            : _selectedRma.Comments + "\n" + log;
+
+        await RmaService.UpdateRmaAsync(_selectedRma);
+        await ActivityService.PushAsync("rma_handoff", $"{_selectedRma.AssetTag} handed off to local DST by {actor}");
+        State.PushToast("Asset marked as handed off to local DST", "up");
+        await LoadRecords();
+    }
+
+    async Task SaveReschedule()
+    {
+        if (_selectedRma == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "IT Staff";
+
+        var newOffset = new DateTimeOffset(_newReturnDate, TimeSpan.Zero);
+        var oldDateStr = _selectedRma.TentativeReturnDate?.ToString("d") ?? "N/A";
+        _selectedRma.TentativeReturnDate = newOffset;
+
+        var log = $"[{DateTimeOffset.UtcNow:g}]: Expected return rescheduled from {oldDateStr} to {newOffset:d} by {actor}.";
+        _selectedRma.Comments = string.IsNullOrWhiteSpace(_selectedRma.Comments) 
+            ? log 
+            : _selectedRma.Comments + "\n" + log;
+
+        await RmaService.UpdateRmaAsync(_selectedRma);
+        State.PushToast("Rescheduled expected return date", "up");
+        _showRescheduleForm = false;
+        await LoadRecords();
+    }
+
+    async Task SaveCompleteRma()
+    {
+        if (_selectedRma == null) return;
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "IT Staff";
+
+        // 1. Update Asset Status and bring it back inside
+        if (_selectedRma.AssetId != null)
+        {
+            await AssetService.SetStatusAsync(_selectedRma.AssetId, _returnedStatus, actor);
+        }
+
+        // 2. Complete RmaRecord
+        var resolutionLog = $"Resolved on {DateTimeOffset.UtcNow:g} by {actor}. Status returned: {_returnedStatus}.";
+        if (!string.IsNullOrWhiteSpace(_completionComments))
+        {
+            resolutionLog += $"\nResolution Comments: {_completionComments}";
+        }
+
+        await RmaService.CompleteRmaAsync(_selectedRma.Id, resolutionLog);
+        await ActivityService.PushAsync("rma_complete", $"{_selectedRma.AssetTag} RMA complete, returned to {_returnedStatus} by {actor}");
+        State.PushToast("RMA successfully resolved & asset checked in", "up");
+        
+        _showCompleteForm = false;
+        await LoadRecords();
+    }
+
+    static void AppendRmaComment(RmaRecord record, string line)
+    {
+        record.Comments = string.IsNullOrWhiteSpace(record.Comments)
+            ? line
+            : record.Comments + "\n" + line;
+    }
+
+    void SetRmaIntakeOk(string message)
+    {
+        _rmaIntakeMessage = message;
+        _rmaIntakeMessageClass = "station-message station-message-ok";
+    }
+
+    void SetRmaIntakeError(string message)
+    {
+        _rmaIntakeMessage = message;
+        _rmaIntakeMessageClass = "form-error";
+    }
+
+    static string AssetLabel(Asset asset)
+    {
+        if (!string.IsNullOrWhiteSpace(asset.Tag)) return asset.Tag;
+        if (!string.IsNullOrWhiteSpace(asset.Serial)) return asset.Serial;
+        return asset.Id;
+    }
+
+    static string DeviceDetail(Asset asset)
+    {
+        var model = string.IsNullOrWhiteSpace(asset.Model) ? Format.CategoryLabel(asset.Category) : asset.Model;
+        var serial = string.IsNullOrWhiteSpace(asset.Serial) ? "No serial" : asset.Serial;
+        return $"{model} · {serial}";
+    }
+}

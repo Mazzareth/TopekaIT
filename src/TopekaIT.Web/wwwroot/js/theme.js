@@ -34,6 +34,21 @@ window.topekaNav = {
     }
 };
 
+window.topekaStationDivision = {
+    get() {
+        try { return localStorage.getItem("topeka-station-division"); } catch { return null; }
+    },
+    set(divisionId) {
+        try {
+            if (divisionId) {
+                localStorage.setItem("topeka-station-division", divisionId);
+            } else {
+                localStorage.removeItem("topeka-station-division");
+            }
+        } catch { }
+    }
+};
+
 window.topekaCommand = {
     _ref: null,
     register(ref) {

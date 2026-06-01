@@ -231,6 +231,14 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("ActualHolderId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ActualLockerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<string>("AssetId")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -240,6 +248,18 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("nvarchar(512)");
 
+                    b.Property<string>("DiscrepancyReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("ExpectedHolderId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ExpectedLockerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<bool>("IsDiscrepancy")
                         .HasColumnType("bit");
 
@@ -247,8 +267,17 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
                     b.Property<DateTimeOffset>("ScannedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ScanValue")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("SessionId")
                         .IsRequired()
@@ -279,6 +308,14 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.Property<int>("Discrepancies")
                         .HasColumnType("int");
 
+                    b.Property<string>("DivisionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("MissingCount")
+                        .HasColumnType("int");
+
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
@@ -287,6 +324,9 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<int>("TotalScanned")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UnexpectedCount")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -325,6 +365,121 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BatteryContainers", (string)null);
+                });
+
+            modelBuilder.Entity("TopekaIT.Core.Domain.Entities.EquipmentTransaction", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("AfterFlags")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AfterHolderId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("AfterLockerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("AfterState")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("AfterStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("AssetId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int>("BeforeFlags")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BeforeHolderId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("BeforeLockerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("BeforeState")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("BeforeStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("CurrentHolderId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("DivisionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("EmployeeId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("LinkedAssetId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("RmaLink")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("RmaRecordId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("ScanSource")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("TicketId")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TicketLink")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<DateTimeOffset>("Timestamp")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetId");
+
+                    b.HasIndex("DivisionId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("Timestamp");
+
+                    b.ToTable("EquipmentTransactions", (string)null);
                 });
 
             modelBuilder.Entity("TopekaIT.Core.Domain.Entities.IssueTagDefinition", b =>
@@ -964,6 +1119,17 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("TopekaIT.Core.Domain.Entities.EquipmentTransaction", b =>
+                {
+                    b.HasOne("TopekaIT.Core.Domain.Entities.Asset", "Asset")
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Asset");
                 });
 
             modelBuilder.Entity("TopekaIT.Core.Domain.Entities.LoanRecord", b =>

@@ -20,6 +20,9 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
         b.Property(x => x.PasswordSalt).HasMaxLength(128).IsRequired();
         b.Property(x => x.PasswordIterations).HasDefaultValue(100_000);
         b.Property(x => x.MustChangePassword).HasDefaultValue(false);
+        b.Property(x => x.StationPinHash).HasMaxLength(128);
+        b.Property(x => x.StationPinSalt).HasMaxLength(128);
+        b.Property(x => x.StationPinIterations).HasDefaultValue(0);
         b.Property(x => x.Role)
             .HasConversion(
                 v => v.ToString(),
@@ -32,6 +35,7 @@ public class MasterUserConfig : IEntityTypeConfiguration<User>
         b.Property(x => x.LockerCombo).HasMaxLength(ComboProtection.ProtectedComboMaxLength);
         b.Property(x => x.LockSerialNumber).HasMaxLength(64);
         b.Property(x => x.DivisionId).HasMaxLength(64);
+        b.HasIndex(x => x.DivisionId);
         b.Property(x => x.LastActiveAt).HasColumnType("datetimeoffset");
         b.Property(x => x.OnLOAReason).HasMaxLength(512);
     }

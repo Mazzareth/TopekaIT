@@ -3,6 +3,7 @@
 @inject AssetService AssetService
 @inject TicketService TicketService
 @inject ActivityService ActivityService
+@inject RmaService RmaService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
@@ -26,6 +27,10 @@
     bool _canUpdateStatus;
     bool _canScanAssets;
     bool _rfidOpen;
+    bool _showRmaForm;
+    string _rmaComments = "";
+    string _rmaSection = "Vendor";
+    DateTime? _rmaTentativeReturn;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -38,6 +43,10 @@
             _showAssignDropdown = false;
             _condition = "ok";
             _rfidOpen = Action == "rfid";
+            _showRmaForm = false;
+            _rmaComments = "";
+            _rmaSection = "Vendor";
+            _rmaTentativeReturn = null;
         }
 
         var auth = await AuthProvider.GetAuthenticationStateAsync();
@@ -133,6 +142,66 @@
         {
             State.PushToast($"Status → {status}", "up");
         }
+        await OnChanged.InvokeAsync();
+    }
+
+    async Task HandleStatusClick(AssetStatus status)
+    {
+        if (Asset == null) return;
+        if (!_canUpdateStatus) return;
+
+        if (status == AssetStatus.InRMA)
+        {
+            _rmaSection = "Vendor";
+            _rmaComments = "";
+            _rmaTentativeReturn = DateTime.Today.AddDays(14);
+            _showRmaForm = true;
+        }
+        else
+        {
+            _showRmaForm = false;
+            await SetStatus(status);
+        }
+    }
+
+    void CancelRma()
+    {
+        _showRmaForm = false;
+    }
+
+    async Task ConfirmRma()
+    {
+        if (Asset == null) return;
+        if (!_canUpdateStatus) return;
+
+        var auth = await AuthProvider.GetAuthenticationStateAsync();
+        var actor = auth.User.FindFirst("name")?.Value ?? "";
+        var userId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
+
+        // 1. Set Asset status
+        await AssetService.SetStatusAsync(Asset.Id, AssetStatus.InRMA, actor);
+
+        // 2. Create RMA Record
+        var tentativeOffset = _rmaTentativeReturn.HasValue
+            ? new DateTimeOffset(_rmaTentativeReturn.Value, TimeSpan.Zero)
+            : (DateTimeOffset?)null;
+
+        var comments = string.IsNullOrWhiteSpace(_rmaComments) ? "Asset marked InRMA." : _rmaComments;
+
+        await RmaService.CreateRmaAsync(
+            Asset.Id,
+            Asset.Tag ?? Asset.Serial ?? Asset.Id,
+            comments,
+            _rmaSection,
+            tentativeOffset
+        );
+
+        // 3. Create Ticket for Repair
+        var label = !string.IsNullOrWhiteSpace(Asset.Tag) ? Asset.Tag : (!string.IsNullOrWhiteSpace(Asset.Serial) ? Asset.Serial : Asset.Id);
+        await TicketService.CreateForRepairAsync(Asset.Id, label, userId, AssetStatus.InRMA);
+
+        State.PushToast($"Device marked InRMA — RMA record & IT ticket created", "up");
+        _showRmaForm = false;
         await OnChanged.InvokeAsync();
     }
 
@@ -306,9 +375,15 @@
                             @foreach (var rma in Asset.RmaRecords.OrderByDescending(r => r.DateSubmitted))
                             {
                                 <div style="font-size: 12px; padding: 6px 10px; background: var(--bg-sunken); border-radius: 4px; margin-bottom: 4px; border-left: 2px solid @(rma.IsReceived ? "var(--up)" : "var(--warn)")">
-                                    <div style="display: flex; justify-content: space-between;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <span>Submitted: @(rma.DateSubmitted?.ToString("d") ?? "Unknown")</span>
-                                        <span style="color: @(rma.IsReceived ? "var(--up)" : "var(--warn)")">@(rma.IsReceived ? "Received" : "Pending")</span>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="color: @(rma.IsReceived ? "var(--up)" : "var(--warn)")">@(rma.IsReceived ? "Received" : "Pending")</span>
+                                            @if (!rma.IsReceived)
+                                            {
+                                                <a href="/it/rma?search=@(Asset.Tag ?? Asset.Serial)" style="font-size: 11px; text-decoration: underline; color: var(--accent); font-weight: 500;">Track RMA</a>
+                                            }
+                                        </div>
                                     </div>
                                     @if (!string.IsNullOrEmpty(rma.Comments))
                                     {
@@ -323,12 +398,37 @@
                     {
                         <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px; margin-bottom: 14px;">
                             <div style="font-size: 11px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 8px; letter-spacing: 0.06em;">Status</div>
-                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: @(_showRmaForm ? "12px" : "0");">
                                 @foreach (var s in new[] { AssetStatus.InUse, AssetStatus.InRMA, AssetStatus.Repair, AssetStatus.Holding, AssetStatus.MIA })
                                 {
-                                    <button class="@(Asset.Status == s ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick="() => SetStatus(s)">@s.ToString()</button>
+                                    <button class="@(Asset.Status == s ? "btn btn-sm btn-primary" : "btn btn-sm")" @onclick="() => HandleStatusClick(s)">@s.ToString()</button>
                                 }
                             </div>
+
+                            @if (_showRmaForm)
+                            {
+                                <div style="margin-top: 12px; padding: 12px; background: var(--bg); border: 1px solid var(--border-subtle); border-radius: 6px; display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="font-weight: 600; font-size: 12px; color: var(--accent); display: flex; align-items: center; gap: 6px;">
+                                        <Icon Name="Flag" Size="14" /> RMA Flow Initialization
+                                    </div>
+                                    <div class="form-row" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Vendor / Repair Center</label>
+                                        <input type="text" @bind="_rmaSection" placeholder="e.g. Zebra, Honeywell, Internal" style="padding: 6px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); width: 100%; background: var(--bg);" />
+                                    </div>
+                                    <div class="form-row" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Tentative Return Date</label>
+                                        <input type="date" @bind-value="_rmaTentativeReturn" @bind-value:format="yyyy-MM-dd" style="padding: 6px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); width: 100%; background: var(--bg);" />
+                                    </div>
+                                    <div class="form-row" style="margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                                        <label style="font-size: 11px; color: var(--text-dim); font-weight: 500;">Issue Comments</label>
+                                        <textarea @bind="_rmaComments" rows="2" placeholder="Describe the physical condition or problem..." style="padding: 6px 10px; font-size: 12px; border-radius: 4px; border: 1px solid var(--border); width: 100%; background: var(--bg); resize: vertical;"></textarea>
+                                    </div>
+                                    <div style="display: flex; gap: 6px; margin-top: 4px;">
+                                        <button class="btn btn-sm btn-primary" @onclick="ConfirmRma" style="flex: 1;">Create RMA & Ticket</button>
+                                        <button class="btn btn-sm" @onclick="CancelRma" style="flex: 0 0 auto;">Cancel</button>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
 

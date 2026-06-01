@@ -8,10 +8,17 @@ namespace TopekaIT.Core.Services;
 public class UserService
 {
     private readonly IUserRepository _repo;
+    private readonly IDivisionRepository? _divisions;
 
     public UserService(IUserRepository repo)
     {
         _repo = repo;
+    }
+
+    public UserService(IUserRepository repo, IDivisionRepository divisions)
+    {
+        _repo = repo;
+        _divisions = divisions;
     }
 
     public Task<IReadOnlyList<User>> GetAllAsync(CancellationToken ct = default) => _repo.GetAllAsync(ct);
@@ -93,6 +100,102 @@ public class UserService
         await _repo.UpdateAsync(user, ct);
     }
 
+    public async Task SetStationPinAsync(string userId, string? stationPin, CancellationToken ct = default)
+    {
+        var user = await _repo.GetByIdAsync(userId, ct)
+            ?? throw new InvalidOperationException("User not found.");
+
+        if (string.IsNullOrWhiteSpace(stationPin))
+        {
+            user.StationPinHash = null;
+            user.StationPinSalt = null;
+            user.StationPinIterations = 0;
+            await _repo.UpdateAsync(user, ct);
+            return;
+        }
+
+        var normalizedPin = NormalizeStationPin(stationPin);
+        if (!IsValidStationPin(normalizedPin))
+        {
+            throw new InvalidOperationException("Station PIN must be exactly 6 numeric digits.");
+        }
+
+        if (string.IsNullOrWhiteSpace(user.DivisionId))
+        {
+            throw new InvalidOperationException("Station PINs require a division-scoped user.");
+        }
+
+        var all = await _repo.GetAllAsync(ct);
+        var duplicate = all.Any(other =>
+            !string.Equals(other.Id, user.Id, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(other.DivisionId, user.DivisionId, StringComparison.OrdinalIgnoreCase)
+            && VerifyStationPin(other, normalizedPin));
+
+        if (duplicate)
+        {
+            throw new InvalidOperationException("That station PIN is already used in this division.");
+        }
+
+        var pinMetadata = PasswordHasher.HashWithMetadata(normalizedPin);
+        user.StationPinHash = pinMetadata.hash;
+        user.StationPinSalt = pinMetadata.salt;
+        user.StationPinIterations = pinMetadata.iterations;
+        await _repo.UpdateAsync(user, ct);
+    }
+
+    public Task ClearStationPinAsync(string userId, CancellationToken ct = default) =>
+        SetStationPinAsync(userId, null, ct);
+
+    public async Task<StationPinValidationResult?> ValidateStationPinAsync(string pin, string? divisionId, CancellationToken ct = default)
+    {
+        var normalizedPin = NormalizeStationPin(pin);
+        if (!IsValidStationPin(normalizedPin))
+        {
+            return null;
+        }
+
+        var all = await _repo.GetAllAsync(ct);
+        var selectedDivisionId = string.IsNullOrWhiteSpace(divisionId) ? null : divisionId.Trim();
+        User? employee = null;
+
+        if (!string.IsNullOrWhiteSpace(selectedDivisionId))
+        {
+            employee = all
+                .Where(u => string.Equals(u.DivisionId, selectedDivisionId, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(u => VerifyStationPin(u, normalizedPin));
+
+            if (employee == null)
+            {
+                var matchesOutsideSelectedDivision = all
+                    .Where(u => !string.Equals(u.DivisionId, selectedDivisionId, StringComparison.OrdinalIgnoreCase))
+                    .Where(u => VerifyStationPin(u, normalizedPin))
+                    .Take(2)
+                    .ToList();
+
+                employee = matchesOutsideSelectedDivision.Count == 1 ? matchesOutsideSelectedDivision[0] : null;
+            }
+        }
+        else
+        {
+            var matches = all
+                .Where(u => VerifyStationPin(u, normalizedPin))
+                .Take(2)
+                .ToList();
+
+            employee = matches.Count == 1 ? matches[0] : null;
+        }
+
+        if (employee == null || string.IsNullOrWhiteSpace(employee.DivisionId)) return null;
+
+        var resolvedDivisionId = employee.DivisionId;
+        var division = _divisions == null ? null : await _divisions.GetByIdAsync(resolvedDivisionId, ct);
+        return new StationPinValidationResult(
+            employee,
+            division,
+            employee.Role >= AccessTier.Supervisor,
+            employee.Role >= AccessTier.Admin);
+    }
+
     public async Task SetAuditAsync(string userId, bool value, CancellationToken ct = default)
     {
         var user = await _repo.GetByIdAsync(userId, ct);
@@ -152,4 +255,34 @@ public class UserService
 
         return new string(chars);
     }
+
+    private static string NormalizeStationPin(string pin) => pin.Trim();
+
+    private static bool IsValidStationPin(string pin)
+        => pin.Length == 6 && pin.All(char.IsDigit);
+
+    private static bool VerifyStationPin(User user, string pin)
+    {
+        if (string.IsNullOrWhiteSpace(user.StationPinHash) ||
+            string.IsNullOrWhiteSpace(user.StationPinSalt) ||
+            user.StationPinIterations <= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return PasswordHasher.Verify(pin, user.StationPinHash, user.StationPinSalt, user.StationPinIterations);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 }
+
+public sealed record StationPinValidationResult(
+    User Employee,
+    Division? Division,
+    bool HasSupervisorAuthority,
+    bool HasAdminAuthority);

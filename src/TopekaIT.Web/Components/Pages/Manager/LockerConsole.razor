@@ -14,7 +14,7 @@
 
 <PageTitle>Lockers - Topeka IT</PageTitle>
 
-<div class="page">
+<div class="page" style="max-width:none;">
     <div class="page-head">
         <div>
             <h1>Lockers</h1>
@@ -30,124 +30,400 @@
         }
     </div>
 
-    <div class="toolbar" style="padding-bottom: 8px;">
-        <div class="seg">
-            <button class="@(_lockerFilter == "all" ? "active" : "")" @onclick='() => _lockerFilter = "all"'>
-                All <span class="count">@_lockers.Count</span>
-            </button>
-            <button class="@(_lockerFilter == "empty" ? "active" : "")" @onclick='() => _lockerFilter = "empty"'>
-                Empty <span class="count">@_lockers.Count(IsEmptyLocker)</span>
-            </button>
-            <button class="@(_lockerFilter == "attention" ? "active" : "")" @onclick='() => _lockerFilter = "attention"'>
-                Attention <span class="count">@_lockers.Count(LockerHasAttention)</span>
-            </button>
-        </div>
-        <div class="spacer"></div>
-        <label class="field">
-            <Icon Name="Search" Size="13" />
-            <input @bind="_lockerSearch" @bind:event="oninput" placeholder="Search locker, person, or device" />
-        </label>
-    </div>
+    <div class="locker-workspace @(_selectedLocker != null ? "with-inspector" : "")">
+        <div class="locker-main-area">
+            <div class="toolbar" style="padding-bottom: 8px;">
+                <div class="seg">
+                    <button class="@(_lockerFilter == "all" ? "active" : "")" @onclick='() => _lockerFilter = "all"'>
+                        All <span class="count">@_lockers.Count</span>
+                    </button>
+                    <button class="@(_lockerFilter == "empty" ? "active" : "")" @onclick='() => _lockerFilter = "empty"'>
+                        Empty <span class="count">@_lockers.Count(IsEmptyLocker)</span>
+                    </button>
+                    <button class="@(_lockerFilter == "attention" ? "active" : "")" @onclick='() => _lockerFilter = "attention"'>
+                        Attention <span class="count">@_lockers.Count(LockerHasAttention)</span>
+                    </button>
+                </div>
+                <div class="spacer"></div>
+                <label class="field">
+                    <Icon Name="Search" Size="13" />
+                    <input @bind="_lockerSearch" @bind:event="oninput" placeholder="Search locker, person, or device" />
+                </label>
+            </div>
 
-    @if (_loadError != null)
-    {
-        <div class="form-error">@_loadError</div>
-    }
-    else if (!_lockers.Any())
-    {
-        <EmptyState IconName="Locker" Title="No lockers">
-            @if (_canEditLockers)
+            @if (_loadError != null)
             {
-                <span>Create the first locker for this division.</span>
+                <div class="form-error">@_loadError</div>
+            }
+            else if (!_lockers.Any())
+            {
+                <EmptyState IconName="Locker" Title="No lockers">
+                    @if (_canEditLockers)
+                    {
+                        <span>Create the first locker for this division.</span>
+                    }
+                    else
+                    {
+                        <span>No lockers have been created for this division.</span>
+                    }
+                </EmptyState>
             }
             else
             {
-                <span>No lockers have been created for this division.</span>
-            }
-        </EmptyState>
-    }
-    else
-    {
-        var filteredLockers = FilteredLockers();
-        if (!filteredLockers.Any())
-        {
-            <EmptyState IconName="Locker" Title="No lockers">No lockers match the current view.</EmptyState>
-        }
-        else
-        {
-            <div class="locker-grid">
-                @foreach (var locker in filteredLockers)
+                var filteredLockers = FilteredLockers();
+                if (!filteredLockers.Any())
                 {
-                    var occupantUsers = ActiveOccupantUsers(locker).ToList();
-                    var lockerAssets = AssetsInLocker(locker.Id).ToList();
-                    var cardClass = LockerCardClass(lockerAssets);
+                    <EmptyState IconName="Locker" Title="No lockers">No lockers match the current view.</EmptyState>
+                }
+                else
+                {
+                    <div class="locker-grid">
+                        @foreach (var locker in filteredLockers)
+                        {
+                            var occupantUsers = ActiveOccupantUsers(locker).ToList();
+                            var lockerAssets = AssetsInLocker(locker.Id).ToList();
+                            var cardClass = LockerCardClass(lockerAssets);
+                            var isSelected = _selectedLocker?.Id == locker.Id;
 
-                    <div class="locker-card @cardClass" @onclick="() => OpenLocker(locker)">
-                        <div class="locker-head">
-                            <span class="locker-num">#@locker.Number</span>
-                            @if (!string.IsNullOrWhiteSpace(locker.Section))
-                            {
-                                <span class="locker-section-tag">@locker.Section</span>
-                            }
-                            @if (locker.IsShared || occupantUsers.Count > 1)
-                            {
-                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Shared</span>
-                            }
-                        </div>
+                            <div class="locker-card @cardClass @(isSelected ? "active" : "")" @onclick="() => OpenLocker(locker)">
+                                <div class="locker-head">
+                                    <span class="locker-num">#@locker.Number</span>
+                                    @if (!string.IsNullOrWhiteSpace(locker.Section))
+                                    {
+                                        <span class="locker-section-tag">@locker.Section</span>
+                                    }
+                                    @if (locker.IsShared || occupantUsers.Count > 1)
+                                    {
+                                        <span class="state-pill" style="font-size:10px;padding:1px 5px;">Shared</span>
+                                    }
+                                </div>
 
-                        <div class="locker-body">
-                            <div class="locker-occupant">
-                                @if (occupantUsers.Any())
-                                {
-                                    <span class="locker-occupant-name">@string.Join(", ", occupantUsers.Select(u => u.Name))</span>
-                                }
-                                else
-                                {
-                                    <span class="locker-unassigned">No assigned user</span>
-                                }
-                            </div>
-
-                            <div class="locker-device-list">
-                                @foreach (var asset in lockerAssets.Take(4))
-                                {
-                                    <div class="locker-device-row">
-                                        <span class="device-tag">@PrimaryTag(asset)</span>
-                                        <span class="@Format.SimpleStateCss(asset.Flags)">
-                                            <span class="dot"></span>@Format.SimpleState(asset.Flags)
-                                        </span>
+                                <div class="locker-body">
+                                    <div class="locker-occupant">
+                                        @if (occupantUsers.Any())
+                                        {
+                                            <span class="locker-occupant-name">@string.Join(", ", occupantUsers.Select(u => u.Name))</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="locker-unassigned">No assigned user</span>
+                                        }
                                     </div>
-                                }
-                                @if (lockerAssets.Count > 4)
-                                {
-                                    <div class="locker-empty-devices">@((lockerAssets.Count - 4).ToString()) more assigned</div>
-                                }
-                                else if (!lockerAssets.Any())
-                                {
-                                    <div class="locker-empty-devices">No devices assigned</div>
-                                }
-                            </div>
-                        </div>
 
-                        <div class="locker-foot">
-                            <span class="locker-audit-ts">
-                                @if (locker.LastAuditedAt.HasValue)
-                                {
-                                    <span>Audited @Format.RelTime(locker.LastAuditedAt.Value)</span>
-                                }
-                                else
-                                {
-                                    <span>Never audited</span>
-                                }
-                            </span>
-                            <button class="btn btn-sm btn-ghost" @onclick:stopPropagation="true" @onclick="() => OpenLocker(locker)">
-                                <Icon Name="Eye" Size="12" /> Open
-                            </button>
-                        </div>
+                                    <div class="locker-device-list">
+                                        @foreach (var asset in lockerAssets.Take(4))
+                                        {
+                                            <div class="locker-device-row">
+                                                <span class="device-tag">@PrimaryTag(asset)</span>
+                                                <span class="@Format.SimpleStateCss(asset.Flags)">
+                                                    <span class="dot"></span>@Format.SimpleState(asset.Flags)
+                                                </span>
+                                            </div>
+                                        }
+                                        @if (lockerAssets.Count > 4)
+                                        {
+                                            <div class="locker-empty-devices">@((lockerAssets.Count - 4).ToString()) more assigned</div>
+                                        }
+                                        else if (!lockerAssets.Any())
+                                        {
+                                            <div class="locker-empty-devices">No devices assigned</div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="locker-foot">
+                                    <span class="locker-audit-ts">
+                                        @if (locker.LastAuditedAt.HasValue)
+                                        {
+                                            <span>Audited @Format.RelTime(locker.LastAuditedAt.Value)</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Never audited</span>
+                                        }
+                                    </span>
+                                    <button class="btn btn-sm btn-ghost" @onclick:stopPropagation="true" @onclick="() => OpenLocker(locker)">
+                                        <Icon Name="Eye" Size="12" /> Open
+                                    </button>
+                                </div>
+                            </div>
+                        }
                     </div>
                 }
+            }
+        </div>
+
+        @if (_selectedLocker != null)
+        {
+            var locker = _selectedLocker;
+            var occupants = ActiveOccupants(locker).ToList();
+            var users = ActiveOccupantUsers(locker).ToList();
+            var assets = AssetsInLocker(locker.Id).ToList();
+
+            <div class="locker-inspector">
+                <div class="inspector-head">
+                    <div class="inspector-title-row">
+                        <div class="inspector-title">
+                            <Icon Name="Locker" Size="16" /> Locker #@locker.Number
+                        </div>
+                        <button class="iconbtn" @onclick="CloseLocker">
+                            <Icon Name="X" Size="16" />
+                        </button>
+                    </div>
+                </div>
+
+                <div class="inspector-body">
+                    <div class="inspector-section">
+                        <div class="inspector-section-title">Locker Details</div>
+                        <div class="form-grid">
+                            <div class="form-row">
+                                <label>Locker #</label>
+                                <input class="mono" @bind="locker.Number" @bind:event="oninput" disabled="@(!_canEditLockers)" />
+                            </div>
+                            <div class="form-row">
+                                <label>Section</label>
+                                <input @bind="locker.Section" @bind:event="oninput" disabled="@(!_canEditLockers)" />
+                            </div>
+                            <div class="form-row">
+                                <label>Combo</label>
+                                <div class="input-with-reveal">
+                                    @if (_canEditLockers || (_canRevealCombos && _revealCombo))
+                                    {
+                                        <input class="mono" @bind="locker.LockCombo" @bind:event="oninput" disabled="@(!_canEditLockers)" />
+                                    }
+                                    else if (_canRevealCombos)
+                                    {
+                                        <input value="••••••••" class="mono" disabled />
+                                    }
+                                    else
+                                    {
+                                        <input value="Restricted" disabled />
+                                    }
+                                    @if (_canRevealCombos && !_canEditLockers)
+                                    {
+                                        <button type="button" class="reveal-btn" @onclick="() => _revealCombo = !_revealCombo">
+                                            <Icon Name="@(_revealCombo ? "EyeOff" : "Eye")" Size="14" />
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <label>Lock serial</label>
+                                <input class="mono" @bind="locker.LockSerial" @bind:event="oninput" disabled="@(!_canEditLockers)" />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <label>Notes</label>
+                            <textarea @bind="locker.Notes" @bind:event="oninput" rows="2" disabled="@(!_canEditLockers)"></textarea>
+                        </div>
+                        <label class="checkbox" style="margin-top: 6px;">
+                            <input type="checkbox" @bind="locker.IsShared" disabled="@(!_canEditLockers)" />
+                            Shared locker
+                        </label>
+                        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
+                            @if (_canEditLockers)
+                            {
+                                <button class="btn btn-primary btn-sm" @onclick="SaveLocker" disabled="@_savingLocker">
+                                    Save locker
+                                </button>
+                            }
+                            @if (_canMarkAudits)
+                            {
+                                <button class="btn btn-sm" @onclick="RecordAudit" disabled="@_savingLocker">
+                                    <Icon Name="Check" Size="13" /> Audited
+                                </button>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_lockerError))
+                        {
+                            <div class="form-error">@_lockerError</div>
+                        }
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-title">Users</div>
+                        @if (users.Any())
+                        {
+                            <div class="locker-device-list" style="margin-bottom: 12px;">
+                                @foreach (var occupant in occupants)
+                                {
+                                    var user = UserFor(occupant.UserId);
+                                    <div class="locker-device-row">
+                                        <span style="flex:1;">
+                                            <strong>@(user?.Name ?? occupant.UserId)</strong>
+                                            <span style="display:block;color:var(--text-faint);font-size:11px;">@(user?.Position ?? user?.Username ?? "Assigned user")</span>
+                                        </span>
+                                        @if (occupant.IsPrimary)
+                                        {
+                                            <span class="state-pill state-inuse" style="font-size:10px;padding:1px 5px;margin-right:4px;">Primary</span>
+                                        }
+                                        @if (_canEditLockers && user != null)
+                                        {
+                                            <button class="btn btn-sm btn-ghost" style="padding:2px 5px;" @onclick="() => RemoveUserFromLocker(user)">
+                                                <Icon Name="X" Size="12" />
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="locker-empty-devices" style="text-align:left; padding: 6px 0;">No assigned users</div>
+                        }
+
+                        @if (_canAssignUsers)
+                        {
+                            <div class="form-row" style="margin-top: 10px;">
+                                <label>Search & Add User</label>
+                                <input @bind="_userSearch" @bind:event="oninput" placeholder="Type name or username" autocomplete="off" />
+                            </div>
+                            @if (UserSearchResults.Any())
+                            {
+                                <div class="autocomplete-results">
+                                    @foreach (var user in UserSearchResults)
+                                    {
+                                        <div class="autocomplete-item" @onclick="() => AssignUserToLocker(user)">
+                                            <div class="autocomplete-item-text">
+                                                <span class="autocomplete-item-title">@user.Name</span>
+                                                <span class="autocomplete-item-sub">@user.Username</span>
+                                            </div>
+                                            <button class="btn btn-xs btn-primary" style="padding: 2px 6px; font-size: 11px;">Add</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (_canCreateUsers)
+                            {
+                                <details class="collapsible-form-panel">
+                                    <summary class="collapsible-summary">
+                                        <Icon Name="Plus" Size="12" /> Create & assign new user
+                                    </summary>
+                                    <div class="collapsible-content">
+                                        <div class="form-grid">
+                                            <div class="form-row">
+                                                <label>Name</label>
+                                                <input @bind="_newUserName" @bind:event="oninput" autocomplete="off" />
+                                            </div>
+                                            <div class="form-row">
+                                                <label>Username</label>
+                                                <input @bind="_newUsername" @bind:event="oninput" autocomplete="off" />
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <label>Position</label>
+                                            <input @bind="_newUserPosition" @bind:event="oninput" autocomplete="off" />
+                                        </div>
+                                        <button class="btn btn-sm" @onclick="CreateUserForLocker" disabled="@(_savingUser || string.IsNullOrWhiteSpace(_newUserName))">
+                                            <Icon Name="User" Size="12" /> Create user
+                                        </button>
+                                    </div>
+                                </details>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_createdUserPassword))
+                            {
+                                <div style="margin-top: 10px; padding: 10px; border: 1px solid var(--warn); background: var(--warn-bg); border-radius: 6px; font-size: 12px;">
+                                    <div style="font-weight: 600; margin-bottom: 4px;">Temporary password for @_createdUserName</div>
+                                    <code class="mono" style="user-select: all;">@_createdUserPassword</code>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(_userError))
+                            {
+                                <div class="form-error">@_userError</div>
+                            }
+                        }
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-title">Devices</div>
+                        @if (assets.Any())
+                        {
+                            <div class="locker-device-list" style="margin-bottom: 14px;">
+                                @foreach (var asset in assets)
+                                {
+                                    var holder = UserFor(asset.HolderId);
+                                    <div class="locker-device-row">
+                                        <span style="flex: 1; min-width: 0;">
+                                            <strong class="mono">@PrimaryTag(asset)</strong>
+                                            <span style="display:block;color:var(--text-faint);font-size:11px;">@DeviceSubtitle(asset, holder)</span>
+                                        </span>
+                                        <span class="@Format.SimpleStateCss(asset.Flags)" style="font-size: 10px; padding: 1px 6px;">
+                                            @Format.SimpleState(asset.Flags)
+                                        </span>
+                                        @if (_canAssignDevices)
+                                        {
+                                            <button class="btn btn-sm btn-ghost" style="padding:2px 5px;" @onclick="() => RemoveDeviceFromLocker(asset)">
+                                                <Icon Name="X" Size="12" />
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="locker-empty-devices" style="text-align:left; padding: 6px 0;">No assigned devices</div>
+                        }
+
+                        @if (_canAssignDevices)
+                        {
+                            <div class="form-row" style="margin-top: 10px;">
+                                <label>Search & Add Device</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input style="flex:1;" @bind="_deviceSearch" @bind:event="oninput" @onkeydown="DeviceSearchKey" placeholder="Serial, tag, or IMEI" autocomplete="off" />
+                                    <button class="btn btn-sm" @onclick="SearchDevice" disabled="@_savingDevice">
+                                        <Icon Name="Search" Size="12" /> Search
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (_deviceSearchResult != null)
+                            {
+                                <div class="autocomplete-results" style="margin-bottom: 12px;">
+                                    <div class="autocomplete-item" @onclick="() => AssignDeviceToLocker(_deviceSearchResult)">
+                                        <div class="autocomplete-item-text">
+                                            <span class="autocomplete-item-title">@PrimaryTag(_deviceSearchResult)</span>
+                                            <span class="autocomplete-item-sub">@_deviceSearchResult.Model</span>
+                                        </div>
+                                        <button class="btn btn-xs btn-primary" style="padding: 2px 6px; font-size: 11px;">Assign</button>
+                                    </div>
+                                </div>
+                            }
+                            else if (_deviceSearchMissing)
+                            {
+                                <details open class="collapsible-form-panel">
+                                    <summary class="collapsible-summary">
+                                        <Icon Name="Plus" Size="12" /> Create & assign new device
+                                    </summary>
+                                    <div class="collapsible-content">
+                                        <div class="form-grid">
+                                            <div class="form-row">
+                                                <label>Serial number</label>
+                                                <input class="mono" @bind="_newDeviceSerial" @bind:event="oninput" autocomplete="off" />
+                                            </div>
+                                            <div class="form-row">
+                                                <label>Model</label>
+                                                <input @bind="_newDeviceModel" @bind:event="oninput" autocomplete="off" />
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-sm" @onclick="CreateDeviceForLocker" disabled="@(_savingDevice || string.IsNullOrWhiteSpace(_newDeviceSerial) || string.IsNullOrWhiteSpace(_newDeviceModel))">
+                                            <Icon Name="Plus" Size="12" /> Create device
+                                        </button>
+                                    </div>
+                                </details>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(_deviceError))
+                            {
+                                <div class="form-error">@_deviceError</div>
+                            }
+                        }
+                    </div>
+                </div>
             </div>
         }
-    }
+    </div>
 </div>
 
 <Modal Open="_createLockerOpen" OnClose="CloseCreateLocker">
@@ -171,258 +447,6 @@
         <button class="btn btn-primary" @onclick="CreateLocker" disabled="@(_savingLocker || string.IsNullOrWhiteSpace(_newLockerNumber))">
             Create
         </button>
-    </Footer>
-</Modal>
-
-<Modal Open="@(_selectedLocker != null)" OnClose="CloseLocker" Wide>
-    <Title>
-        <span class="modal-title-icon">
-            <Icon Name="Locker" Size="16" /> Locker #@_selectedLocker?.Number
-        </span>
-    </Title>
-    <ChildContent>
-        @if (_selectedLocker != null)
-        {
-            var locker = _selectedLocker;
-            var occupants = ActiveOccupants(locker).ToList();
-            var users = ActiveOccupantUsers(locker).ToList();
-            var assets = AssetsInLocker(locker.Id).ToList();
-
-            <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px;">
-                <div style="display: grid; gap: 18px;">
-                    <section>
-                        <h4 style="margin: 0 0 10px; font-size: 13px; text-transform: uppercase; color: var(--text-faint);">Locker</h4>
-                        <div class="form-grid">
-                            <div class="form-row">
-                                <label>Locker #</label>
-                                <input class="mono" @bind="locker.Number" @bind:event="oninput" disabled="@(!_canEditLockers)" />
-                            </div>
-                            <div class="form-row">
-                                <label>Section</label>
-                                <input @bind="locker.Section" @bind:event="oninput" disabled="@(!_canEditLockers)" />
-                            </div>
-                            <div class="form-row">
-                                <label>Combo</label>
-                                @if (_canEditLockers || (_canRevealCombos && _revealCombo))
-                                {
-                                    <input class="mono" @bind="locker.LockCombo" @bind:event="oninput" disabled="@(!_canEditLockers)" />
-                                }
-                                else if (_canRevealCombos)
-                                {
-                                    <button class="btn btn-sm" @onclick="() => _revealCombo = true">Reveal</button>
-                                }
-                                else
-                                {
-                                    <input value="Restricted" disabled />
-                                }
-                            </div>
-                            <div class="form-row">
-                                <label>Lock serial</label>
-                                <input class="mono" @bind="locker.LockSerial" @bind:event="oninput" disabled="@(!_canEditLockers)" />
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <label>Notes</label>
-                            <textarea @bind="locker.Notes" @bind:event="oninput" rows="2" disabled="@(!_canEditLockers)"></textarea>
-                        </div>
-                        <label class="checkbox" style="margin-top: 6px;">
-                            <input type="checkbox" @bind="locker.IsShared" disabled="@(!_canEditLockers)" />
-                            Shared locker
-                        </label>
-                        <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">
-                            @if (_canEditLockers)
-                            {
-                                <button class="btn btn-primary" @onclick="SaveLocker" disabled="@_savingLocker">
-                                    Save locker
-                                </button>
-                            }
-                            @if (_canMarkAudits)
-                            {
-                                <button class="btn" @onclick="RecordAudit" disabled="@_savingLocker">
-                                    <Icon Name="Check" Size="13" /> Mark audited
-                                </button>
-                            }
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(_lockerError))
-                        {
-                            <div class="form-error">@_lockerError</div>
-                        }
-                    </section>
-
-                    <section>
-                        <h4 style="margin: 0 0 10px; font-size: 13px; text-transform: uppercase; color: var(--text-faint);">Users</h4>
-                        @if (users.Any())
-                        {
-                            <div class="locker-device-list" style="margin-bottom: 12px;">
-                                @foreach (var occupant in occupants)
-                                {
-                                    var user = UserFor(occupant.UserId);
-                                    <div class="locker-device-row">
-                                        <span style="flex:1;">
-                                            <strong>@(user?.Name ?? occupant.UserId)</strong>
-                                            <span style="display:block;color:var(--text-faint);font-size:11px;">@(user?.Position ?? user?.Username ?? "Assigned user")</span>
-                                        </span>
-                                        @if (occupant.IsPrimary)
-                                        {
-                                            <span class="state-pill state-inuse">Primary</span>
-                                        }
-                                        @if (_canEditLockers && user != null)
-                                        {
-                                            <button class="btn btn-sm btn-ghost" @onclick="() => RemoveUserFromLocker(user)">
-                                                <Icon Name="X" Size="12" />
-                                            </button>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="locker-empty-devices" style="text-align:left;">No assigned users</div>
-                        }
-
-                        @if (_canAssignUsers)
-                        {
-                            <div class="form-row">
-                                <label>Search user</label>
-                                <input @bind="_userSearch" @bind:event="oninput" placeholder="Name or username" autocomplete="off" />
-                            </div>
-                            @if (UserSearchResults.Any())
-                            {
-                                <div class="locker-device-list" style="margin-bottom: 12px;">
-                                    @foreach (var user in UserSearchResults)
-                                    {
-                                        <div class="locker-device-row">
-                                            <span style="flex:1;">
-                                                <strong>@user.Name</strong>
-                                                <span style="display:block;color:var(--text-faint);font-size:11px;">@user.Username</span>
-                                            </span>
-                                            <button class="btn btn-sm btn-primary" @onclick="() => AssignUserToLocker(user)" disabled="@_savingUser">
-                                                Add
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                            }
-
-                            @if (_canCreateUsers)
-                            {
-                                <div class="form-grid">
-                                    <div class="form-row">
-                                        <label>Name</label>
-                                        <input @bind="_newUserName" @bind:event="oninput" autocomplete="off" />
-                                    </div>
-                                    <div class="form-row">
-                                        <label>Username</label>
-                                        <input @bind="_newUsername" @bind:event="oninput" autocomplete="off" />
-                                    </div>
-                                </div>
-                                <div class="form-row">
-                                    <label>Position</label>
-                                    <input @bind="_newUserPosition" @bind:event="oninput" autocomplete="off" />
-                                </div>
-                                <button class="btn" @onclick="CreateUserForLocker" disabled="@(_savingUser || string.IsNullOrWhiteSpace(_newUserName))">
-                                    <Icon Name="User" Size="13" /> Create user
-                                </button>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(_createdUserPassword))
-                            {
-                                <div style="margin-top: 10px; padding: 10px; border: 1px solid var(--warn); background: var(--warn-bg); border-radius: 6px; font-size: 12px;">
-                                    <div style="font-weight: 600; margin-bottom: 4px;">Temporary password for @_createdUserName</div>
-                                    <code class="mono" style="user-select: all;">@_createdUserPassword</code>
-                                </div>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(_userError))
-                            {
-                                <div class="form-error">@_userError</div>
-                            }
-                        }
-                    </section>
-                </div>
-
-                <div>
-                    <h4 style="margin: 0 0 10px; font-size: 13px; text-transform: uppercase; color: var(--text-faint);">Devices</h4>
-                    @if (assets.Any())
-                    {
-                        <div class="locker-device-list" style="margin-bottom: 14px;">
-                            @foreach (var asset in assets)
-                            {
-                                var holder = UserFor(asset.HolderId);
-                                <div class="locker-device-row">
-                                    <span style="flex: 1; min-width: 0;">
-                                        <strong class="mono">@PrimaryTag(asset)</strong>
-                                        <span style="display:block;color:var(--text-faint);font-size:11px;">@DeviceSubtitle(asset, holder)</span>
-                                    </span>
-                                    <span class="@Format.SimpleStateCss(asset.Flags)">
-                                        <span class="dot"></span>@Format.SimpleState(asset.Flags)
-                                    </span>
-                                    @if (_canAssignDevices)
-                                    {
-                                        <button class="btn btn-sm btn-ghost" @onclick="() => RemoveDeviceFromLocker(asset)">
-                                            <Icon Name="X" Size="12" />
-                                        </button>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="locker-empty-devices" style="text-align:left;">No assigned devices</div>
-                    }
-
-                    @if (_canAssignDevices)
-                    {
-                        <div class="form-row">
-                            <label>Search device</label>
-                            <div style="display: flex; gap: 8px;">
-                                <input style="flex:1;" @bind="_deviceSearch" @bind:event="oninput" @onkeydown="DeviceSearchKey" placeholder="Serial, tag, IMEI, or ID" autocomplete="off" />
-                                <button class="btn" @onclick="SearchDevice" disabled="@_savingDevice">
-                                    <Icon Name="Search" Size="13" /> Search
-                                </button>
-                            </div>
-                        </div>
-
-                        @if (_deviceSearchResult != null)
-                        {
-                            <div class="locker-device-row" style="border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-bottom: 12px;">
-                                <span style="flex:1;">
-                                    <strong class="mono">@PrimaryTag(_deviceSearchResult)</strong>
-                                    <span style="display:block;color:var(--text-faint);font-size:11px;">@_deviceSearchResult.Model</span>
-                                </span>
-                                <button class="btn btn-sm btn-primary" @onclick="() => AssignDeviceToLocker(_deviceSearchResult)" disabled="@_savingDevice">
-                                    Assign
-                                </button>
-                            </div>
-                        }
-                        else if (_deviceSearchMissing)
-                        {
-                            <div class="form-grid">
-                                <div class="form-row">
-                                    <label>Serial number</label>
-                                    <input class="mono" @bind="_newDeviceSerial" @bind:event="oninput" autocomplete="off" />
-                                </div>
-                                <div class="form-row">
-                                    <label>Model</label>
-                                    <input @bind="_newDeviceModel" @bind:event="oninput" autocomplete="off" />
-                                </div>
-                            </div>
-                            <button class="btn" @onclick="CreateDeviceForLocker" disabled="@(_savingDevice || string.IsNullOrWhiteSpace(_newDeviceSerial) || string.IsNullOrWhiteSpace(_newDeviceModel))">
-                                <Icon Name="Plus" Size="13" /> Create device
-                            </button>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(_deviceError))
-                        {
-                            <div class="form-error">@_deviceError</div>
-                        }
-                    }
-                </div>
-            </div>
-        }
-    </ChildContent>
-    <Footer>
-        <button class="btn btn-ghost" @onclick="CloseLocker">Close</button>
     </Footer>
 </Modal>
 
@@ -734,14 +758,10 @@
                 Serial = serial,
                 Model = _newDeviceModel.Trim(),
                 Quantity = 1,
-                Status = AssetStatus.InLocker,
-                Flags = StatusFlags.InLocker,
-                LockerId = _selectedLocker.Id,
-                LastSeenAt = DateTimeOffset.UtcNow,
-                LastSeenLocation = _selectedLocker.Number,
             };
 
             await AssetService.AddAsync(asset);
+            await AssetService.AssignToLockerAsync(asset.Id, _selectedLocker.Id, _selectedLocker.Number, _actorId);
             State.PushToast($"{serial} created in locker {_selectedLocker.Number}", "up");
             await RefreshSelected(_selectedLocker.Id);
             ResetDeviceInputs();

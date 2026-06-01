@@ -38,6 +38,96 @@ public class RmaRecordRepositoryTests
             second => Assert.Equal("rma-new", second.Id));
     }
 
+    [Fact]
+    public async Task AddAsync_SavesRecordToDatabase()
+    {
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"rma-add-{Guid.NewGuid()}")
+            .Options;
+
+        var repo = new RmaRecordRepository(new TestDivisionDbContextFactory(options));
+        var record = new RmaRecord
+        {
+            Id = "rma-test",
+            AssetId = "asset-test",
+            AssetTag = "TAG-TEST",
+            DateSubmitted = DateTimeOffset.UtcNow,
+            Comments = "Testing",
+            Section = "Zebra"
+        };
+
+        await repo.AddAsync(record);
+
+        await using var db = new TopekaDbContext(options, TestDataProtection.Provider);
+        var loaded = await db.RmaRecords.FindAsync("rma-test");
+        Assert.NotNull(loaded);
+        Assert.Equal("TAG-TEST", loaded.AssetTag);
+        Assert.Equal("Zebra", loaded.Section);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_UpdatesExistingRecord()
+    {
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"rma-update-{Guid.NewGuid()}")
+            .Options;
+
+        var record = new RmaRecord
+        {
+            Id = "rma-update-test",
+            AssetId = "asset-test",
+            AssetTag = "TAG",
+            Comments = "Initial"
+        };
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            db.RmaRecords.Add(record);
+            await db.SaveChangesAsync();
+        }
+
+        var repo = new RmaRecordRepository(new TestDivisionDbContextFactory(options));
+        record.Comments = "Updated Comments";
+        await repo.UpdateAsync(record);
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            var loaded = await db.RmaRecords.FindAsync("rma-update-test");
+            Assert.NotNull(loaded);
+            Assert.Equal("Updated Comments", loaded.Comments);
+        }
+    }
+
+    [Fact]
+    public async Task RemoveAsync_DeletesRecordFromDatabase()
+    {
+        var options = new DbContextOptionsBuilder<TopekaDbContext>()
+            .UseInMemoryDatabase($"rma-delete-{Guid.NewGuid()}")
+            .Options;
+
+        var record = new RmaRecord
+        {
+            Id = "rma-del",
+            AssetId = "asset-test",
+            AssetTag = "TAG"
+        };
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            db.RmaRecords.Add(record);
+            await db.SaveChangesAsync();
+        }
+
+        var repo = new RmaRecordRepository(new TestDivisionDbContextFactory(options));
+        await repo.RemoveAsync("rma-del");
+
+        await using (var db = new TopekaDbContext(options, TestDataProtection.Provider))
+        {
+            var loaded = await db.RmaRecords.FindAsync("rma-del");
+            Assert.Null(loaded);
+        }
+    }
+
     private static Asset Asset(string id, string tag) => new()
     {
         Id = id,

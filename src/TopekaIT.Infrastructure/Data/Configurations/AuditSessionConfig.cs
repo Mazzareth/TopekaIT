@@ -11,6 +11,7 @@ public class AuditSessionConfig : IEntityTypeConfiguration<AuditSession>
         b.ToTable("AuditSessions");
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasMaxLength(16);
+        b.Property(x => x.DivisionId).HasMaxLength(64).IsRequired();
         b.Property(x => x.ConductedBy).HasMaxLength(16).IsRequired();
         b.Property(x => x.Notes).HasMaxLength(2000);
 

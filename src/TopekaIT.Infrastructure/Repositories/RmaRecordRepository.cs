@@ -25,4 +25,46 @@ public class RmaRecordRepository : IRmaRecordRepository
             .ThenBy(r => r.AssetTag)
             .ToListAsync(ct);
     }
+
+    public async Task<RmaRecord?> GetByIdAsync(string id, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        return await db.RmaRecords
+            .Include(r => r.Asset)
+            .FirstOrDefaultAsync(r => r.Id == id, ct);
+    }
+
+    public async Task<IReadOnlyList<RmaRecord>> GetAllAsync(CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        return await db.RmaRecords
+            .Include(r => r.Asset)
+            .OrderByDescending(r => r.DateSubmitted)
+            .ToListAsync(ct);
+    }
+
+    public async Task AddAsync(RmaRecord record, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        db.RmaRecords.Add(record);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task UpdateAsync(RmaRecord record, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        db.Entry(record).State = EntityState.Modified;
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task RemoveAsync(string id, CancellationToken ct = default)
+    {
+        await using var db = await _factory.CreateDbContextAsync(ct);
+        var r = await db.RmaRecords.FindAsync(new object[] { id }, ct);
+        if (r != null)
+        {
+            db.RmaRecords.Remove(r);
+            await db.SaveChangesAsync(ct);
+        }
+    }
 }

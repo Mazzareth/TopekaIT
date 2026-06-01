@@ -2,33 +2,33 @@
 @layout LoginLayout
 @attribute [AllowAnonymous]
 
-<PageTitle>Sign in · Local IT</PageTitle>
+<PageTitle>Sign in · Local Warehouse Operations Portal</PageTitle>
 
-<div class="login-card">
-    <div class="login-brand">
-        <div class="brand-mark big">L</div>
-        <div>
-            <div class="login-title">Local IT</div>
-            <div class="login-sub">Warehouse operations portal</div>
+<div class="login-stack">
+    <div class="login-card">
+        <div class="login-brand">
+            <div class="login-title">Local Warehouse Operations Portal</div>
         </div>
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="login-error">@ErrorMessage</div>
+        }
+        <form method="post" action="/auth/login">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
+            <div class="form-row">
+                <label>Username</label>
+                <input name="Username" autofocus autocomplete="username" required />
+            </div>
+            <div class="form-row">
+                <label>Password</label>
+                <input name="Password" type="password" autocomplete="current-password" required />
+            </div>
+            <button class="btn btn-accent btn-block" type="submit">Sign in</button>
+        </form>
     </div>
-    @if (!string.IsNullOrEmpty(ErrorMessage))
-    {
-        <div class="login-error">@ErrorMessage</div>
-    }
-    <form method="post" action="/auth/login">
-        <AntiforgeryToken />
-        <input type="hidden" name="ReturnUrl" value="@ReturnUrl" />
-        <div class="form-row">
-            <label>Username</label>
-            <input name="Username" autofocus autocomplete="username" required />
-        </div>
-        <div class="form-row">
-            <label>Password</label>
-            <input name="Password" type="password" autocomplete="current-password" required />
-        </div>
-        <button class="btn btn-accent btn-block" type="submit">Sign in</button>
-    </form>
+
+    <a class="btn btn-block login-station-link" href="/station/equipment">Use Check-In / Check-Out Station</a>
 </div>
 
 @code {
