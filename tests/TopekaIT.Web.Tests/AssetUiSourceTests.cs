@@ -27,13 +27,13 @@ public class AssetUiSourceTests
     }
 
     [Theory]
-    [InlineData("src", "TopekaIT.Web", "Components", "Pages", "Shared", "AssetConsole.razor")]
-    [InlineData("src", "TopekaIT.Web", "Components", "Pages", "Manager", "ManagerAssets.razor")]
+    [InlineData("src", "TopekaIT.Web", "Components", "Pages", "Shared", "AssetConsole.razor.css")]
+    [InlineData("src", "TopekaIT.Web", "Components", "Pages", "Manager", "ManagerAssets.razor.css")]
     public void AssetTables_ConstrainModelColumnWidth(params string[] relativePath)
     {
         var source = ReadRepoFile(relativePath);
 
-        Assert.Contains("minmax(110px, .55fr)", source);
+        Assert.Contains("minmax(90px, 0.4fr)", source);
     }
 
     private static string ReadRepoFile(params string[] relativePath) =>
