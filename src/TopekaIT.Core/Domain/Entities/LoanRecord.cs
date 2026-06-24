@@ -3,6 +3,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A spare-device loan. It answers who borrowed it, why, and whether it made it back.
+/// </summary>
 public class LoanRecord
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..16];

@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for printer ping history. Mostly append, occasionally purge.
+/// </summary>
 public class PingHistoryRepository : IPingHistoryRepository
 {
     private readonly IDivisionDbContextFactory _factory;

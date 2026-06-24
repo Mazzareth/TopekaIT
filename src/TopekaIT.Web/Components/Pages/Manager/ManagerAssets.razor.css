@@ -86,7 +86,7 @@
 /* Premium Table Layout */
 .table-cols {
     display: grid;
-    grid-template-columns: 150px 90px minmax(90px, 0.4fr) 70px 150px 105px 120px;
+    grid-template-columns: 150px 90px minmax(90px, 0.4fr) 150px 105px 120px;
     gap: 8px;
     align-items: center;
 }

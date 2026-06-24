@@ -2,6 +2,9 @@ using System.Security.Cryptography;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// PBKDF2 password hashing with iteration metadata so old hashes can be upgraded after a good login.
+/// </summary>
 public static class PasswordHasher
 {
     private const int SaltBytes = 32;

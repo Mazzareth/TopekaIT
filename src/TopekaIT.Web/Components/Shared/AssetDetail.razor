@@ -1,12 +1,15 @@
+@* Asset detail drawer. It pulls the device story together: holder, status, RMA trips, and quick actions. *@
 @using TopekaIT.Core.Services
 @using System.Security.Claims
 @inject AssetService AssetService
+@inject EquipmentStationService Station
 @inject TicketService TicketService
 @inject ActivityService ActivityService
 @inject RmaService RmaService
 @inject AppState State
 @inject AuthenticationStateProvider AuthProvider
 @inject AccessControlService Access
+@inject ITenantContext TenantContext
 @inject IJSRuntime JS
 
 @code {
@@ -25,8 +28,6 @@
     bool _canCheckInOut;
     bool _canDeleteAssets;
     bool _canUpdateStatus;
-    bool _canScanAssets;
-    bool _rfidOpen;
     bool _showRmaForm;
     string _rmaComments = "";
     string _rmaSection = "Vendor";
@@ -42,7 +43,6 @@
             _holderSearch = "";
             _showAssignDropdown = false;
             _condition = "ok";
-            _rfidOpen = Action == "rfid";
             _showRmaForm = false;
             _rmaComments = "";
             _rmaSection = "Vendor";
@@ -56,7 +56,6 @@
         _canCheckInOut = access?.Has(AccessPermissionKeys.AssetsCheckInOut) == true;
         _canDeleteAssets = access?.Has(AccessPermissionKeys.AssetsDelete) == true;
         _canUpdateStatus = access?.Has(AccessPermissionKeys.AssetsUpdateStatus) == true;
-        _canScanAssets = access?.Has(AccessPermissionKeys.AssetsScanSearch) == true;
     }
 
     async Task DoCheckOut()
@@ -101,11 +100,40 @@
         if (!_canAssignAssets) return;
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var actor = auth.User.FindFirst("name")?.Value ?? "";
-        await AssetService.AssignHolderAsync(Asset.Id, _holder, actor);
+        var actorId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
         var holder = Users.FirstOrDefault(u => u.Id == _holder);
+        var divisionId = TenantContext.DivisionId
+            ?? auth.User.FindFirst("active_division")?.Value
+            ?? auth.User.FindFirst("division")?.Value
+            ?? holder?.DivisionId
+            ?? "";
+
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            State.PushToast("Select a division before issuing this device.", "down");
+            return;
+        }
+
+        var notes = holder == null
+            ? $"Issued by {actor}."
+            : $"Issued to {holder.Name} by {actor}.";
+        var result = await Station.AssignByManagerAsync(new EquipmentStationRequest(
+            divisionId,
+            Asset.Id,
+            _holder,
+            actorId,
+            notes,
+            null));
+        if (result == null)
+        {
+            State.PushToast("Device assignment could not be saved.", "down");
+            return;
+        }
+
         if (holder != null)
         {
-            State.PushToast($"{Asset.Tag ?? Asset.Serial} → {holder.Name}", "up");
+            await ActivityService.PushAsync("assignment", $"{Label(result.Asset)} issued to {holder.Name} by {actor}");
+            State.PushToast($"{Label(result.Asset)} issued to {holder.Name}", "up");
         }
         await OnChanged.InvokeAsync();
         await OnClose.InvokeAsync();
@@ -218,11 +246,6 @@
         await OnClose.InvokeAsync();
     }
 
-    async Task RfidChanged()
-    {
-        await OnChanged.InvokeAsync();
-    }
-
     string EffectiveAction()
     {
         if (Asset?.Category == AssetCategory.Battery) return "detail";
@@ -246,6 +269,46 @@
         AssetCategory.Battery => "Battery",
         _ => "SAE device",
     };
+
+    IReadOnlyList<RmaRecord> RmaHistory()
+    {
+        if (Asset == null) return Array.Empty<RmaRecord>();
+
+        return Asset.RmaRecords
+            .OrderByDescending(r => r.DateSubmitted ?? r.ItHandOffDate ?? r.ReceivedDate ?? DateTimeOffset.MinValue)
+            .ThenBy(r => r.AssetTag)
+            .ToList();
+    }
+
+    static string RmaStatusLabel(RmaRecord rma)
+    {
+        if (rma.IsReceived) return "Returned";
+        return rma.ItHandOffDate.HasValue ? "With DST" : "Pending";
+    }
+
+    static string RmaStatusPillKind(RmaRecord rma)
+    {
+        if (rma.IsReceived) return "pill-up";
+        return rma.ItHandOffDate.HasValue ? "pill-info" : "pill-warn";
+    }
+
+    static string RmaAccent(RmaRecord rma)
+    {
+        if (rma.IsReceived) return "var(--up)";
+        return rma.ItHandOffDate.HasValue ? "var(--info)" : "var(--warn)";
+    }
+
+    static string FormatRmaDateTime(DateTimeOffset? value) =>
+        value?.ToString("M/d/yyyy h:mm tt") ?? "Not recorded";
+
+    static string FormatRmaDate(DateTimeOffset? value) =>
+        value?.ToString("M/d/yyyy") ?? "Not set";
+
+    static string RmaReturnLabel(RmaRecord rma) =>
+        rma.IsReceived ? FormatRmaDateTime(rma.ReceivedDate) : "Still in RMA";
+
+    static string RmaTrackUrl(Asset asset) =>
+        $"/it/rma?search={Uri.EscapeDataString(Label(asset))}";
 }
 
 <Modal Open="@(Asset != null)" OnClose="OnClose" Wide>
@@ -285,21 +348,6 @@
                             <div class="mono" style="font-size:11px;word-break:break-all;">@Asset.Id</div>
                         </div>
                     </div>
-                    @if (_canScanAssets)
-                    {
-                        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-                            @if (!string.IsNullOrWhiteSpace(Asset.RfidTagId))
-                            {
-                                <div style="padding:8px;background:var(--bg-sunken);border-radius:4px;text-align:center;">
-                                    <div style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text-faint);">RFID</div>
-                                    <div class="mono" style="font-size:11px;word-break:break-all;">@AssetService.BuildRfidPayload(Asset.RfidTagId)</div>
-                                </div>
-                            }
-                            <button class="btn btn-sm" @onclick="() => _rfidOpen = true">
-                                <Icon Name="Rfid" Size="12" /> RFID NTAG213
-                            </button>
-                        </div>
-                    }
                     @if (!string.IsNullOrEmpty(Asset.ScannerType))
                     {
                         <div style="text-align: center; margin-top: 8px;">
@@ -368,31 +416,68 @@
                         </div>
                     }
 
-                    @if (Asset.RmaRecords.Any())
-                    {
-                        <div style="margin-bottom: 14px;">
-                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; letter-spacing: 0.06em;">RMA History</div>
-                            @foreach (var rma in Asset.RmaRecords.OrderByDescending(r => r.DateSubmitted))
-                            {
-                                <div style="font-size: 12px; padding: 6px 10px; background: var(--bg-sunken); border-radius: 4px; margin-bottom: 4px; border-left: 2px solid @(rma.IsReceived ? "var(--up)" : "var(--warn)")">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <span>Submitted: @(rma.DateSubmitted?.ToString("d") ?? "Unknown")</span>
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <span style="color: @(rma.IsReceived ? "var(--up)" : "var(--warn)")">@(rma.IsReceived ? "Received" : "Pending")</span>
-                                            @if (!rma.IsReceived)
-                                            {
-                                                <a href="/it/rma?search=@(Asset.Tag ?? Asset.Serial)" style="font-size: 11px; text-decoration: underline; color: var(--accent); font-weight: 500;">Track RMA</a>
-                                            }
-                                        </div>
-                                    </div>
-                                    @if (!string.IsNullOrEmpty(rma.Comments))
-                                    {
-                                        <div style="color: var(--text-dim); margin-top: 4px;">@rma.Comments</div>
-                                    }
-                                </div>
-                            }
-                        </div>
+                    @{
+                        var rmaHistory = RmaHistory();
+                        var openRmaCount = rmaHistory.Count(r => !r.IsReceived);
                     }
+                    <div style="margin-bottom: 14px; padding: 12px; background: var(--bg-sunken); border: 1px solid var(--border-subtle); border-radius: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint);">RMA History</div>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                @if (openRmaCount > 0)
+                                {
+                                    <Pill Kind="pill-warn">@openRmaCount open</Pill>
+                                }
+                                <Pill Kind="pill-dim">@rmaHistory.Count total</Pill>
+                            </div>
+                        </div>
+                        @if (!rmaHistory.Any())
+                        {
+                            <div style="font-size: 12px; color: var(--text-dim); padding: 8px 0;">No RMA trips recorded for this device.</div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                @foreach (var rma in rmaHistory)
+                                {
+                                    <div style="font-size: 12px; padding: 10px; background: var(--bg); border: 1px solid var(--border-subtle); border-left: 3px solid @RmaAccent(rma); border-radius: 5px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex-wrap: wrap;">
+                                            <div style="min-width: 0;">
+                                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                                    <strong>@(string.IsNullOrWhiteSpace(rma.Section) ? "RMA" : rma.Section)</strong>
+                                                    <Pill Kind="@RmaStatusPillKind(rma)">@RmaStatusLabel(rma)</Pill>
+                                                </div>
+                                                <div class="mono" style="font-size: 11px; color: var(--text-faint); margin-top: 2px;">@rma.Id</div>
+                                            </div>
+                                            <a href="@RmaTrackUrl(Asset)" style="font-size: 11px; text-decoration: underline; color: var(--accent); font-weight: 500;">Track RMA</a>
+                                        </div>
+                                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-top: 10px;">
+                                            <div>
+                                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint);">Sent to RMA</div>
+                                                <div>@FormatRmaDateTime(rma.DateSubmitted)</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint);">DST handoff</div>
+                                                <div>@FormatRmaDateTime(rma.ItHandOffDate)</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint);">Expected back</div>
+                                                <div>@FormatRmaDate(rma.TentativeReturnDate)</div>
+                                            </div>
+                                            <div>
+                                                <div style="font-size: 10px; font-family: var(--mono); text-transform: uppercase; color: var(--text-faint);">Returned from RMA</div>
+                                                <div>@RmaReturnLabel(rma)</div>
+                                            </div>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(rma.Comments))
+                                        {
+                                            <div style="color: var(--text-dim); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-subtle); white-space: pre-wrap;">@rma.Comments</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
 
                     @if (_canUpdateStatus && Asset.Category == AssetCategory.SaeDevice)
                     {
@@ -466,7 +551,7 @@
                     {
                         <div style="padding: 14px; background: var(--bg-sunken); border-radius: 6px;">
                             <div class="form-row">
-                                <label>Assign to employee</label>
+                                <label>Issue device to employee</label>
                                 <div style="position: relative;">
                                     <input value="@_holderSearch" @oninput="(e) => { _holderSearch = e.Value?.ToString() ?? string.Empty; _showAssignDropdown = true; }" placeholder="Type to search..." autocomplete="off" />
                                     @if (_showAssignDropdown)
@@ -489,7 +574,7 @@
                             
                             @if (!string.IsNullOrEmpty(_holder) && _holder != Asset.HolderId)
                             {
-                                <button class="btn btn-primary" style="margin-top: 10px; width: 100%;" @onclick="DoAssign">Save Assignment</button>
+                                <button class="btn btn-primary" style="margin-top: 10px; width: 100%;" @onclick="DoAssign">Issue Device</button>
                             }
                             @if (!string.IsNullOrEmpty(Asset.HolderId))
                             {
@@ -515,5 +600,3 @@
         }
     </Footer>
 </Modal>
-
-<RfidTagModal Asset="@(_rfidOpen ? Asset : null)" OnClose="() => _rfidOpen = false" OnChanged="RfidChanged" />

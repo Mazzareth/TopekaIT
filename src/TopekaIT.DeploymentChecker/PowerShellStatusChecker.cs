@@ -5,6 +5,9 @@ using System.Text.Json;
 
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Runs remote status checks through PowerShell and turns the script output into UI-friendly results.
+/// </summary>
 public sealed class PowerShellStatusChecker
 {
     static readonly JsonSerializerOptions JsonOptions = new()
@@ -149,10 +152,15 @@ function New-BaseResult {
         Status = "Offline"
         Reason = ""
         ServiceStatus = $null
+        ServiceStartName = $null
+        ServicePathName = $null
+        ServiceExitCode = $null
+        ServiceSpecificExitCode = $null
         ProcessId = $null
         ProcessName = $null
         ProcessStartTime = $null
         DeploymentInfo = $null
+        ConfigurationHints = @()
         Events = @()
     }
 }
@@ -206,6 +214,124 @@ try {
     $remoteResult = Invoke-Command -Session $session -ArgumentList $ServiceName, $RemotePath -ScriptBlock {
         param($ServiceName, $RemotePath)
 
+        function Convert-EventForResult {
+            param([Parameter(Mandatory = $true)]$Event)
+
+            [pscustomobject]@{
+                TimeCreated = $Event.TimeCreated.ToString("o")
+                LogName = $Event.LogName
+                ProviderName = $Event.ProviderName
+                Id = $Event.Id
+                LevelDisplayName = $Event.LevelDisplayName
+                Message = $Event.Message -replace "`r?`n", " "
+            }
+        }
+
+        function Get-RecentDiagnosticEvents {
+            param(
+                [Parameter(Mandatory = $true)][string]$ServiceName,
+                [Parameter(Mandatory = $true)][string]$RemotePath
+            )
+
+            $events = @()
+            $startTime = (Get-Date).AddDays(-2)
+
+            try {
+                $events += Get-WinEvent -FilterHashtable @{
+                    LogName = "System"
+                    ProviderName = "Service Control Manager"
+                    StartTime = $startTime
+                } -MaxEvents 100 -ErrorAction Stop |
+                    Where-Object { $_.Message -like "*$ServiceName*" }
+            }
+            catch {
+            }
+
+            try {
+                $remotePathPattern = if ([string]::IsNullOrWhiteSpace($RemotePath)) { $null } else { "*$RemotePath*" }
+                $events += Get-WinEvent -FilterHashtable @{
+                    LogName = "Application"
+                    StartTime = $startTime
+                } -MaxEvents 200 -ErrorAction Stop |
+                    Where-Object {
+                        $_.ProviderName -in @(".NET Runtime", "Application Error", "Windows Error Reporting") -or
+                        $_.Message -like "*$ServiceName*" -or
+                        $_.Message -like "*TopekaIT.Web*" -or
+                        ($remotePathPattern -and $_.Message -like $remotePathPattern)
+                    }
+            }
+            catch {
+            }
+
+            @($events) |
+                Sort-Object TimeCreated -Descending |
+                Select-Object -First 12 |
+                ForEach-Object { Convert-EventForResult -Event $_ }
+        }
+
+        function Get-ConfigurationHints {
+            param(
+                [Parameter(Mandatory = $true)][string]$RemotePath,
+                [Parameter(Mandatory = $true)]$ServiceDetails,
+                [Parameter(Mandatory = $false)]$Process
+            )
+
+            $hints = @()
+            $appSettingsPath = Join-Path $RemotePath "appsettings.json"
+
+            if (-not (Test-Path $appSettingsPath)) {
+                $hints += "Remote appsettings.json was not found at $appSettingsPath."
+                return $hints
+            }
+
+            $settings = $null
+            try {
+                $settings = Get-Content -Path $appSettingsPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            }
+            catch {
+                $hints += "Remote appsettings.json could not be parsed: $($_.Exception.Message)"
+                return $hints
+            }
+
+            foreach ($name in @("Topeka", "Master")) {
+                $value = $settings.ConnectionStrings.$name
+                if ([string]::IsNullOrWhiteSpace($value)) {
+                    $hints += "ConnectionStrings:$name is missing or blank in remote appsettings.json."
+                }
+                elseif ($value -match "(?i)\(localdb\)|MSSQLLocalDB") {
+                    $logon = if ($ServiceDetails -and -not [string]::IsNullOrWhiteSpace($ServiceDetails.StartName)) { $ServiceDetails.StartName } else { "the service account" }
+                    $hints += "ConnectionStrings:$name points at LocalDB. Windows services running as $logon often cannot use a user-scoped LocalDB instance."
+                }
+            }
+
+            try {
+                $rawSettings = Get-Content -Path $appSettingsPath -Raw -ErrorAction Stop
+                if ($rawSettings -match "5117") {
+                    $listeners = @(Get-NetTCPConnection -LocalPort 5117 -State Listen -ErrorAction SilentlyContinue)
+                    if ($listeners.Count -gt 0) {
+                        $owners = @()
+                        foreach ($listener in $listeners) {
+                            $owner = Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue
+                            if ($owner) {
+                                $owners += "$($owner.ProcessName) ($($owner.Id))"
+                            }
+                        }
+
+                        $currentProcessId = if ($Process) { $Process.Id } else { $null }
+                        $otherListeners = @($listeners | Where-Object { -not $currentProcessId -or $_.OwningProcess -ne $currentProcessId })
+                        if ($otherListeners.Count -gt 0) {
+                            $ownerSummary = if ($owners.Count -gt 0) { $owners -join ", " } else { "unknown process" }
+                            $hints += "Port 5117 is already listening on this server: $ownerSummary."
+                        }
+                    }
+                }
+            }
+            catch {
+            }
+
+            return $hints
+        }
+
         $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
         $serviceDetails = Get-CimInstance -ClassName Win32_Service | Where-Object { $_.Name -eq $ServiceName } | Select-Object -First 1
         $deploymentInfo = $null
@@ -215,37 +341,26 @@ try {
             $deploymentInfo = Get-Content -Path $deploymentInfoPath -Raw -ErrorAction SilentlyContinue
         }
 
+        $configurationHints = @(Get-ConfigurationHints -RemotePath $RemotePath -ServiceDetails $serviceDetails)
         $events = @()
 
         if ($null -eq $service) {
-            try {
-                $events = Get-WinEvent -FilterHashtable @{
-                    LogName = "System"
-                    ProviderName = "Service Control Manager"
-                    StartTime = (Get-Date).AddDays(-2)
-                } -MaxEvents 100 -ErrorAction Stop |
-                    Where-Object { $_.Message -like "*$ServiceName*" } |
-                    Select-Object -First 8 @{
-                        Name = "TimeCreated"
-                        Expression = { $_.TimeCreated.ToString("o") }
-                    }, Id, LevelDisplayName, @{
-                        Name = "Message"
-                        Expression = { $_.Message -replace "`r?`n", " " }
-                    }
-            }
-            catch {
-                $events = @()
-            }
+            $events = @(Get-RecentDiagnosticEvents -ServiceName $ServiceName -RemotePath $RemotePath)
 
             return [pscustomobject]@{
                 IsOnline = $false
                 Status = "Service missing"
                 Reason = "Service '$ServiceName' was not found on the remote server."
                 ServiceStatus = $null
+                ServiceStartName = $null
+                ServicePathName = $null
+                ServiceExitCode = $null
+                ServiceSpecificExitCode = $null
                 ProcessId = $null
                 ProcessName = $null
                 ProcessStartTime = $null
                 DeploymentInfo = $deploymentInfo
+                ConfigurationHints = @($configurationHints)
                 Events = @($events)
             }
         }
@@ -265,25 +380,10 @@ try {
             $reason = "Service reports Running, but no backing process was found."
         }
 
+        $configurationHints = @(Get-ConfigurationHints -RemotePath $RemotePath -ServiceDetails $serviceDetails -Process $process)
+
         if (-not $isOnline) {
-            try {
-                $events = Get-WinEvent -FilterHashtable @{
-                    LogName = "System"
-                    ProviderName = "Service Control Manager"
-                    StartTime = (Get-Date).AddDays(-2)
-                } -MaxEvents 100 -ErrorAction Stop |
-                    Where-Object { $_.Message -like "*$ServiceName*" } |
-                    Select-Object -First 8 @{
-                        Name = "TimeCreated"
-                        Expression = { $_.TimeCreated.ToString("o") }
-                    }, Id, LevelDisplayName, @{
-                        Name = "Message"
-                        Expression = { $_.Message -replace "`r?`n", " " }
-                    }
-            }
-            catch {
-                $events = @()
-            }
+            $events = @(Get-RecentDiagnosticEvents -ServiceName $ServiceName -RemotePath $RemotePath)
         }
 
         [pscustomobject]@{
@@ -291,10 +391,15 @@ try {
             Status = if ($isOnline) { "Online" } else { "Offline" }
             Reason = $reason
             ServiceStatus = $service.Status.ToString()
+            ServiceStartName = if ($serviceDetails) { $serviceDetails.StartName } else { $null }
+            ServicePathName = if ($serviceDetails) { $serviceDetails.PathName } else { $null }
+            ServiceExitCode = if ($serviceDetails) { $serviceDetails.ExitCode } else { $null }
+            ServiceSpecificExitCode = if ($serviceDetails) { $serviceDetails.ServiceSpecificExitCode } else { $null }
             ProcessId = if ($process) { $process.Id } else { $null }
             ProcessName = if ($process) { $process.ProcessName } else { $null }
             ProcessStartTime = if ($process) { $process.StartTime.ToUniversalTime().ToString("o") } else { $null }
             DeploymentInfo = $deploymentInfo
+            ConfigurationHints = @($configurationHints)
             Events = @($events)
         }
     } -ErrorAction Stop
@@ -303,10 +408,20 @@ try {
     $result.Status = [string]$remoteResult.Status
     $result.Reason = [string]$remoteResult.Reason
     $result.ServiceStatus = $remoteResult.ServiceStatus
+    $result.ServiceStartName = $remoteResult.ServiceStartName
+    $result.ServicePathName = $remoteResult.ServicePathName
+    $result.ServiceExitCode = $remoteResult.ServiceExitCode
+    $result.ServiceSpecificExitCode = $remoteResult.ServiceSpecificExitCode
     $result.ProcessId = $remoteResult.ProcessId
     $result.ProcessName = $remoteResult.ProcessName
     $result.ProcessStartTime = $remoteResult.ProcessStartTime
     $result.DeploymentInfo = $remoteResult.DeploymentInfo
+    if ($null -eq $remoteResult.ConfigurationHints) {
+        $result.ConfigurationHints = @()
+    }
+    else {
+        $result.ConfigurationHints = @($remoteResult.ConfigurationHints)
+    }
     if ($null -eq $remoteResult.Events) {
         $result.Events = @()
     }

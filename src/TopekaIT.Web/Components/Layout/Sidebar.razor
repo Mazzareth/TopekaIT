@@ -1,3 +1,4 @@
+@* Permission-built navigation. Roles are the starting point, but the resolved access set decides what shows up. *@
 @using System.Security.Claims
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthProvider
@@ -60,6 +61,7 @@
 
     void BuildNav()
     {
+        // Build from permissions instead of hard-coded roles so access overrides immediately change the shell.
         _primary = new();
         _secondary = new();
 
@@ -134,7 +136,7 @@
             _primary.Add(new("assets", "Assets", "Watch", "/manager/assets"));
             _primary.Add(new("rma", "RMA Flow", "Flag", "/manager/rma"));
         }
-        AddIf(_primary, AccessPermissionKeys.AssetsViewSupervisorConsole, "station", "Station", "Scan", "/station/equipment");
+        AddIf(_primary, AccessPermissionKeys.AssetsViewSupervisorConsole, "station", "Station", "Scan", StationRoute);
     }
 
     void AddUsersNav()
@@ -162,6 +164,10 @@
     }
 
     bool Has(string permission) => _access?.Has(permission) == true;
+
+    string StationRoute => TenantContext.IsResolved && !string.IsNullOrWhiteSpace(TenantContext.DivisionId)
+        ? $"/station/equipment/{Uri.EscapeDataString(TenantContext.DivisionId)}"
+        : "/station/equipment";
 
     async Task RefreshBadges()
     {

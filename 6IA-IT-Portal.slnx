@@ -1,11 +1,14 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TopekaIT.Core/TopekaIT.Core.csproj" />
+    <Project Path="src/TopekaIT.AvaloniaShell/TopekaIT.AvaloniaShell.csproj" />
+    <Project Path="src/TopekaIT.AndroidLocker/TopekaIT.AndroidLocker.csproj" />
     <Project Path="src/TopekaIT.DeploymentChecker/TopekaIT.DeploymentChecker.csproj" />
     <Project Path="src/TopekaIT.Infrastructure/TopekaIT.Infrastructure.csproj" />
     <Project Path="src/TopekaIT.Web/TopekaIT.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TopekaIT.AvaloniaShell.Tests/TopekaIT.AvaloniaShell.Tests.csproj" />
     <Project Path="tests/TopekaIT.Core.Tests/TopekaIT.Core.Tests.csproj" />
     <Project Path="tests/TopekaIT.Infrastructure.Tests/TopekaIT.Infrastructure.Tests.csproj" />
     <Project Path="tests/TopekaIT.Web.Tests/TopekaIT.Web.Tests.csproj" />

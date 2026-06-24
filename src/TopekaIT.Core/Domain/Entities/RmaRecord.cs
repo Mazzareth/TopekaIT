@@ -2,6 +2,9 @@ using System;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A device's trip through DST/RMA. It tracks the handoff, expected return, and whether the thing came back.
+/// </summary>
 public class RmaRecord
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..16];

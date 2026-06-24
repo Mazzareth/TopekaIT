@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for device RMA trips.
+/// </summary>
 public interface IRmaRecordRepository
 {
     Task<IReadOnlyList<RmaRecord>> GetActiveAsync(CancellationToken ct = default);

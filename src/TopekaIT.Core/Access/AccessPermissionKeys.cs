@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Access;
 
+/// <summary>
+/// Stable permission IDs. These strings are the shared language between the database, policies, and sidebar links.
+/// </summary>
 public static class AccessPermissionKeys
 {
     public const string WorkerHome = "workspace.worker.home";

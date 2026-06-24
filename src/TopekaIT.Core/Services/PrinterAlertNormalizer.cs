@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Turns printer log/trap text into alert keys and friendly labels. The raw line stays around; this just gives it a shape.
+/// </summary>
 public static partial class PrinterAlertNormalizer
 {
     public const string SnmpAuthenticationFailureAlertKey = "SNMP_AUTHENTICATION_FAILURE";
@@ -228,6 +231,9 @@ public static partial class PrinterAlertNormalizer
     private static partial Regex TrainingRegex();
 }
 
+/// <summary>
+/// The normalized alert shape the UI and active-alert state can agree on.
+/// </summary>
 public sealed record PrinterAlertInfo(
     string AlertKey,
     string AlertTitle,

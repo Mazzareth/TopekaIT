@@ -7,6 +7,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Printer event repository tests for raw events, active alert state, and grouped incident reports.
+/// </summary>
 public class PrinterEventRepositoryTests
 {
     [Fact]

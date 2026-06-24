@@ -8,6 +8,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Seed;
 
+/// <summary>
+/// Startup defaults. This gets the first admin, first division, expected printer/asset models, and issue tags into place.
+/// </summary>
 public static class DataSeeder
 {
     private const string SuperAdminId = "bwilliams";
@@ -18,6 +21,7 @@ public static class DataSeeder
 
     public static async Task SeedMasterAsync(MasterDbContext db, string topekaConnectionString, CancellationToken ct = default)
     {
+        // Master seeding sets up the global login/division world before any tenant database is touched.
         await db.Database.MigrateAsync(ct);
 
         if (!await db.Users.AnyAsync(u => u.Username == SuperAdminUsername, ct))
@@ -165,6 +169,7 @@ public static class DataSeeder
     {
         if (await db.IssueTagDefinitions.AnyAsync(ct)) return;
 
+        // This is the starter dictionary for field-friendly device problems. Keep the labels plain; users actually read them.
         var definitions = new[]
         {
             new IssueTagDefinition { Code = "RightPortBroken",       Label = "Right port broken",        Severity = IssueSeverity.Critical, ApplicableCategories = "SaeDevice",          SortOrder = 10 },

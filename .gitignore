@@ -1,6 +1,9 @@
 # Build outputs
 bin/
 obj/
+build/
+.gradle/
+local.properties
 
 # IDE and editor state
 .vs/

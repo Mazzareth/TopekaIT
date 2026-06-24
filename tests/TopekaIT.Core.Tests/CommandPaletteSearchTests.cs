@@ -3,6 +3,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Keeps command-palette search useful enough that names and important fields float to the top.
+/// </summary>
 public class CommandPaletteSearchTests
 {
     [Fact]

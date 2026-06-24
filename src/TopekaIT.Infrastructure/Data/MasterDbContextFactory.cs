@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore.Design;
 
 namespace TopekaIT.Infrastructure.Data;
 
+/// <summary>
+/// Design-time factory for master migrations. EF tooling needs this when the web app is not running.
+/// </summary>
 public class MasterDbContextFactory : IDesignTimeDbContextFactory<MasterDbContext>
 {
     public MasterDbContext CreateDbContext(string[] args)

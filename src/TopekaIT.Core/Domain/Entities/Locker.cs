@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A physical locker and its current people/device context. The combo stays protected down in Infrastructure.
+/// </summary>
 public class Locker
 {
     public string Id { get; set; } = "";
@@ -7,6 +10,8 @@ public class Locker
     public string? Section { get; set; }
     public string? LockCombo { get; set; }
     public string? LockSerial { get; set; }
+    public string? RfidTagId { get; set; }
+    public DateTimeOffset? RfidLinkedAt { get; set; }
     public string? Notes { get; set; }
     public bool IsShared { get; set; }
     public bool IsActive { get; set; } = true;

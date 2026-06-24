@@ -3,6 +3,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Safety tests for PrintNet commands: read-only is fine, protected is gated, risky stays blocked.
+/// </summary>
 public class PrintNetCommandCatalogTests
 {
     private readonly PrintNetCommandCatalog _catalog = new();

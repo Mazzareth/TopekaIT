@@ -1,5 +1,8 @@
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Result of pushing the portal to the remote host. Keeps the status, summary, and log text together.
+/// </summary>
 public sealed class DeploymentPushResult
 {
     public bool Succeeded { get; init; }

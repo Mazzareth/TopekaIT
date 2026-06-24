@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for Lantronix poll samples.
+/// </summary>
 public class LantronixPollSampleConfig : IEntityTypeConfiguration<LantronixPollSample>
 {
     public void Configure(EntityTypeBuilder<LantronixPollSample> b)

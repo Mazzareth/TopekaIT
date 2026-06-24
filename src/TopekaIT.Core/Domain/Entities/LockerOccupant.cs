@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A user's active or historical relationship to a locker. We keep history instead of pretending assignments never changed.
+/// </summary>
 public class LockerOccupant
 {
     public string LockerId { get; set; } = "";

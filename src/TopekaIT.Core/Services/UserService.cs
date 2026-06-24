@@ -5,6 +5,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Handles users, passwords, and station PINs. It keeps the login path and the kiosk path close enough that they follow the same security habits.
+/// </summary>
 public class UserService
 {
     private readonly IUserRepository _repo;
@@ -146,7 +149,11 @@ public class UserService
     public Task ClearStationPinAsync(string userId, CancellationToken ct = default) =>
         SetStationPinAsync(userId, null, ct);
 
-    public async Task<StationPinValidationResult?> ValidateStationPinAsync(string pin, string? divisionId, CancellationToken ct = default)
+    public async Task<StationPinValidationResult?> ValidateStationPinAsync(
+        string pin,
+        string? divisionId,
+        bool allowCrossDivisionFallback = true,
+        CancellationToken ct = default)
     {
         var normalizedPin = NormalizeStationPin(pin);
         if (!IsValidStationPin(normalizedPin))
@@ -164,7 +171,7 @@ public class UserService
                 .Where(u => string.Equals(u.DivisionId, selectedDivisionId, StringComparison.OrdinalIgnoreCase))
                 .FirstOrDefault(u => VerifyStationPin(u, normalizedPin));
 
-            if (employee == null)
+            if (employee == null && allowCrossDivisionFallback)
             {
                 var matchesOutsideSelectedDivision = all
                     .Where(u => !string.Equals(u.DivisionId, selectedDivisionId, StringComparison.OrdinalIgnoreCase))
@@ -194,14 +201,6 @@ public class UserService
             division,
             employee.Role >= AccessTier.Supervisor,
             employee.Role >= AccessTier.Admin);
-    }
-
-    public async Task SetAuditAsync(string userId, bool value, CancellationToken ct = default)
-    {
-        var user = await _repo.GetByIdAsync(userId, ct);
-        if (user == null) return;
-        user.Audit = value;
-        await _repo.UpdateAsync(user, ct);
     }
 
     public async Task<string> ResetPasswordAsync(string userId, string? customPassword = null, CancellationToken ct = default)
@@ -281,6 +280,9 @@ public class UserService
     }
 }
 
+/// <summary>
+/// What a good station PIN resolves to: the employee, their division, and whether they can do supervisor/admin station moves.
+/// </summary>
 public sealed record StationPinValidationResult(
     User Employee,
     Division? Division,

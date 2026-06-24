@@ -4,6 +4,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// The kiosk brain. PIN in, device scan in, then this writes the asset state plus the ticket/RMA/transaction trail.
+/// </summary>
 public class EquipmentStationService
 {
     private readonly AssetService _assets;
@@ -26,8 +29,12 @@ public class EquipmentStationService
         _transactions = transactions;
     }
 
-    public Task<StationPinValidationResult?> ValidateStationPinAsync(string pin, string? divisionId, CancellationToken ct = default) =>
-        _users.ValidateStationPinAsync(pin, divisionId, ct);
+    public Task<StationPinValidationResult?> ValidateStationPinAsync(
+        string pin,
+        string? divisionId,
+        bool allowCrossDivisionFallback = true,
+        CancellationToken ct = default) =>
+        _users.ValidateStationPinAsync(pin, divisionId, allowCrossDivisionFallback, ct);
 
     public Task<Asset?> FindByScanAsync(string scanValue, CancellationToken ct = default) =>
         _assets.FindByScanAsync(scanValue, ct);
@@ -112,6 +119,50 @@ public class EquipmentStationService
             rma: null,
             linkedAssetId: null,
             asset => MarkCheckedOut(asset, request.EmployeeId, request.Notes),
+            ct);
+    }
+
+    public async Task<EquipmentStationResult?> ConfirmAssignmentAsync(EquipmentStationRequest request, CancellationToken ct = default)
+    {
+        return await RecordAsync(
+            request,
+            EquipmentTransactionType.AssignmentConfirmation,
+            ticket: null,
+            rma: null,
+            linkedAssetId: null,
+            asset => MarkAssignmentConfirmed(asset, request.EmployeeId, request.Notes),
+            ct);
+    }
+
+    public async Task<EquipmentStationResult?> CheckoutViaLockerAsync(
+        EquipmentStationRequest request,
+        string lockerId,
+        string lockerNumber,
+        CancellationToken ct = default)
+    {
+        return await RecordAsync(
+            request,
+            EquipmentTransactionType.Checkout,
+            ticket: null,
+            rma: null,
+            linkedAssetId: null,
+            asset => MarkCheckedOutThroughLocker(asset, lockerId, lockerNumber, request.Notes),
+            ct);
+    }
+
+    public async Task<EquipmentStationResult?> CheckinViaLockerAsync(
+        EquipmentStationRequest request,
+        string lockerId,
+        string lockerNumber,
+        CancellationToken ct = default)
+    {
+        return await RecordAsync(
+            request,
+            EquipmentTransactionType.Checkin,
+            ticket: null,
+            rma: null,
+            linkedAssetId: null,
+            asset => MarkAvailableInLocker(asset, lockerId, lockerNumber, request.Notes),
             ct);
     }
 
@@ -224,7 +275,8 @@ public class EquipmentStationService
             request.ScanSource,
             linkedAssetId,
             mutate,
-            ct);
+            ct,
+            request.ToTransactionMetadata());
 
         return mutation == null ? null : new EquipmentStationResult(mutation.Asset, mutation.Transaction, ticket, rma);
     }
@@ -239,6 +291,34 @@ public class EquipmentStationService
         asset.LastSeenLocation = "Checked out";
         SetPrimaryFlag(asset, StatusFlags.WithHolder);
         asset.Flags &= ~(StatusFlags.InRepair | StatusFlags.InRMA | StatusFlags.Missing | StatusFlags.OnHold | StatusFlags.UnderInvestigation);
+        AppendNote(asset, notes);
+    }
+
+    private static void MarkCheckedOutThroughLocker(Asset asset, string lockerId, string lockerNumber, string? notes)
+    {
+        SetStatus(asset, AssetStatus.Out);
+        asset.LockerId = lockerId;
+        asset.HolderId = null;
+        asset.CheckedOutAt = DateTimeOffset.UtcNow;
+        asset.DueAt = null;
+        asset.LastSeenAt = DateTimeOffset.UtcNow;
+        asset.LastSeenLocation = $"Locker {lockerNumber}";
+        SetPrimaryFlag(asset, StatusFlags.WithHolder);
+        asset.Flags &= ~(StatusFlags.InRepair | StatusFlags.InRMA | StatusFlags.Missing | StatusFlags.OnHold | StatusFlags.UnderInvestigation);
+        AppendNote(asset, notes);
+    }
+
+    private static void MarkAvailableInLocker(Asset asset, string lockerId, string lockerNumber, string? notes)
+    {
+        SetStatus(asset, AssetStatus.InLocker);
+        asset.LockerId = lockerId;
+        asset.HolderId = null;
+        asset.CheckedOutAt = null;
+        asset.DueAt = null;
+        asset.LastSeenAt = DateTimeOffset.UtcNow;
+        asset.LastSeenLocation = $"Locker {lockerNumber}";
+        SetPrimaryFlag(asset, StatusFlags.InLocker);
+        asset.Flags &= ~(StatusFlags.DayLoan | StatusFlags.UnderInvestigation | StatusFlags.InRepair | StatusFlags.InRMA | StatusFlags.OnHold);
         AppendNote(asset, notes);
     }
 
@@ -289,6 +369,28 @@ public class EquipmentStationService
         asset.LastSeenLocation = "DST/RMA";
         SetPrimaryFlag(asset, StatusFlags.InRMA);
         asset.Flags &= ~(StatusFlags.DayLoan | StatusFlags.UnderInvestigation | StatusFlags.InRepair | StatusFlags.OnHold);
+        AppendNote(asset, notes);
+    }
+
+    private static void MarkAssignmentConfirmed(Asset asset, string holderId, string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(asset.HolderId))
+        {
+            asset.HolderId = holderId;
+        }
+
+        asset.LastSeenAt = DateTimeOffset.UtcNow;
+        asset.LastSeenLocation = "Employee confirmation";
+
+        if (string.Equals(asset.HolderId, holderId, StringComparison.OrdinalIgnoreCase))
+        {
+            SetPrimaryFlag(asset, StatusFlags.WithHolder);
+            if (asset.Status is not AssetStatus.Out and not AssetStatus.InUse)
+            {
+                SetStatus(asset, AssetStatus.Out);
+            }
+        }
+
         AppendNote(asset, notes);
     }
 
@@ -347,14 +449,42 @@ public class EquipmentStationService
     ];
 }
 
+/// <summary>
+/// One station action against one device. ActorId is optional because sometimes the employee and the manager are the same person, sometimes not.
+/// </summary>
 public sealed record EquipmentStationRequest(
     string DivisionId,
     string AssetId,
     string EmployeeId,
     string? ActorId,
     string? Notes,
-    string? ScanSource);
+    string? ScanSource,
+    string? MobileSessionId = null,
+    string? ReaderDeviceSerial = null,
+    string? ScannedLockerId = null,
+    string? LockerNumberSnapshot = null,
+    string? EmployeeNameSnapshot = null)
+{
+    public EquipmentTransactionMetadata? ToTransactionMetadata()
+    {
+        return string.IsNullOrWhiteSpace(MobileSessionId) &&
+            string.IsNullOrWhiteSpace(ReaderDeviceSerial) &&
+            string.IsNullOrWhiteSpace(ScannedLockerId) &&
+            string.IsNullOrWhiteSpace(LockerNumberSnapshot) &&
+            string.IsNullOrWhiteSpace(EmployeeNameSnapshot)
+            ? null
+            : new(
+                MobileSessionId,
+                ReaderDeviceSerial,
+                ScannedLockerId,
+                LockerNumberSnapshot,
+                EmployeeNameSnapshot);
+    }
+}
 
+/// <summary>
+/// A two-device station action: the old device gets handled, the replacement goes out, and both sides need the same audit context.
+/// </summary>
 public sealed record EquipmentStationSwapRequest(
     string DivisionId,
     string OldAssetId,
@@ -369,12 +499,18 @@ public sealed record EquipmentStationSwapRequest(
         new(DivisionId, assetId, EmployeeId, ActorId, Notes, ScanSource);
 }
 
+/// <summary>
+/// What the station needs back after one device move: the updated asset, the ledger row, and any side record it created.
+/// </summary>
 public sealed record EquipmentStationResult(
     Asset Asset,
     EquipmentTransaction Transaction,
     Ticket? Ticket,
     RmaRecord? RmaRecord);
 
+/// <summary>
+/// The paired result for a swap, kept together so the UI does not accidentally show only half the handoff.
+/// </summary>
 public sealed record EquipmentStationSwapResult(
     EquipmentStationResult Original,
     EquipmentStationResult Replacement,

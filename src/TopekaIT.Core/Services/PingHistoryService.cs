@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Turns raw printer ping samples into uptime windows for charts and cleanup decisions.
+/// </summary>
 public class PingHistoryService
 {
     private readonly IPingHistoryRepository _repo;
@@ -47,4 +50,7 @@ public class PingHistoryService
         => _repo.PurgeOlderThanAsync(DateTimeOffset.UtcNow - maxAge, ct);
 }
 
+/// <summary>
+/// A stretch of time where the printer stayed either reachable or unreachable.
+/// </summary>
 public record UptimeWindow(DateTimeOffset Start, DateTimeOffset End, bool IsUp);

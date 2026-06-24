@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// The dictionary entry for issue tags. Change these and you change what people can pick when marking asset problems.
+/// </summary>
 public class IssueTagDefinition
 {
     public string Code { get; set; } = "";

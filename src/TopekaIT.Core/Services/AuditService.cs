@@ -4,6 +4,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Runs equipment audits: start a session, record scans, then close it by marking anything expected but unseen.
+/// </summary>
 public class AuditService
 {
     private readonly IAuditRepository _audits;

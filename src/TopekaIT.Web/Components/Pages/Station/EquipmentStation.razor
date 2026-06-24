@@ -1,4 +1,6 @@
+@* Fast kiosk flow: enter PIN, tap/scan assigned equipment, then confirm possession or start RMA. *@
 @page "/station/equipment"
+@page "/station/equipment/{DivisionCode}"
 @using System.Security.Claims
 @using TopekaIT.Core.Domain.Entities
 @using TopekaIT.Core.Domain.Enums
@@ -19,7 +21,7 @@
     <div class="page-head">
         <div>
             <h1>Equipment Station</h1>
-            <div class="page-sub">PIN unlock and device scan for check-in / check-out.</div>
+            <div class="page-sub">PIN unlock for assigned-device check-in, RMA help, and broken-device handoff.</div>
         </div>
         <div class="page-actions">
             @if (_employee != null)
@@ -43,12 +45,20 @@
             <div class="station-division-copy">
                 <span class="scan-dock-label">Division</span>
                 <strong>@(string.IsNullOrWhiteSpace(_divisionId) ? "Select a division" : DivisionName(_divisionId))</strong>
-                @if (_divisionPersisted)
+                @if (_divisionPersisted && !_divisionLocked)
                 {
                     <span>Saved for this terminal</span>
                 }
+                @if (_divisionLocked)
+                {
+                    <span>Locked to this station URL</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(_divisionId))
+                {
+                    <span>@CheckInCadenceLabel accountability cadence</span>
+                }
             </div>
-            <select value="@_divisionId" @onchange="OnDivisionChanged" disabled="@(_employee != null)">
+            <select value="@_divisionId" @onchange="OnDivisionChanged" disabled="@(_divisionLocked || _employee != null)">
                 <option value="">Select division</option>
                 @foreach (var division in _divisions)
                 {
@@ -62,7 +72,7 @@
                 <div class="station-panel-head">
                     <div>
                         <h3>PIN</h3>
-                        <span>@(_employee == null ? "Employee sign-in" : EmployeeSummary)</span>
+                        <span>@(_employee == null ? "Employee check-in / RMA help" : EmployeeSummary)</span>
                     </div>
                     @if (_employee != null)
                     {
@@ -89,7 +99,7 @@
                 <div class="station-panel-head">
                     <div>
                         <h3>Device Scan</h3>
-                        <span>@(_employee == null ? "Sign in first" : $"Ready for {_employee.Name}")</span>
+                        <span>@(_employee == null ? "Sign in first" : $"Ready to verify {_employee.Name}'s assigned devices")</span>
                     </div>
                 </div>
                 <div class="scan-dock station-scan-dock">
@@ -101,7 +111,7 @@
                            @bind:event="oninput"
                            @onkeydown="ScanKeyDown"
                            disabled="@(_employee == null)"
-                           placeholder="RFID, tag, serial, IMEI" />
+                           placeholder="Tag, serial, IMEI, or record ID" />
                     <button class="btn btn-sm btn-accent" @onclick="ScanAsset" disabled="@(_employee == null || string.IsNullOrWhiteSpace(_scanValue))">
                         <Icon Name="Scan" Size="13" /> Find
                     </button>
@@ -120,8 +130,12 @@
             </div>
             <div class="station-stats">
                 <div class="station-stat">
-                    <span>Devices out</span>
+                    <span>Assigned devices</span>
                     <strong>@_employeeAssets.Count</strong>
+                </div>
+                <div class="station-stat">
+                    <span>Due now</span>
+                    <strong>@DueCheckInCount</strong>
                 </div>
                 <div class="station-stat">
                     <span>Open tickets</span>
@@ -133,12 +147,12 @@
         <div class="station-summary-grid">
             <section class="card station-list-panel">
                 <div class="station-list-head">
-                    <h3>Devices currently out</h3>
+                    <h3>Assigned devices</h3>
                     <Pill Kind="@(_employeeAssets.Count == 0 ? "pill-up" : "pill-info")">@_employeeAssets.Count</Pill>
                 </div>
                 @if (_employeeAssets.Count == 0)
                 {
-                    <div class="station-empty">No devices are checked out to @_employee.Name.</div>
+                    <div class="station-empty">No devices are assigned to @_employee.Name.</div>
                 }
                 else
                 {
@@ -149,8 +163,9 @@
                                 <span class="station-list-main">
                                     <strong>@AssetLabel(asset)</strong>
                                     <span>@DeviceDetail(asset)</span>
+                                    <span>@CheckInStatusLine(asset)</span>
                                 </span>
-                                <Pill Kind="@SimpleStatePill(asset)">@Format.SimpleState(asset.Flags)</Pill>
+                                <Pill Kind="@CheckInPillKind(asset)">@CheckInLabel(asset)</Pill>
                             </button>
                         }
                     </div>
@@ -200,25 +215,28 @@
             <div class="station-device-grid">
                 <span>Status <strong>@_selectedAsset.Status</strong></span>
                 <span>Holder <strong>@(holder?.Name ?? "None")</strong></span>
-                <span>Locker <strong>@(_selectedAsset.LockerId ?? "None")</strong></span>
+                <span>Check-in <strong>@CheckInLabel(_selectedAsset)</strong></span>
             </div>
             <div class="station-device-actions">
-                @if (IsAvailable(_selectedAsset))
+                @if (IsSameHolder(_selectedAsset))
                 {
-                    <button class="btn btn-accent" @onclick="CheckoutToEmployee">
-                        <Icon Name="ArrowOut" Size="14" /> Check out to @_employee.Name
+                    <button class="btn btn-accent" @onclick="ConfirmAssignment">
+                        <Icon Name="Check" Size="14" /> Confirm I have this
+                    </button>
+                    <button class="btn btn-danger" @onclick="SendBrokenDeviceToRma">
+                        <Icon Name="Flag" Size="14" /> This device is broken
                     </button>
                 }
-                else if (IsSameHolder(_selectedAsset))
+                else if (IsAvailable(_selectedAsset))
                 {
-                    <button class="btn btn-accent" @onclick="CheckIn">
-                        <Icon Name="ArrowIn" Size="14" /> Check in
-                    </button>
+                    <div class="station-blocked">
+                        This device is available. A manager should issue it from Assets so the assignment has a receipt.
+                    </div>
                 }
                 else
                 {
                     <div class="station-blocked">
-                        This device is not available for @_employee.Name.
+                        This device is assigned to @(holder?.Name ?? "another employee") and cannot be confirmed for @_employee.Name.
                     </div>
                 }
             </div>
@@ -227,6 +245,8 @@
 </div>
 
 @code {
+    [Parameter] public string? DivisionCode { get; set; }
+
     List<Division> _divisions = new();
     List<User> _users = new();
     List<Asset> _allAssets = new();
@@ -243,15 +263,21 @@
     string _message = "";
     string _messageClass = "form-error";
     string _loggedInUserId = "";
+    string _appliedDivisionCode = "";
     bool _divisionPersisted;
+    bool _divisionLocked;
+    int _checkInIntervalDays = 30;
 
     string EmployeeSummary => _employee == null
         ? ""
         : $"{_employee.Name} · {_employee.Role.DisplayName()}";
+    string CheckInCadenceLabel => _checkInIntervalDays <= 14 ? "Biweekly" : "Monthly";
+    int DueCheckInCount => _employeeAssets.Count(a => IsCheckInDue(a));
 
     protected override async Task OnInitializedAsync()
     {
         _divisions = (await DivisionService.GetAllAsync()).OrderBy(d => d.Name).ToList();
+        _divisionLocked = TryApplyRouteDivision();
 
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         _loggedInUserId = auth.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
@@ -261,16 +287,57 @@
             claimDivision = auth.User.FindFirst("active_division")?.Value;
         }
 
-        _divisionId = !string.IsNullOrWhiteSpace(claimDivision)
-            ? claimDivision
-            : _divisions.Count == 1 ? _divisions[0].Id : "";
+        if (!_divisionLocked)
+        {
+            _divisionId = !string.IsNullOrWhiteSpace(claimDivision)
+                ? claimDivision
+                : _divisions.Count == 1 ? _divisions[0].Id : "";
+        }
 
-        await ResolveDivision(showError: false);
+        if (!await ResolveDivision(showError: false) && _divisionLocked)
+        {
+            SetError("Station location was not found. Check the division code in the URL.");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_divisions.Count == 0) return;
+
+        var routeDivision = DivisionCode?.Trim() ?? "";
+        if (string.Equals(routeDivision, _appliedDivisionCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var previousDivisionId = _divisionId;
+        _divisionLocked = TryApplyRouteDivision();
+        if (!string.Equals(previousDivisionId, _divisionId, StringComparison.OrdinalIgnoreCase))
+        {
+            ClearEmployeeState();
+        }
+
+        if (_divisionLocked)
+        {
+            if (!await ResolveDivision(showError: false))
+            {
+                SetError("Station location was not found. Check the division code in the URL.");
+            }
+            else
+            {
+                _message = "";
+            }
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        if (_divisionLocked)
+        {
+            return;
+        }
 
         try
         {
@@ -324,10 +391,13 @@
 
     async Task ValidatePin()
     {
-        var validation = await Station.ValidateStationPinAsync(_pin, _divisionId);
+        // Locked station URLs only accept PINs for that station's division; flexible stations can still infer a unique PIN.
+        var validation = await Station.ValidateStationPinAsync(_pin, _divisionId, allowCrossDivisionFallback: !_divisionLocked);
         if (validation == null)
         {
-            SetError("PIN was not recognized. If this PIN is shared across locations, select the location and try again.");
+            SetError(_divisionLocked
+                ? $"PIN was not recognized for {DivisionName(_divisionId)}."
+                : "PIN was not recognized. If this PIN is shared across locations, select the location and try again.");
             return;
         }
 
@@ -335,6 +405,12 @@
         if (string.IsNullOrWhiteSpace(employeeDivisionId))
         {
             SetError("This employee needs a location assignment before station sign-in.");
+            return;
+        }
+
+        if (_divisionLocked && !string.Equals(employeeDivisionId, _divisionId, StringComparison.OrdinalIgnoreCase))
+        {
+            SetError($"PIN was not recognized for {DivisionName(_divisionId)}.");
             return;
         }
 
@@ -369,18 +445,34 @@
         SetOk($"Loaded {AssetLabel(asset)}.");
     }
 
-    async Task CheckoutToEmployee()
+    async Task ConfirmAssignment()
     {
         if (_selectedAsset == null || _employee == null) return;
-        var result = await Station.CheckoutAsync(BuildRequest(_selectedAsset.Id, _employee.Id));
-        await FinishMutation(result, $"Checked out {AssetLabel(_selectedAsset)} to {_employee.Name}.");
+        if (!IsSameHolder(_selectedAsset))
+        {
+            SetError("Only devices assigned to this employee can be confirmed here.");
+            return;
+        }
+
+        var label = AssetLabel(_selectedAsset);
+        var notes = $"{_employee.Name} confirmed this assigned device from the station.";
+        var result = await Station.ConfirmAssignmentAsync(BuildRequest(_selectedAsset.Id, _employee.Id, notes));
+        await FinishMutation(result, $"Confirmed {label} for {_employee.Name}.");
     }
 
-    async Task CheckIn()
+    async Task SendBrokenDeviceToRma()
     {
         if (_selectedAsset == null || _employee == null) return;
-        var result = await Station.CheckinAsync(BuildRequest(_selectedAsset.Id, _employee.Id));
-        await FinishMutation(result, $"Checked in {AssetLabel(_selectedAsset)}.");
+        if (!IsSameHolder(_selectedAsset))
+        {
+            SetError("Only the assigned device holder can start RMA from this station.");
+            return;
+        }
+
+        var label = AssetLabel(_selectedAsset);
+        var notes = $"{_employee.Name} reported this assigned device as broken from the station. Give the device to local DST and issue a replacement from manager Assets.";
+        var result = await Station.SendToDstRmaAsync(BuildRequest(_selectedAsset.Id, _employee.Id, notes), "Local DST");
+        await FinishMutation(result, $"RMA started for {label}. Give it to local DST and have a manager issue a replacement.");
     }
 
     async Task FinishMutation(EquipmentStationResult? result, string okMessage)
@@ -395,6 +487,21 @@
         await LoadEmployeeSummary();
         SetOk(okMessage);
         State.PushToast(okMessage, "up");
+    }
+
+    bool TryApplyRouteDivision()
+    {
+        var routeDivision = DivisionCode?.Trim();
+        _appliedDivisionCode = routeDivision ?? "";
+        if (string.IsNullOrWhiteSpace(routeDivision))
+        {
+            return false;
+        }
+
+        var division = _divisions.FirstOrDefault(d => string.Equals(d.Id, routeDivision, StringComparison.OrdinalIgnoreCase));
+        _divisionId = division?.Id ?? routeDivision;
+        _divisionPersisted = false;
+        return true;
     }
 
     async Task LoadEmployeeSummary()
@@ -426,8 +533,8 @@
             .ToList();
     }
 
-    EquipmentStationRequest BuildRequest(string assetId, string employeeId) =>
-        new(_divisionId, assetId, employeeId, ActorId, null, _selectedScanSource);
+    EquipmentStationRequest BuildRequest(string assetId, string employeeId, string? notes = null) =>
+        new(_divisionId, assetId, employeeId, ActorId, notes, _selectedScanSource);
 
     async Task<bool> ResolveDivision(bool showError = true)
     {
@@ -446,6 +553,7 @@
         }
 
         TenantContext.SetDivision(division.Id, division.ConnectionString);
+        _checkInIntervalDays = NormalizeCheckInInterval(division.EquipmentCheckInIntervalDays);
         return true;
     }
 
@@ -532,6 +640,47 @@
         var serial = string.IsNullOrWhiteSpace(asset.Serial) ? "No serial" : asset.Serial;
         return $"{model} · {serial}";
     }
+
+    DateTimeOffset? LastConfirmationAt(Asset asset) =>
+        asset.LastSeenAt ?? asset.CheckedOutAt ?? asset.StatusChangedAt;
+
+    DateTimeOffset? NextCheckInDueAt(Asset asset) =>
+        LastConfirmationAt(asset)?.AddDays(_checkInIntervalDays);
+
+    bool IsCheckInDue(Asset asset)
+    {
+        var dueAt = NextCheckInDueAt(asset);
+        return dueAt == null || dueAt <= DateTimeOffset.UtcNow;
+    }
+
+    string CheckInLabel(Asset asset)
+    {
+        var dueAt = NextCheckInDueAt(asset);
+        if (dueAt == null) return "Needs check-in";
+        if (dueAt <= DateTimeOffset.UtcNow) return "Due now";
+        if (LastConfirmationAt(asset)?.Date == DateTimeOffset.UtcNow.Date) return "Confirmed today";
+        return dueAt.Value <= DateTimeOffset.UtcNow.AddDays(7) ? "Due soon" : "Current";
+    }
+
+    string CheckInPillKind(Asset asset) => CheckInLabel(asset) switch
+    {
+        "Due now" => "pill-warn",
+        "Needs check-in" => "pill-warn",
+        "Due soon" => "pill-info",
+        _ => "pill-up",
+    };
+
+    string CheckInStatusLine(Asset asset)
+    {
+        var last = LastConfirmationAt(asset);
+        var due = NextCheckInDueAt(asset);
+        var lastText = last == null ? "No confirmation yet" : $"Last confirmed {Format.RelTime(last.Value)}";
+        var dueText = due == null ? "due now" : $"next due {due.Value:MMM d}";
+        return $"{lastText}; {dueText}";
+    }
+
+    static int NormalizeCheckInInterval(int intervalDays) =>
+        intervalDays <= 0 ? 30 : intervalDays;
 
     static string SimpleStatePill(Asset asset)
     {

@@ -5,6 +5,9 @@ using System.Text.Json;
 
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Starts, stops, and checks the local portal process used for quick verification.
+/// </summary>
 public sealed class LocalDevRunner
 {
     public const string LocalUrl = "http://localhost:5117";

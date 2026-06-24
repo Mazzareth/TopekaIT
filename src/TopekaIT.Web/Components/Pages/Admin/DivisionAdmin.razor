@@ -1,3 +1,4 @@
+@* Division setup page. It creates the master division row and the tenant database that backs that site. *@
 @page "/admin/divisions/new"
 @attribute [Authorize(Policy = AccessPermissionKeys.AdminCreateDivisions)]
 @using Microsoft.AspNetCore.DataProtection
@@ -39,6 +40,13 @@
                     <input class="inline-input mono" style="width: 100%;" @bind="_printerPasswordZipCode" @bind:event="oninput" placeholder="66618" />
                 </label>
             </div>
+            <label>
+                <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Equipment check-in cadence</div>
+                <select class="inline-input" style="width: 180px;" @bind="_equipmentCheckInIntervalDays">
+                    <option value="14">Biweekly</option>
+                    <option value="30">Monthly</option>
+                </select>
+            </label>
             <div>
                 <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 6px;">Database</div>
                 <div class="mono" style="font-size: 13px;">@DatabasePreview</div>
@@ -62,6 +70,7 @@
     string _name = "";
     string _printerPasswordCode = "";
     string _printerPasswordZipCode = "";
+    int _equipmentCheckInIntervalDays = 30;
     string _error = "";
     bool _saving;
     bool IsDisabled => _saving || string.IsNullOrWhiteSpace(_code) || string.IsNullOrWhiteSpace(_name);
@@ -81,6 +90,7 @@
             created = await DivisionService.CreateAsync(_code, _name, connectionString);
             created.PrinterPasswordCode = NormalizeNullable(_printerPasswordCode.ToUpperInvariant());
             created.PrinterPasswordZipCode = NormalizeNullable(_printerPasswordZipCode);
+            created.EquipmentCheckInIntervalDays = _equipmentCheckInIntervalDays <= 14 ? 14 : 30;
             await DivisionService.UpdateAsync(created);
 
             var options = new DbContextOptionsBuilder<TopekaDbContext>()

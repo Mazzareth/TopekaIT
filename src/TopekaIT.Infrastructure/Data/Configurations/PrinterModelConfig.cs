@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for printer model names.
+/// </summary>
 public class PrinterModelConfig : IEntityTypeConfiguration<PrinterModel>
 {
     public void Configure(EntityTypeBuilder<PrinterModel> b)

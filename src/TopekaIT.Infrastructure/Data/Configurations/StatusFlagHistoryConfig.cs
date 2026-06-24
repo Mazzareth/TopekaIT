@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for asset flag change history.
+/// </summary>
 public class StatusFlagHistoryConfig : IEntityTypeConfiguration<StatusFlagHistory>
 {
     public void Configure(EntityTypeBuilder<StatusFlagHistory> b)

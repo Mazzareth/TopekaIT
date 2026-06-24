@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Locker repository tests keep occupant assignment history from getting flattened by accident.
+/// </summary>
 public class LockerRepositoryTests
 {
     [Fact]

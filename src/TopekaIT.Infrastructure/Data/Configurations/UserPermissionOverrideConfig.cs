@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for manual user permission overrides.
+/// </summary>
 public class UserPermissionOverrideConfig : IEntityTypeConfiguration<UserPermissionOverride>
 {
     public void Configure(EntityTypeBuilder<UserPermissionOverride> b)

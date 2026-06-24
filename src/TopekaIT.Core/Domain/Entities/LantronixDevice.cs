@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A Lantronix endpoint the portal polls for fuel/inventory data. It is configured globally, then tied to a division when needed.
+/// </summary>
 public class LantronixDevice
 {
     public string Id { get; set; } = "";
@@ -26,6 +29,9 @@ public class LantronixDevice
     public decimal? LastTemperature { get; set; }
 }
 
+/// <summary>
+/// Default Lantronix commands and labels. Kept here so the seed data and UI do not disagree about the starting point.
+/// </summary>
 public static class LantronixDeviceDefaults
 {
     public const string InventoryCommand = "I20100";

@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for the current active printer alert state.
+/// </summary>
 public class PrinterAlertStateConfig : IEntityTypeConfiguration<PrinterAlertState>
 {
     public void Configure(EntityTypeBuilder<PrinterAlertState> b)

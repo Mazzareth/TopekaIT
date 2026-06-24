@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A printer the portal watches and sometimes configures. Live status belongs to monitoring, while identity stays here.
+/// </summary>
 public class Printer
 {
     public string Id { get; set; } = "";

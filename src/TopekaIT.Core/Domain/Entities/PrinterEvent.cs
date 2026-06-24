@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// One stored printer event, whether it came from a log line, trap, or monitoring pass.
+/// </summary>
 public class PrinterEvent
 {
     public long Id { get; set; }

@@ -3,6 +3,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Protects Lantronix inventory parsing so strange controller text still becomes usable samples.
+/// </summary>
 public class LantronixDeviceServiceTests
 {
     [Fact]

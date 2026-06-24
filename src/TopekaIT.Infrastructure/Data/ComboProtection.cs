@@ -6,6 +6,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data;
 
+/// <summary>
+/// Protects stored locker combinations while still reading old plaintext rows. New writes are locked down; old data does not crash the page.
+/// </summary>
 public static class ComboProtection
 {
     public const int ProtectedComboMaxLength = 512;

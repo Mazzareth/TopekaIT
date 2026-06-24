@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Station workflow tests: device state changes, tickets/RMA records, and the ledger row need to agree.
+/// </summary>
 public class EquipmentStationServiceTests
 {
     [Fact]
@@ -24,6 +27,101 @@ public class EquipmentStationServiceTests
         Assert.Equal(EquipmentTransactionType.Checkout, fixture.Transactions.Transactions[0].Type);
         Assert.Equal(StatusFlags.InCC, fixture.Transactions.Transactions[0].BeforeFlags);
         Assert.Equal(StatusFlags.WithHolder, fixture.Transactions.Transactions[0].AfterFlags);
+    }
+
+    [Fact]
+    public async Task AssignByManagerAsync_IssuesDeviceAndRecordsManagerAssignment()
+    {
+        var asset = Asset("asset-1", "TC77-1", AssetStatus.InCC, StatusFlags.InCC);
+        var fixture = Fixture(asset);
+
+        var result = await fixture.Service.AssignByManagerAsync(Request(asset.Id, "worker-1", "issued by manager"));
+
+        Assert.NotNull(result);
+        Assert.Equal(AssetStatus.Out, asset.Status);
+        Assert.Equal("worker-1", asset.HolderId);
+        Assert.True(asset.Flags.HasFlag(StatusFlags.WithHolder));
+        var transaction = Assert.Single(fixture.Transactions.Transactions);
+        Assert.Equal(EquipmentTransactionType.ManagerAssignment, transaction.Type);
+        Assert.Equal("worker-1", transaction.EmployeeId);
+        Assert.Equal("manager-1", transaction.ActorId);
+        Assert.Equal("issued by manager", transaction.Notes);
+    }
+
+    [Fact]
+    public async Task ConfirmAssignmentAsync_UpdatesLastSeenWithoutClearingHolder()
+    {
+        var asset = Asset("asset-1", "TC77-1", AssetStatus.Out, StatusFlags.WithHolder);
+        asset.HolderId = "worker-1";
+        var fixture = Fixture(asset);
+
+        var result = await fixture.Service.ConfirmAssignmentAsync(Request(asset.Id, "worker-1", "monthly confirmation"));
+
+        Assert.NotNull(result);
+        Assert.Equal("worker-1", asset.HolderId);
+        Assert.Equal(AssetStatus.Out, asset.Status);
+        Assert.True(asset.Flags.HasFlag(StatusFlags.WithHolder));
+        Assert.NotNull(asset.LastSeenAt);
+        Assert.Equal("Employee confirmation", asset.LastSeenLocation);
+        var transaction = Assert.Single(fixture.Transactions.Transactions);
+        Assert.Equal(EquipmentTransactionType.AssignmentConfirmation, transaction.Type);
+        Assert.Equal("worker-1", transaction.AfterHolderId);
+    }
+
+    [Fact]
+    public async Task CheckoutViaLockerAsync_UsesLockerUserAndRecordsMobileSnapshot()
+    {
+        var asset = Asset("asset-1", "TC77-1", AssetStatus.InLocker, StatusFlags.InLocker);
+        asset.LockerId = "locker-1";
+        var fixture = Fixture(asset);
+        var request = MobileRequest(asset.Id);
+
+        var result = await fixture.Service.CheckoutViaLockerAsync(request, "locker-1", "A-01");
+
+        Assert.NotNull(result);
+        Assert.Equal(AssetStatus.Out, asset.Status);
+        Assert.Equal("locker-1", asset.LockerId);
+        Assert.Null(asset.HolderId);
+        Assert.True(asset.Flags.HasFlag(StatusFlags.WithHolder));
+        var transaction = Assert.Single(fixture.Transactions.Transactions);
+        Assert.Equal(EquipmentTransactionType.Checkout, transaction.Type);
+        Assert.Equal("worker-1", transaction.EmployeeId);
+        Assert.Equal("manager-1", transaction.ActorId);
+        Assert.Equal("mobile-session-1", transaction.MobileSessionId);
+        Assert.Equal("WT-123", transaction.ReaderDeviceSerial);
+        Assert.Equal("locker-1", transaction.ScannedLockerId);
+        Assert.Equal("A-01", transaction.LockerNumberSnapshot);
+        Assert.Equal("Worker One", transaction.EmployeeNameSnapshot);
+        Assert.Equal("locker-1", transaction.BeforeLockerId);
+        Assert.Equal("locker-1", transaction.AfterLockerId);
+    }
+
+    [Fact]
+    public async Task CheckinViaLockerAsync_ReturnsDeviceToLockerAndRecordsMobileSnapshot()
+    {
+        var asset = Asset("asset-1", "TC77-1", AssetStatus.Out, StatusFlags.WithHolder);
+        asset.LockerId = "locker-1";
+        var fixture = Fixture(asset);
+        var request = MobileRequest(asset.Id);
+
+        var result = await fixture.Service.CheckinViaLockerAsync(request, "locker-1", "A-01");
+
+        Assert.NotNull(result);
+        Assert.Equal(AssetStatus.InLocker, asset.Status);
+        Assert.Equal("locker-1", asset.LockerId);
+        Assert.Null(asset.HolderId);
+        Assert.True(asset.Flags.HasFlag(StatusFlags.InLocker));
+        var transaction = Assert.Single(fixture.Transactions.Transactions);
+        Assert.Equal(EquipmentTransactionType.Checkin, transaction.Type);
+        Assert.Equal("worker-1", transaction.EmployeeId);
+        Assert.Equal("manager-1", transaction.ActorId);
+        Assert.Equal("mobile-session-1", transaction.MobileSessionId);
+        Assert.Equal("WT-123", transaction.ReaderDeviceSerial);
+        Assert.Equal("locker-1", transaction.ScannedLockerId);
+        Assert.Equal("A-01", transaction.LockerNumberSnapshot);
+        Assert.Equal("Worker One", transaction.EmployeeNameSnapshot);
+        Assert.Equal("locker-1", transaction.BeforeLockerId);
+        Assert.Equal("locker-1", transaction.AfterLockerId);
     }
 
     [Fact]
@@ -64,6 +162,20 @@ public class EquipmentStationServiceTests
 
     private static EquipmentStationRequest Request(string assetId, string employeeId, string? notes = null) =>
         new("6IA", assetId, employeeId, "manager-1", notes, "scan-value");
+
+    private static EquipmentStationRequest MobileRequest(string assetId) =>
+        new(
+            "6IA",
+            assetId,
+            "worker-1",
+            "manager-1",
+            "mobile locker tap",
+            "rfid:NTAG-001",
+            "mobile-session-1",
+            "WT-123",
+            "locker-1",
+            "A-01",
+            "Worker One");
 
     private static Asset Asset(string id, string tag, AssetStatus status, StatusFlags flags) => new()
     {
@@ -129,7 +241,8 @@ public class EquipmentStationServiceTests
             string? scanSource,
             string? linkedAssetId,
             Action<Asset> mutateAsset,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            EquipmentTransactionMetadata? metadata = null)
         {
             var asset = _assets.Assets.GetValueOrDefault(assetId);
             if (asset == null) return Task.FromResult<EquipmentTransactionMutationResult?>(null);
@@ -137,6 +250,7 @@ public class EquipmentStationServiceTests
             var beforeFlags = asset.Flags;
             var beforeStatus = asset.Status.ToString();
             var beforeHolder = asset.HolderId;
+            var beforeLocker = asset.LockerId;
             mutateAsset(asset);
             var transaction = new EquipmentTransaction
             {
@@ -145,16 +259,24 @@ public class EquipmentStationServiceTests
                 AssetId = asset.Id,
                 EmployeeId = employeeId,
                 ActorId = actorId,
+                Notes = notes,
                 TicketId = ticketId,
                 RmaRecordId = rmaRecordId,
                 ScanSource = scanSource,
                 LinkedAssetId = linkedAssetId,
+                MobileSessionId = metadata?.MobileSessionId,
+                ReaderDeviceSerial = metadata?.ReaderDeviceSerial,
+                ScannedLockerId = metadata?.ScannedLockerId,
+                LockerNumberSnapshot = metadata?.LockerNumberSnapshot,
+                EmployeeNameSnapshot = metadata?.EmployeeNameSnapshot,
                 BeforeFlags = beforeFlags,
                 AfterFlags = asset.Flags,
                 BeforeStatus = beforeStatus,
                 AfterStatus = asset.Status.ToString(),
                 BeforeHolderId = beforeHolder,
                 AfterHolderId = asset.HolderId,
+                BeforeLockerId = beforeLocker,
+                AfterLockerId = asset.LockerId,
             };
             Transactions.Add(transaction);
             return Task.FromResult<EquipmentTransactionMutationResult?>(new(asset, transaction));

@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for printers in the active division.
+/// </summary>
 public class PrinterRepository : IPrinterRepository
 {
     private readonly IDivisionDbContextFactory _factory;

@@ -2,6 +2,9 @@ using System.Net;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// A guardrail for printer telnet commands. Read-only commands are easy, protected commands are allowed on purpose, and risky commands stay out.
+/// </summary>
 public sealed class PrintNetCommandCatalog
 {
     public const string ManualUrl = "https://efficientbi.com/wp-content/uploads/PrintNet-Ethernet-User%E2%80%99s-Manual-257367g_UM_PrintNet_Ethernet_TH.pdf";
@@ -158,10 +161,6 @@ public sealed class PrintNetCommandCatalog
 
         return Excluded(normalized, "Command is not in the approved PrintNet catalog.");
     }
-
-    public bool IsSafe(string command) => Classify(command).Access == PrintNetCommandAccess.Safe;
-
-    public bool IsProtected(string command) => Classify(command).Access == PrintNetCommandAccess.Protected;
 
     private static bool IsExcluded(string[] tokens, string normalized, out string reason)
     {
@@ -367,6 +366,9 @@ public sealed class PrintNetCommandCatalog
     }
 }
 
+/// <summary>
+/// The safety bucket for a PrintNet command.
+/// </summary>
 public enum PrintNetCommandAccess
 {
     Safe,
@@ -374,12 +376,18 @@ public enum PrintNetCommandAccess
     Excluded,
 }
 
+/// <summary>
+/// One command pattern from the catalog, with enough explanation to show why it landed in that bucket.
+/// </summary>
 public sealed record PrintNetCommandDefinition(
     string Command,
     PrintNetCommandAccess Access,
     string Category,
     string Description);
 
+/// <summary>
+/// The answer after a raw command has been normalized and judged.
+/// </summary>
 public sealed record PrintNetCommandAssessment(
     string NormalizedCommand,
     PrintNetCommandAccess Access,

@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for printer ping samples.
+/// </summary>
 public class PingSampleConfig : IEntityTypeConfiguration<PingSample>
 {
     public void Configure(EntityTypeBuilder<PingSample> b)

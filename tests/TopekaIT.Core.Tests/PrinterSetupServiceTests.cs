@@ -5,6 +5,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Printer setup tests protect login order, sysinfo parsing, and the exact setup command script.
+/// </summary>
 public class PrinterSetupServiceTests
 {
     [Fact]
@@ -232,15 +235,15 @@ public class PrinterSetupServiceTests
 
     private sealed class FakeTelnetClient : IPrinterSetupTelnetClient
     {
-        private readonly Queue<PrinterSetupTelnetLogin> _logins = new();
+        private readonly Queue<(string ExpectedPassword, PrinterSetupTelnetLogin Login)> _logins = new();
 
         public List<string> PasswordAttempts { get; } = new();
 
         public void AddSuccess(string password, IPrinterSetupTelnetSession session) =>
-            _logins.Enqueue(new PrinterSetupTelnetLogin(true, session));
+            _logins.Enqueue((password, new PrinterSetupTelnetLogin(true, session)));
 
         public void AddFailure(string password) =>
-            _logins.Enqueue(new PrinterSetupTelnetLogin(false, null, "Login failed."));
+            _logins.Enqueue((password, new PrinterSetupTelnetLogin(false, null, "Login failed.")));
 
         public Task<PrinterSetupTelnetLogin> TryLoginAsync(
             string ipAddress,
@@ -251,9 +254,14 @@ public class PrinterSetupServiceTests
             CancellationToken ct = default)
         {
             PasswordAttempts.Add(password);
-            return Task.FromResult(_logins.Count > 0
-                ? _logins.Dequeue()
-                : new PrinterSetupTelnetLogin(false, null, "Login failed."));
+            if (_logins.Count == 0)
+            {
+                return Task.FromResult(new PrinterSetupTelnetLogin(false, null, "Login failed."));
+            }
+
+            var next = _logins.Dequeue();
+            Assert.Equal(next.ExpectedPassword, password);
+            return Task.FromResult(next.Login);
         }
     }
 

@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Writes short feed items for humans to see what just happened. This is not the hard audit log.
+/// </summary>
 public class ActivityService
 {
     private readonly IActivityRepository _repo;

@@ -1,3 +1,4 @@
+@* Blazor-friendly route that immediately hands division entry to the auth controller. Weird little bridge, but useful. *@
 @page "/admin/enter/{DivisionId}"
 @attribute [Authorize(Policy = AccessPermissionKeys.AdminEnterDivisions)]
 @inject NavigationManager Nav

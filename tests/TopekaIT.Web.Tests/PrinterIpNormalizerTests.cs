@@ -4,6 +4,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// IP normalization tests so printer logs match the right device even when input formatting varies.
+/// </summary>
 public class PrinterIpNormalizerTests
 {
     [Fact]

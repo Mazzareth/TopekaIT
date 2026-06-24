@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Tenant;
 
+/// <summary>
+/// Opens the division database selected for the current request. No selected division means no tenant data, on purpose.
+/// </summary>
 public class TenantDivisionDbContextFactory : IDivisionDbContextFactory
 {
     private readonly ITenantContext _tenantContext;

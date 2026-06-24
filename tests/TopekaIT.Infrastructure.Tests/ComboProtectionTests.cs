@@ -5,6 +5,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Locker combo protection tests: encrypted new values, readable old plaintext, no drama.
+/// </summary>
 public class ComboProtectionTests
 {
     [Fact]

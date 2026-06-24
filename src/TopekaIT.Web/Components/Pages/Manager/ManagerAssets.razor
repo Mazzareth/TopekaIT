@@ -1,3 +1,4 @@
+@* Supervisor asset console. Built for quick scans, assignment, locker moves, and day-to-day equipment control. *@
 @page "/manager/assets"
 @attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewSupervisorConsole)]
 @using TopekaIT.Core.Domain.Entities
@@ -18,7 +19,7 @@
     <div class="page-head">
         <div>
             <h1>Assets</h1>
-            <div class="page-sub">Lockers, SAE devices, scanners, and batteries.</div>
+            <div class="page-sub">Issue assigned equipment, verify holders, and manage device condition.</div>
         </div>
         <div class="page-actions">
             @if (_canCreateAssets)
@@ -29,9 +30,6 @@
             }
             @if (_canScanAssets)
             {
-                <button class="btn" @onclick="() => _rfidScanOpen = true">
-                    <Icon Name="Rfid" Size="14" /> RFID Scan
-                </button>
                 <button class="btn btn-primary" @onclick="FocusScanDock">
                     <Icon Name="Scan" Size="14" /> Scan
                 </button>
@@ -227,7 +225,7 @@
             </div>
             <label class="field">
                 <Icon Name="Search" Size="13" />
-                <input @bind="_tableSearch" @bind:event="oninput" placeholder="Search tag, serial, holder" />
+                <input @bind="_tableSearch" @bind:event="oninput" placeholder="Search tag, serial, holder, locker" />
             </label>
         </div>
 
@@ -236,8 +234,7 @@
                 <div>Tag / S/N</div>
                 <div>Type</div>
                 <div>Model</div>
-                <div>RFID</div>
-                <div>Holder</div>
+                <div>Assigned To</div>
                 <div>State</div>
                 <div style="text-align:right;">Action</div>
             </div>
@@ -253,6 +250,8 @@
                 @foreach (var a in filtered)
                 {
                     var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
+                    var locker = LockerForAsset(a);
+                    var lockerUser = locker == null ? null : ActiveOccupantUser(locker);
                     <div class="asset-row asset-signal-row table-cols @Format.FlagRowCss(a.Flags)"
                          @onclick="() => Open(a, null)">
                         <div>
@@ -267,20 +266,31 @@
                             <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
                         </div>
                         <div>
-                            @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
+                            @if (holder != null)
                             {
-                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Linked</span>
+                                <div>@holder.Name</div>
+                                @if (locker != null)
+                                {
+                                    <span style="color:var(--text-faint);font-size:11px;">Direct holder - Locker #@locker.Number</span>
+                                }
+                                else if (a.CheckedOutAt.HasValue)
+                                {
+                                    <span style="color:var(--text-faint);font-size:11px;">@Format.RelTime(a.CheckedOutAt.Value)</span>
+                                }
+                            }
+                            else if (lockerUser != null && locker != null)
+                            {
+                                <div>@lockerUser.Name</div>
+                                <span style="color:var(--text-faint);font-size:11px;">Via Locker #@locker.Number</span>
+                            }
+                            else if (locker != null)
+                            {
+                                <div>Locker #@locker.Number</div>
+                                <span style="color:var(--text-faint);font-size:11px;">No assigned user</span>
                             }
                             else
                             {
-                                <span style="color:var(--text-faint);font-size:12px;">—</span>
-                            }
-                        </div>
-                        <div>
-                            <div>@(holder?.Name ?? "Unassigned")</div>
-                            @if (a.CheckedOutAt.HasValue)
-                            {
-                                <span style="color:var(--text-faint);font-size:11px;">@Format.RelTime(a.CheckedOutAt.Value)</span>
+                                <div>Unassigned</div>
                             }
                         </div>
                         <div>
@@ -318,7 +328,6 @@
 <AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="() => _viewing = null" OnChanged="Load" />
 <AssetEditor Open="_createOpen" PrefillSerial="_prefillSerial" OnClose="CloseEditor" OnChanged="Load" />
 <ScanModal Open="_camScanOpen" OnClose="() => _camScanOpen = false" OnMatch="OnCamScanMatch" />
-<RfidScanModal Open="_rfidScanOpen" OnClose="() => _rfidScanOpen = false" OnMatch="OnRfidScanMatch" />
 
 @if (_pairingScanner != null)
 {
@@ -401,7 +410,6 @@
     string _scanValue = "";
     bool _scanNotFound;
     bool _camScanOpen;
-    bool _rfidScanOpen;
     bool _createOpen;
     bool _canCreateAssets;
     bool _canDeleteAssets;
@@ -538,13 +546,6 @@
         Open(a, null);
     }
 
-    async Task OnRfidScanMatch(Asset a)
-    {
-        _rfidScanOpen = false;
-        await Task.Yield();
-        Open(a, null);
-    }
-
     void Open(Asset a, string? action)
     {
         _viewing    = a;
@@ -629,6 +630,11 @@
     List<Asset> AssetsInLocker(string lockerId) =>
         _assets.Where(a => a.LockerId == lockerId).ToList();
 
+    Locker? LockerForAsset(Asset asset) =>
+        string.IsNullOrWhiteSpace(asset.LockerId)
+            ? null
+            : _lockers.FirstOrDefault(l => string.Equals(l.Id, asset.LockerId, StringComparison.OrdinalIgnoreCase));
+
     LockerOccupant? ActiveOccupant(Locker locker) =>
         locker.Occupants.FirstOrDefault(o => o.UnassignedAt == null);
 
@@ -676,7 +682,16 @@
             q = q.Where(a =>
             {
                 var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.RfidTagId, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+                var locker = LockerForAsset(a);
+                var lockerUser = locker == null ? null : ActiveOccupantUser(locker);
+                return Contains(a.Tag, s) ||
+                       Contains(a.Serial, s) ||
+                       Contains(a.Imei, s) ||
+                       Contains(a.Id, s) ||
+                       Contains(a.Model, s) ||
+                       Contains(holder?.Name, s) ||
+                       Contains(locker?.Number, s) ||
+                       Contains(lockerUser?.Name, s);
             });
         }
 

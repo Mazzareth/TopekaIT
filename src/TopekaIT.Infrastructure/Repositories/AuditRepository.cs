@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for audit sessions and scan entries.
+/// </summary>
 public class AuditRepository : IAuditRepository
 {
     private readonly IDivisionDbContextFactory _factory;

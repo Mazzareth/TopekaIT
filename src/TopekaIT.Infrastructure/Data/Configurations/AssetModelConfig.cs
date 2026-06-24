@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for the asset model pick-list.
+/// </summary>
 public class AssetModelConfig : IEntityTypeConfiguration<AssetModel>
 {
     public void Configure(EntityTypeBuilder<AssetModel> builder)

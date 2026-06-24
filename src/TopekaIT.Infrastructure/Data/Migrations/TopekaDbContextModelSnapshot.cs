@@ -110,13 +110,6 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
-                    b.Property<DateTimeOffset?>("RfidLinkedAt")
-                        .HasColumnType("datetimeoffset");
-
-                    b.Property<string>("RfidTagId")
-                        .HasMaxLength(64)
-                        .HasColumnType("nvarchar(64)");
-
                     b.Property<string>("ScannerKind")
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
@@ -155,10 +148,6 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.HasIndex("LockerId");
 
                     b.HasIndex("PairedAssetId");
-
-                    b.HasIndex("RfidTagId")
-                        .IsUnique()
-                        .HasFilter("[RfidTagId] IS NOT NULL");
 
                     b.HasIndex("Serial");
 
@@ -272,12 +261,12 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
-                    b.Property<DateTimeOffset>("ScannedAt")
-                        .HasColumnType("datetimeoffset");
-
                     b.Property<string>("ScanValue")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset>("ScannedAt")
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SessionId")
                         .IsRequired()
@@ -373,6 +362,10 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<int>("AfterFlags")
                         .HasColumnType("int");
 
@@ -391,10 +384,6 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.Property<string>("AfterStatus")
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
-
-                    b.Property<string>("ActorId")
-                        .HasMaxLength(16)
-                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("AssetId")
                         .IsRequired()
@@ -433,13 +422,29 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("EmployeeNameSnapshot")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
                     b.Property<string>("LinkedAssetId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("LockerNumberSnapshot")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("MobileSessionId")
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("ReaderDeviceSerial")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("RmaLink")
                         .HasMaxLength(256)
@@ -452,6 +457,10 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.Property<string>("ScanSource")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ScannedLockerId")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
 
                     b.Property<string>("TicketId")
                         .HasMaxLength(32)
@@ -601,11 +610,22 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
+                    b.Property<DateTimeOffset?>("RfidLinkedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("RfidTagId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Section")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("RfidTagId")
+                        .IsUnique()
+                        .HasFilter("[RfidTagId] IS NOT NULL");
 
                     b.ToTable("Lockers", (string)null);
                 });
@@ -642,6 +662,66 @@ namespace TopekaIT.Infrastructure.Data.Migrations
                     b.HasIndex("UserId", "UnassignedAt");
 
                     b.ToTable("LockerOccupants", (string)null);
+                });
+
+            modelBuilder.Entity("TopekaIT.Core.Domain.Entities.MobileEquipmentSession", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<string>("AppVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("DivisionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Platform")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("ReaderDeviceSerial")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("ReaderDeviceSerial");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("MobileEquipmentSessions", (string)null);
                 });
 
             modelBuilder.Entity("TopekaIT.Core.Domain.Entities.PingSample", b =>

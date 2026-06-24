@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <RootNamespace>TopekaIT.AndroidLocker</RootNamespace>
+    <AssemblyName>TopekaIT.AndroidLocker</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="**\*" Exclude="bin\**;obj\**" />
+  </ItemGroup>
+
+  <Target Name="AndroidLockerBuildNote" BeforeTargets="Build">
+    <Message Importance="high" Text="TopekaIT.AndroidLocker is a native Android Gradle project wrapped for solution visibility. Build the APK from this folder with Android Studio or Gradle once Android SDK tooling is installed." />
+  </Target>
+</Project>

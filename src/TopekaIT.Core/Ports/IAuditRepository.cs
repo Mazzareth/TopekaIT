@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for audit sessions and the scans that belong to them.
+/// </summary>
 public interface IAuditRepository
 {
     Task<AuditSession?> GetSessionAsync(string id, CancellationToken ct = default);

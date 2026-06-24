@@ -4,6 +4,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Basic printer inventory service. Monitoring owns live status changes; this owns the saved printer rows.
+/// </summary>
 public class PrinterService
 {
     private readonly IPrinterRepository _repo;
@@ -35,15 +38,6 @@ public class PrinterService
 
     public Task UpdateAsync(Printer printer, CancellationToken ct = default) => _repo.UpdateAsync(printer, ct);
     public Task DeleteAsync(string id, CancellationToken ct = default) => _repo.RemoveAsync(id, ct);
-
-    public async Task<Printer?> ToggleStatusAsync(string id, CancellationToken ct = default)
-    {
-        var p = await _repo.GetByIdAsync(id, ct);
-        if (p == null) return null;
-        p.Status = p.Status == PrinterStatus.Up ? PrinterStatus.Down : PrinterStatus.Up;
-        await _repo.UpdateAsync(p, ct);
-        return p;
-    }
 
     private static string NextPrinterId(IReadOnlyList<Printer> printers)
     {

@@ -16,16 +16,21 @@ using TopekaIT.Web.Services;
 
 namespace TopekaIT.Web;
 
+/// <summary>
+/// The web app's front door: hosting, auth, policies, services, background workers, health checks, and startup seeding all meet here.
+/// </summary>
 public class Program
 {
     public static async Task Main(string[] args)
     {
+        // Windows Service hosting starts from the service folder, so point content root back at the deployed app files.
         var webAppOptions = new WebApplicationOptions
         {
             Args = args,
             ContentRootPath = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService() 
                 ? AppContext.BaseDirectory : default
         };
+
         var builder = WebApplication.CreateBuilder(webAppOptions);
         builder.Host.UseWindowsService();
 
@@ -52,6 +57,7 @@ public class Program
                 options.SlidingExpiration = true;
             });
 
+        // Every permission in Core becomes a named ASP.NET policy the Razor pages can use.
         builder.Services.AddAuthorization(AccessAuthorizationPolicies.AddPolicies);
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
@@ -61,6 +67,7 @@ public class Program
             ?? "Server=(localdb)\\MSSQLLocalDB;Database=TopekaIT;Trusted_Connection=true;";
         var masterConnectionString = builder.Configuration.GetConnectionString("Master")
             ?? "Server=(localdb)\\MSSQLLocalDB;Database=TopekaIT_Master;Trusted_Connection=true;";
+
         builder.Services.AddMasterInfrastructure(masterConnectionString);
         builder.Services.AddDivisionInfrastructure();
 
@@ -76,6 +83,7 @@ public class Program
         builder.Services.AddScoped<ActivityService>();
         builder.Services.AddScoped<RmaService>();
         builder.Services.AddScoped<EquipmentStationService>();
+        builder.Services.AddScoped<MobileEquipmentService>();
         builder.Services.AddScoped<AuditService>();
         builder.Services.AddScoped<PingHistoryService>();
         builder.Services.AddScoped<PrinterEventService>();
@@ -126,26 +134,46 @@ public class Program
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
 
-        using (var scope = app.Services.CreateScope())
+        app.Lifetime.ApplicationStarted.Register(() =>
         {
-            var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MasterDbContext>>();
-            await using (var masterDb = await masterFactory.CreateDbContextAsync())
+            _ = Task.Run(async () =>
             {
-                await DataSeeder.SeedMasterAsync(masterDb, topekaConnectionString);
-            }
+                try
+                {
+                    await SeedStartupDataAsync(app.Services, topekaConnectionString);
+                }
+                catch (Exception ex)
+                {
+                    app.Logger.LogCritical(ex, "Startup data seeding failed. Stopping the portal host.");
+                    await app.StopAsync();
+                }
+            });
+        });
 
-            var divisionRepo = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
-            var dataProtectionProvider = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>();
-            foreach (var division in await divisionRepo.GetAllAsync())
-            {
-                var options = new DbContextOptionsBuilder<TopekaDbContext>()
-                    .UseSqlServer(division.ConnectionString, sql => sql.CommandTimeout(120))
-                    .Options;
-                await using var divisionDb = new TopekaDbContext(options, dataProtectionProvider);
-                await DataSeeder.SeedDivisionAsync(divisionDb);
-            }
+        await app.RunAsync();
+    }
+
+    static async Task SeedStartupDataAsync(IServiceProvider services, string topekaConnectionString)
+    {
+        using var scope = services.CreateScope();
+
+        // Seed master first so the division list exists, then seed each tenant database on its own connection.
+        var masterFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<MasterDbContext>>();
+        await using (var masterDb = await masterFactory.CreateDbContextAsync())
+        {
+            await DataSeeder.SeedMasterAsync(masterDb, topekaConnectionString);
         }
 
-        app.Run();
+        var divisionRepo = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
+        var dataProtectionProvider = scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>();
+        foreach (var division in await divisionRepo.GetAllAsync())
+        {
+            var options = new DbContextOptionsBuilder<TopekaDbContext>()
+                .UseSqlServer(division.ConnectionString, sql => sql.CommandTimeout(120))
+                .Options;
+            await using var divisionDb = new TopekaDbContext(options, dataProtectionProvider);
+            await DataSeeder.SeedDivisionAsync(divisionDb);
+        }
     }
+
 }

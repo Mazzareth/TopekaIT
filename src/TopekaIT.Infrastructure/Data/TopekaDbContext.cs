@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data;
 
+/// <summary>
+/// A division database. Printers, assets, lockers, tickets, RMA, audits, and station transactions stay tenant-local.
+/// </summary>
 public class TopekaDbContext : DbContext
 {
     private readonly IDataProtectionProvider _dataProtectionProvider;
@@ -36,6 +39,7 @@ public class TopekaDbContext : DbContext
     public DbSet<AuditSession> AuditSessions => Set<AuditSession>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<EquipmentTransaction> EquipmentTransactions => Set<EquipmentTransaction>();
+    public DbSet<MobileEquipmentSession> MobileEquipmentSessions => Set<MobileEquipmentSession>();
     public DbSet<SavedView> SavedViews => Set<SavedView>();
     public DbSet<StatusFlagHistory> StatusFlagHistory => Set<StatusFlagHistory>();
 

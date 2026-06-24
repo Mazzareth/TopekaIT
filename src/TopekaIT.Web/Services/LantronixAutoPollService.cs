@@ -3,6 +3,9 @@ using TopekaIT.Core.Services;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Background polling loop for Lantronix devices. It stays gentle: poll, record, sleep, repeat.
+/// </summary>
 public class LantronixAutoPollService : BackgroundService
 {
     private const string DefaultDeviceId = "lan-6i-fuel";
@@ -25,6 +28,8 @@ public class LantronixAutoPollService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
+
         if (!_options.Enabled)
         {
             _logger.LogInformation("Lantronix auto poll is disabled.");

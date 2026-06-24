@@ -1,3 +1,4 @@
+@* RMA flow console. Scan first, then move the device through local DST, vendor work, and return. *@
 @page "/it/rma"
 @page "/manager/rma"
 @attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewSupervisorConsole)]
@@ -36,7 +37,7 @@
                 <div>
                     <span class="scan-dock-label">RMA intake</span>
                     <h2>Scan the device going to DST</h2>
-                    <p>Tap NFC/RFID, scan the asset tag, or type the serial number.</p>
+                    <p>Scan the asset tag, scan the barcode, or type the serial number.</p>
                 </div>
                 <button class="btn btn-sm btn-ghost" @onclick="ResetRmaIntake">
                     <Icon Name="X" Size="12" /> Close
@@ -51,7 +52,7 @@
                        @bind="_rmaScanValue"
                        @bind:event="oninput"
                        @onkeydown="RmaScanKeyDown"
-                       placeholder="RFID, asset tag, serial, IMEI" />
+                       placeholder="Asset tag, serial, IMEI, or record ID" />
                 <button class="btn btn-accent" @onclick="ScanRmaDevice" disabled="@string.IsNullOrWhiteSpace(_rmaScanValue)">
                     <Icon Name="Search" Size="14" /> Find Device
                 </button>
@@ -73,7 +74,6 @@
                     <div class="rma-device-ids">
                         <span>Asset tag <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.Tag) ? "None" : _rmaScanAsset.Tag)</strong></span>
                         <span>Serial <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.Serial) ? "None" : _rmaScanAsset.Serial)</strong></span>
-                        <span>NFC/RFID <strong>@(string.IsNullOrWhiteSpace(_rmaScanAsset.RfidTagId) ? "Not linked" : _rmaScanAsset.RfidTagId)</strong></span>
                     </div>
                     <button class="btn btn-accent rma-send-button" @onclick="SendScannedDeviceToRma" disabled="@_rmaSubmitting">
                         <Icon Name="Flag" Size="14" /> @(_rmaSubmitting ? "Opening RMA..." : "Send to RMA")
@@ -173,10 +173,6 @@
                                 @if (rma.Asset != null && !string.IsNullOrWhiteSpace(rma.Asset.Serial))
                                 {
                                     <span class="asset-sub">S/N: @rma.Asset.Serial</span>
-                                }
-                                @if (rma.Asset != null && !string.IsNullOrWhiteSpace(rma.Asset.RfidTagId))
-                                {
-                                    <span class="asset-sub">RFID: @rma.Asset.RfidTagId</span>
                                 }
                             </div>
                             <div class="vendor-section text-dim">@(string.IsNullOrWhiteSpace(rma.Section) ? "Local DST" : rma.Section)</div>
@@ -491,8 +487,7 @@
             var match = _records.FirstOrDefault(r => 
                 r.AssetTag.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase) ||
                 r.AssetId.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase) ||
-                (r.Asset != null && r.Asset.Serial != null && r.Asset.Serial.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase)) ||
-                (r.Asset != null && r.Asset.RfidTagId != null && r.Asset.RfidTagId.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase))
+                (r.Asset != null && r.Asset.Serial != null && r.Asset.Serial.Equals(QuerySearch, StringComparison.OrdinalIgnoreCase))
             );
 
             if (match != null)
@@ -601,7 +596,6 @@
             query = query.Where(r => 
                 r.AssetTag.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) || 
                 (r.Asset != null && r.Asset.Serial != null && r.Asset.Serial.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)) ||
-                (r.Asset != null && r.Asset.RfidTagId != null && r.Asset.RfidTagId.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)) ||
                 r.AssetId.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
                 r.Section.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
                 (r.Comments != null && r.Comments.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
@@ -673,7 +667,7 @@
         var scan = _rmaScanValue.Trim();
         if (string.IsNullOrWhiteSpace(scan))
         {
-            SetRmaIntakeError("Scan or enter a serial, asset tag, or NFC/RFID value.");
+            SetRmaIntakeError("Scan or enter a serial, asset tag, IMEI, or record ID.");
             return;
         }
 
@@ -691,6 +685,7 @@
 
     async Task SendScannedDeviceToRma()
     {
+        // One button should leave a complete trail: asset state, RMA record, ticket, and station transaction.
         if (_rmaScanAsset == null || _rmaSubmitting) return;
 
         var divisionId = TenantContext.DivisionId;

@@ -6,6 +6,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for manual access overrides in the master database.
+/// </summary>
 public class UserPermissionOverrideRepository : IUserPermissionOverrideRepository
 {
     private readonly IDbContextFactory<MasterDbContext> _factory;

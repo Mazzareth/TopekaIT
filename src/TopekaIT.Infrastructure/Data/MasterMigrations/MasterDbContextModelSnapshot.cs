@@ -36,6 +36,11 @@ namespace TopekaIT.Infrastructure.Data.MasterMigrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<int>("EquipmentCheckInIntervalDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(30);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(128)

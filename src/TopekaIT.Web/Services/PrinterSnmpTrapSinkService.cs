@@ -45,6 +45,8 @@ public class PrinterSnmpTrapSinkService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
+
         if (!_enabled)
         {
             _logger.LogInformation("Printer SNMP Trap Sink is disabled.");

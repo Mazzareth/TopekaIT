@@ -1,5 +1,8 @@
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Saved deployment checker settings. Plain data so the window and runners do not pass loose strings around.
+/// </summary>
 public sealed class DeploymentSettings
 {
     public string RemoteServer { get; set; } = "10.36.155.64";

@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for battery containers.
+/// </summary>
 public class BatteryContainerConfig : IEntityTypeConfiguration<BatteryContainer>
 {
     public void Configure(EntityTypeBuilder<BatteryContainer> b)

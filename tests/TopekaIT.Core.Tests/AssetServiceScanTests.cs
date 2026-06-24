@@ -6,15 +6,15 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Protects asset scan matching. Physical RFID/NFC stickers now belong to lockers, not assets.
+/// </summary>
 public class AssetServiceScanTests
 {
     [Theory]
     [InlineData("TAG-001")]
     [InlineData("serial:SN-001")]
     [InlineData("sn:SN-001")]
-    [InlineData("rfid:NTAG-001")]
-    [InlineData("nfc:NTAG-001")]
-    [InlineData("https://local.asset/scan?nfc=NTAG-001")]
     [InlineData("asset-1")]
     public async Task FindByScanAsync_MatchesAssetIdentifiers(string scanValue)
     {
@@ -25,7 +25,6 @@ public class AssetServiceScanTests
             Serial = "SN-001",
             Model = "TC77",
             Category = AssetCategory.PodTc77,
-            RfidTagId = "NTAG-001",
         };
         var service = new AssetService(new FakeAssetRepository(asset), new ActivityService(new FakeActivityRepository()));
 
@@ -33,6 +32,29 @@ public class AssetServiceScanTests
 
         Assert.NotNull(match);
         Assert.Equal(asset.Id, match!.Id);
+    }
+
+    [Theory]
+    [InlineData("rfid:TAG-001")]
+    [InlineData("nfc:TAG-001")]
+    [InlineData("ntag:TAG-001")]
+    [InlineData("uid:TAG-001")]
+    [InlineData("https://local.asset/scan?nfc=TAG-001")]
+    public async Task FindByScanAsync_DoesNotMatchRfidOrNfcPayloads(string scanValue)
+    {
+        var asset = new Asset
+        {
+            Id = "asset-1",
+            Tag = "TAG-001",
+            Serial = "SN-001",
+            Model = "TC77",
+            Category = AssetCategory.PodTc77,
+        };
+        var service = new AssetService(new FakeAssetRepository(asset), new ActivityService(new FakeActivityRepository()));
+
+        var match = await service.FindByScanAsync(scanValue);
+
+        Assert.Null(match);
     }
 
     private sealed class FakeAssetRepository : IAssetRepository

@@ -5,6 +5,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Turns a user's tier plus any manual overrides into the real set of things they can do right now.
+/// </summary>
 public class AccessControlService
 {
     private readonly IUserRepository _users;
@@ -102,6 +105,9 @@ public class AccessControlService
         => actorTier == AccessTier.SuperAdmin || actorTier > targetTier;
 }
 
+/// <summary>
+/// The resolved access snapshot the UI can ask quick yes/no questions against.
+/// </summary>
 public sealed record UserAccess(
     User User,
     IReadOnlySet<string> Permissions,
@@ -113,6 +119,9 @@ public sealed record UserAccess(
         => Overrides.TryGetValue(permissionKey, out var state) ? state : null;
 }
 
+/// <summary>
+/// Small answer object for access edits, because "denied, here is why" reads better than throwing for normal UI choices.
+/// </summary>
 public sealed record AccessMutationResult(bool Succeeded, string? Error)
 {
     public static AccessMutationResult Success() => new(true, null);

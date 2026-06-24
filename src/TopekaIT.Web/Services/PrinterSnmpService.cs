@@ -7,8 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace TopekaIT.Web.Services;
 
 /// <summary>
-/// Queries T8000 printers via SNMP v1/v2c for system information.
-/// Populates SerialNumber, FirmwareVersion, MacAddress, Location, Contact fields.
+/// Queries T8000 printers via SNMP for system information that helps inventory feel less hand-entered.
 /// </summary>
 public class PrinterSnmpService
 {
@@ -143,6 +142,9 @@ public class PrinterSnmpService
     }
 }
 
+/// <summary>
+/// The printer identity fields SNMP can fill in when the device answers.
+/// </summary>
 public class PrinterSysInfo
 {
     public string? Description { get; set; }

@@ -7,6 +7,9 @@ using TopekaIT.Infrastructure.Tenant;
 
 namespace TopekaIT.Infrastructure;
 
+/// <summary>
+/// Wires Core ports to EF repositories. Master services are global; division services run against whichever tenant is active.
+/// </summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddMasterInfrastructure(this IServiceCollection services, string masterConnectionString)
@@ -39,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<ILockerRepository, LockerRepository>();
         services.AddScoped<IRmaRecordRepository, RmaRecordRepository>();
         services.AddScoped<IEquipmentTransactionRepository, EquipmentTransactionRepository>();
+        services.AddScoped<IMobileEquipmentSessionRepository, MobileEquipmentSessionRepository>();
         services.AddScoped<IAuditRepository, AuditRepository>();
 
         return services;

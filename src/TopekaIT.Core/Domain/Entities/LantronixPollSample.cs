@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// One Lantronix poll result, successful or not. The raw response stays around because field devices enjoy being weird.
+/// </summary>
 public class LantronixPollSample
 {
     public long Id { get; set; }

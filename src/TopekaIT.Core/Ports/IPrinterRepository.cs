@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for printers in the current division.
+/// </summary>
 public interface IPrinterRepository
 {
     Task<IReadOnlyList<Printer>> GetAllAsync(CancellationToken ct = default);

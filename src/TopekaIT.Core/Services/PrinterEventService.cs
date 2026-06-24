@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Reads printer events, error rollups, and active incident views without making pages know repository details.
+/// </summary>
 public class PrinterEventService
 {
     private readonly IPrinterEventRepository _repo;

@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Audits should count what was scanned, what was missing, and what did not match expectations.
+/// </summary>
 public class AuditServiceTests
 {
     [Fact]

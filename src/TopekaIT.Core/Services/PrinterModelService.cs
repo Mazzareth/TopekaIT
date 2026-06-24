@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Maintains the printer model list used by printer setup and admin screens.
+/// </summary>
 public class PrinterModelService
 {
     private readonly IPrinterModelRepository _repo;

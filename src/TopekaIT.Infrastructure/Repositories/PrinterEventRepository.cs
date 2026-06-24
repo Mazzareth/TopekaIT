@@ -8,6 +8,9 @@ using TopekaIT.Infrastructure.Tenant;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// Stores raw printer events, keeps current alert state warm, and builds the flattened reports the printer screens can scan quickly.
+/// </summary>
 public class PrinterEventRepository : IPrinterEventRepository
 {
     private static readonly TimeSpan ActiveIncidentWindow = TimeSpan.FromDays(2);
@@ -415,6 +418,7 @@ public class PrinterEventRepository : IPrinterEventRepository
         return count > 0 ? query.Take(count) : query;
     }
 
+    // A noisy printer should update one open alert, not create a brand-new incident every time it repeats itself.
     private static async Task UpsertAlertStateAsync(TopekaDbContext db, PrinterEvent ev, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(ev.AlertKey) || IsInfoSeverity(ev.Severity))
@@ -460,6 +464,7 @@ public class PrinterEventRepository : IPrinterEventRepository
         await db.SaveChangesAsync(ct);
     }
 
+    // Stored events may predate newer normalization rules, so rebuild the friendly alert shape while preserving the raw message.
     private static PrinterAlertOccurrence ToOccurrence(PrinterErrorLogEntry entry)
     {
         var normalized = PrinterAlertNormalizer.Normalize(entry.RawMessage, entry.EventType, entry.Severity);
@@ -492,6 +497,7 @@ public class PrinterEventRepository : IPrinterEventRepository
         };
     }
 
+    // Group by alert key first, then sort by "how bad and how recent" because that is how people triage the list.
     private static IReadOnlyList<PrinterAlertGroup> BuildGroups(IEnumerable<PrinterAlertOccurrence> entries)
     {
         return entries

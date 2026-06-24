@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for the tenant activity feed.
+/// </summary>
 public class ActivityRepository : IActivityRepository
 {
     private readonly IDivisionDbContextFactory _factory;

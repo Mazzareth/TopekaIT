@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// One sighting inside a grouped printer alert, with enough division/printer detail to trace it back.
+/// </summary>
 public class PrinterAlertOccurrence
 {
     public long EventId { get; set; }

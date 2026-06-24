@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for activity feed rows.
+/// </summary>
 public class ActivityConfig : IEntityTypeConfiguration<ActivityEvent>
 {
     public void Configure(EntityTypeBuilder<ActivityEvent> b)

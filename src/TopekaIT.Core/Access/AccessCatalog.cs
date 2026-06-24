@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Access;
 
+/// <summary>
+/// The one list of permissions the app believes in. Menus, policies, and user overrides all come back here instead of making up their own rules.
+/// </summary>
 public static class AccessCatalog
 {
     private static readonly AccessPermissionDefinition[] _permissions =
@@ -92,8 +95,4 @@ public static class AccessCatalog
             ? targetTier < AccessTier.SuperAdmin
             : actorTier > targetTier;
 
-    public static IEnumerable<AccessTier> AssignableTiersFor(AccessTier actorTier)
-        => Enum.GetValues<AccessTier>()
-            .Where(t => actorTier == AccessTier.SuperAdmin || actorTier > t)
-            .OrderBy(t => t);
 }

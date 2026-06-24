@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// RMA repository tests for active records and persisted return status.
+/// </summary>
 public class RmaRecordRepositoryTests
 {
     [Fact]

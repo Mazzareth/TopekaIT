@@ -5,6 +5,9 @@ using System.Text;
 
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Runs the deployment push script and captures enough output for the checker window to explain what happened.
+/// </summary>
 public sealed class DeploymentPushRunner
 {
     public async Task<DeploymentPushResult> PushAsync(
@@ -368,7 +371,26 @@ try {
             New-Item -ItemType Directory -Path $RemotePath -Force | Out-Null
         }
 
+        $configBackupDirectory = Join-Path $RemotePath (Join-Path "deployment-config-backups" $DeploymentStamp)
+        $serverConfigFiles = @(Get-ChildItem -Path $RemotePath -Filter "appsettings*.json" -File -ErrorAction SilentlyContinue)
+        if ($serverConfigFiles.Count -gt 0) {
+            New-Item -ItemType Directory -Path $configBackupDirectory -Force | Out-Null
+            foreach ($configFile in $serverConfigFiles) {
+                Copy-Item -Path $configFile.FullName -Destination (Join-Path $configBackupDirectory $configFile.Name) -Force
+            }
+
+            Write-Output "preserved $($serverConfigFiles.Count) existing remote appsettings file(s)"
+        }
+
         Expand-Archive -Path $RemoteArchive -DestinationPath $RemotePath -Force
+
+        if (Test-Path $configBackupDirectory) {
+            foreach ($configFile in Get-ChildItem -Path $configBackupDirectory -Filter "appsettings*.json" -File -ErrorAction SilentlyContinue) {
+                Copy-Item -Path $configFile.FullName -Destination (Join-Path $RemotePath $configFile.Name) -Force
+            }
+
+            Write-Output "restored existing remote appsettings file(s)"
+        }
 
         @(
             "DeploymentStamp=$DeploymentStamp",

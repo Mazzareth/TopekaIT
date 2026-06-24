@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for lockers. Assignment keeps one active locker per user while preserving the old occupant rows as history.
+/// </summary>
 public class LockerRepository : ILockerRepository
 {
     private readonly IDivisionDbContextFactory _factory;

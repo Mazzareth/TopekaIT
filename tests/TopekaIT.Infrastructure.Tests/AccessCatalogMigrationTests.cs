@@ -9,6 +9,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Checks that access-catalog migrations keep the expected user role data intact.
+/// </summary>
 public class AccessCatalogMigrationTests
 {
     [Fact]
@@ -21,6 +24,19 @@ public class AccessCatalogMigrationTests
         using var db = new MasterDbContext(options, TestDataProtection.Provider);
 
         Assert.NotNull(db.Model.FindEntityType(typeof(UserPermissionOverride)));
+    }
+
+    [Fact]
+    public void MasterContext_DivisionIncludesEquipmentCheckInCadence()
+    {
+        var options = new DbContextOptionsBuilder<MasterDbContext>()
+            .UseSqlServer("Server=(localdb)\\MSSQLLocalDB;Database=ModelOnly;Trusted_Connection=True;")
+            .Options;
+
+        using var db = new MasterDbContext(options, TestDataProtection.Provider);
+        var division = db.Model.FindEntityType(typeof(Division));
+
+        Assert.NotNull(division?.FindProperty(nameof(Division.EquipmentCheckInIntervalDays)));
     }
 
     [Fact]
@@ -51,6 +67,17 @@ public class AccessCatalogMigrationTests
 
         Assert.Contains(operations.OfType<SqlOperation>(), op => op.Sql.Contains("SET [Role] = N'Admin'", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(operations.OfType<SqlOperation>(), op => op.Sql.Contains("[Role] = N'IT'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void DivisionCadenceMigration_AddsEquipmentCheckInInterval()
+    {
+        var operations = BuildUpOperations(new AddDivisionEquipmentCheckInCadence());
+
+        Assert.Contains(operations.OfType<AddColumnOperation>(), op =>
+            op.Table == "Divisions" &&
+            op.Name == "EquipmentCheckInIntervalDays" &&
+            op.DefaultValue is 30);
     }
 
     private static IReadOnlyList<MigrationOperation> BuildUpOperations(Migration migration)

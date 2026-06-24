@@ -10,14 +10,13 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Guards the permission bridge: if Core adds a permission, Web needs a matching authorization policy.
+/// </summary>
 public class AuthorizationPolicyTests
 {
     [Theory]
-    [InlineData(AccessPermissionKeys.TicketsViewOwn)]
-    [InlineData(AccessPermissionKeys.AssetsViewSupervisorConsole)]
-    [InlineData(AccessPermissionKeys.PrintersViewAdmin)]
-    [InlineData(AccessPermissionKeys.PrintersAutoSetup)]
-    [InlineData(AccessPermissionKeys.AdminCreateDivisions)]
+    [MemberData(nameof(AllPermissionKeys))]
     public void PermissionPolicies_AreRegistered(string permissionKey)
     {
         var options = new AuthorizationOptions();
@@ -34,6 +33,7 @@ public class AuthorizationPolicyTests
     [Theory]
     [InlineData(typeof(MyTickets), AccessPermissionKeys.TicketsViewOwn)]
     [InlineData(typeof(ManagerAssets), AccessPermissionKeys.AssetsViewSupervisorConsole)]
+    [InlineData(typeof(LockerConsole), AccessPermissionKeys.LockersView)]
     [InlineData(typeof(PrinterAdmin), AccessPermissionKeys.PrintersViewAdmin)]
     [InlineData(typeof(ControlRoom), AccessPermissionKeys.ItDashboard)]
     [InlineData(typeof(DivisionAdmin), AccessPermissionKeys.AdminCreateDivisions)]
@@ -44,4 +44,7 @@ public class AuthorizationPolicyTests
 
         Assert.Contains(attributes, attribute => attribute.Policy == permissionKey);
     }
+
+    public static IEnumerable<object[]> AllPermissionKeys() =>
+        AccessCatalog.Permissions.Select(permission => new object[] { permission.Key });
 }

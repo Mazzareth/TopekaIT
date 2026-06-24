@@ -4,6 +4,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Tenant;
 
+/// <summary>
+/// Opens a specific division database without needing request tenant state. Background jobs and all-division reports use this path.
+/// </summary>
 public sealed class DirectDivisionDbContextFactory : IDivisionDbContextFactory
 {
     private readonly string _connectionString;

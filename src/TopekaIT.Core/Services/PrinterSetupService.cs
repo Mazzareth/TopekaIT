@@ -6,6 +6,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Handles the printer setup dance: try the login, read enough sysinfo to know what it is, then only run approved setup commands.
+/// </summary>
 public class PrinterSetupService
 {
     public const string PasswordFormatPlaceholder = "[Division Code]@[Zip Code]";
@@ -335,6 +338,9 @@ public class PrinterSetupService
     private sealed record PrinterSetupConnection(bool Connected, IPrinterSetupTelnetSession? Session, string? ErrorMessage = null);
 }
 
+/// <summary>
+/// The knobs for the auto-setup flow. These are boring on purpose so division setup does not hide magic values in code.
+/// </summary>
 public sealed class PrinterSetupSettings
 {
     public string ManagerIp { get; set; } = "10.36.155.64";
@@ -345,8 +351,14 @@ public sealed class PrinterSetupSettings
     public int TimeoutMs { get; set; } = 5000;
 }
 
+/// <summary>
+/// The bits we can scrape from printer output before the portal decides how to store it.
+/// </summary>
 public sealed record PrinterDetectedInfo(string Name, string Model);
 
+/// <summary>
+/// One test result for "can we talk to this printer and what does it look like?"
+/// </summary>
 public sealed record PrinterSetupTestResult(
     string IpAddress,
     bool Connected,
@@ -363,12 +375,18 @@ public sealed record PrinterSetupTestResult(
         new(ipAddress, false, "Failed", errorMessage ?? "Connection failed.", "", "", "");
 }
 
+/// <summary>
+/// The selected setup work for one printer after the test pass has shown what is on the network.
+/// </summary>
 public sealed record PrinterSetupRunRequest(
     string IpAddress,
     string DetectedName,
     string DetectedModel,
     string SelectedModel);
 
+/// <summary>
+/// The final answer for a setup attempt, including whether the portal had to create a new printer row.
+/// </summary>
 public sealed record PrinterSetupRunResult(
     string IpAddress,
     bool Success,

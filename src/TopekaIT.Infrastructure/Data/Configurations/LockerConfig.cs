@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for lockers and their device/occupant relationships.
+/// </summary>
 public class LockerConfig : IEntityTypeConfiguration<Locker>
 {
     public void Configure(EntityTypeBuilder<Locker> b)
@@ -16,8 +19,13 @@ public class LockerConfig : IEntityTypeConfiguration<Locker>
         b.Property(x => x.Section).HasMaxLength(64);
         b.Property(x => x.LockCombo).HasMaxLength(ComboProtection.ProtectedComboMaxLength);
         b.Property(x => x.LockSerial).HasMaxLength(64);
+        b.Property(x => x.RfidTagId).HasMaxLength(64);
         b.Property(x => x.Notes).HasMaxLength(1000);
         b.Property(x => x.LastAuditedBy).HasMaxLength(16);
+
+        b.HasIndex(x => x.RfidTagId)
+            .IsUnique()
+            .HasFilter("[RfidTagId] IS NOT NULL");
 
         b.HasMany(x => x.Occupants)
             .WithOne(x => x.Locker)

@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for audit sessions.
+/// </summary>
 public class AuditSessionConfig : IEntityTypeConfiguration<AuditSession>
 {
     public void Configure(EntityTypeBuilder<AuditSession> b)

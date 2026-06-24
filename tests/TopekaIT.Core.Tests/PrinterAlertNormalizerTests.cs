@@ -3,6 +3,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Printer alert text is messy; these tests keep the friendly alert shape stable.
+/// </summary>
 public class PrinterAlertNormalizerTests
 {
     [Theory]

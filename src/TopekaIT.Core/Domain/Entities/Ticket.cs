@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A work request tied to a person and optionally a device. Simple on purpose; the queue does the organizing.
+/// </summary>
 public class Ticket
 {
     public string Id { get; set; } = "";

@@ -1,3 +1,4 @@
+@* Locker console. It manages lockers, people, combos, audits, and the devices sitting in those lockers. *@
 @page "/manager/lockers"
 @attribute [Authorize(Policy = AccessPermissionKeys.LockersView)]
 @using System.Security.Claims
@@ -96,6 +97,10 @@
                                     {
                                         <span class="state-pill" style="font-size:10px;padding:1px 5px;">Shared</span>
                                     }
+                                    @if (!string.IsNullOrWhiteSpace(locker.RfidTagId))
+                                    {
+                                        <span class="state-pill" style="font-size:10px;padding:1px 5px;">RFID</span>
+                                    }
                                 </div>
 
                                 <div class="locker-body">
@@ -159,6 +164,8 @@
             var occupants = ActiveOccupants(locker).ToList();
             var users = ActiveOccupantUsers(locker).ToList();
             var assets = AssetsInLocker(locker.Id).ToList();
+            var lockerRfidPayload = TopekaIT.Core.Services.LockerService.BuildRfidPayload(locker.RfidTagId);
+            var lockerRfidBytes = TopekaIT.Core.Services.LockerService.GetPayloadByteCount(lockerRfidPayload);
 
             <div class="locker-inspector">
                 <div class="inspector-head">
@@ -237,6 +244,73 @@
                         @if (!string.IsNullOrWhiteSpace(_lockerError))
                         {
                             <div class="form-error">@_lockerError</div>
+                        }
+                    </div>
+
+                    <div class="inspector-section">
+                        <div class="inspector-section-title">Locker RFID</div>
+                        <div class="rfid-summary">
+                            <span class="@(!string.IsNullOrWhiteSpace(locker.RfidTagId) ? "state-pill state-inuse" : "state-pill")">
+                                <Icon Name="Rfid" Size="12" />
+                                @(!string.IsNullOrWhiteSpace(locker.RfidTagId) ? "Linked" : "Not linked")
+                            </span>
+                            @if (locker.RfidLinkedAt.HasValue)
+                            {
+                                <span class="rfid-linked-at">Linked @Format.RelTime(locker.RfidLinkedAt.Value)</span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(locker.RfidTagId))
+                        {
+                            <div class="rfid-token-panel">
+                                <div>
+                                    <span class="rfid-token-label">Stored tag</span>
+                                    <code>@locker.RfidTagId</code>
+                                </div>
+                                <div>
+                                    <span class="rfid-token-label">Writable payload</span>
+                                    <code>@lockerRfidPayload</code>
+                                    <span class="rfid-byte-count">@lockerRfidBytes / @TopekaIT.Core.Services.LockerService.Ntag213UserBytes bytes</span>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="locker-empty-devices" style="text-align:left; padding: 6px 0;">No locker tag linked</div>
+                        }
+
+                        @if (_canEditLockers)
+                        {
+                            <div class="form-row" style="margin-top: 10px;">
+                                <label>RFID UID or locker tag value</label>
+                                <input class="mono" @bind="_lockerRfidValue" @bind:event="oninput" placeholder="Scan UID or enter rfid:..." autocomplete="off" />
+                            </div>
+                            <div class="locker-rfid-actions">
+                                <button class="btn btn-sm" @onclick="GenerateLockerRfid" disabled="@_savingLockerRfid">
+                                    <Icon Name="RefreshCw" Size="12" /> Generate Tag
+                                </button>
+                                <button class="btn btn-primary btn-sm" @onclick="LinkLockerRfid" disabled="@(_savingLockerRfid || string.IsNullOrWhiteSpace(_lockerRfidValue))">
+                                    <Icon Name="Link" Size="12" />
+                                    @if (string.IsNullOrWhiteSpace(locker.RfidTagId))
+                                    {
+                                        <span>Link Locker Tag</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Replace Tag</span>
+                                    }
+                                </button>
+                                @if (!string.IsNullOrWhiteSpace(locker.RfidTagId))
+                                {
+                                    <button class="btn btn-sm btn-ghost" @onclick="ClearLockerRfid" disabled="@_savingLockerRfid">
+                                        <Icon Name="Unlink" Size="12" /> Clear Tag
+                                    </button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(_lockerRfidError))
+                            {
+                                <div class="form-error">@_lockerRfidError</div>
+                            }
                         }
                     </div>
 
@@ -346,7 +420,7 @@
                                     <div class="locker-device-row">
                                         <span style="flex: 1; min-width: 0;">
                                             <strong class="mono">@PrimaryTag(asset)</strong>
-                                            <span style="display:block;color:var(--text-faint);font-size:11px;">@DeviceSubtitle(asset, holder)</span>
+                                            <span style="display:block;color:var(--text-faint);font-size:11px;">@DeviceSubtitle(asset, holder, users)</span>
                                         </span>
                                         <span class="@Format.SimpleStateCss(asset.Flags)" style="font-size: 10px; padding: 1px 6px;">
                                             @Format.SimpleState(asset.Flags)
@@ -460,6 +534,9 @@
     string _lockerFilter = "all";
     string? _loadError;
     string? _lockerError;
+    string _lockerRfidValue = "";
+    string? _lockerRfidError;
+    bool _savingLockerRfid;
 
     bool _createLockerOpen;
     string _newLockerNumber = "";
@@ -625,6 +702,7 @@
         _selectedLocker = locker;
         _lockerError = null;
         _revealCombo = false;
+        SyncLockerRfidInput();
         ResetDeviceInputs();
         ResetUserInputs();
     }
@@ -633,6 +711,8 @@
     {
         _selectedLocker = null;
         _lockerError = null;
+        _lockerRfidValue = "";
+        _lockerRfidError = null;
         ResetDeviceInputs();
         ResetUserInputs();
     }
@@ -666,6 +746,90 @@
         await LockerService.RecordAuditAsync(_selectedLocker.Id, _actorId);
         await RefreshSelected(_selectedLocker.Id);
         State.PushToast($"Locker {_selectedLocker?.Number} audited", "up");
+    }
+
+    async Task GenerateLockerRfid()
+    {
+        if (_selectedLocker == null || !_canEditLockers) return;
+
+        _savingLockerRfid = true;
+        _lockerRfidError = null;
+        try
+        {
+            var updated = await LockerService.GenerateRfidLinkAsync(_selectedLocker.Id, _actorId);
+            if (updated == null)
+            {
+                _lockerRfidError = "Locker was not found.";
+                return;
+            }
+
+            State.PushToast($"Locker {updated.Number} RFID tag generated", "up");
+            await RefreshSelected(updated.Id);
+        }
+        catch (Exception ex)
+        {
+            _lockerRfidError = ex.Message;
+        }
+        finally
+        {
+            _savingLockerRfid = false;
+        }
+    }
+
+    async Task LinkLockerRfid()
+    {
+        if (_selectedLocker == null || !_canEditLockers) return;
+
+        _savingLockerRfid = true;
+        _lockerRfidError = null;
+        try
+        {
+            var updated = await LockerService.LinkRfidAsync(_selectedLocker.Id, _lockerRfidValue, _actorId);
+            if (updated == null)
+            {
+                _lockerRfidError = "Locker was not found.";
+                return;
+            }
+
+            State.PushToast($"Locker {updated.Number} RFID tag linked", "up");
+            await RefreshSelected(updated.Id);
+        }
+        catch (Exception ex)
+        {
+            _lockerRfidError = ex.Message;
+        }
+        finally
+        {
+            _savingLockerRfid = false;
+        }
+    }
+
+    async Task ClearLockerRfid()
+    {
+        if (_selectedLocker == null || !_canEditLockers) return;
+
+        _savingLockerRfid = true;
+        _lockerRfidError = null;
+        try
+        {
+            var updated = await LockerService.ClearRfidLinkAsync(_selectedLocker.Id, _actorId);
+            if (updated == null)
+            {
+                _lockerRfidError = "Locker was not found.";
+                return;
+            }
+
+            State.PushToast($"Locker {updated.Number} RFID tag cleared", "");
+            await RefreshSelected(updated.Id);
+        }
+        catch (Exception ex)
+        {
+            _lockerRfidError = ex.Message;
+        }
+        finally
+        {
+            _savingLockerRfid = false;
+        }
     }
 
     async Task SearchDevice()
@@ -885,10 +1049,18 @@
     {
         await Load();
         _selectedLocker = _lockers.FirstOrDefault(l => l.Id == selectedLockerId);
+        SyncLockerRfidInput();
+    }
+
+    void SyncLockerRfidInput()
+    {
+        _lockerRfidValue = _selectedLocker?.RfidTagId ?? "";
+        _lockerRfidError = null;
     }
 
     async Task SyncLegacyLockerFields(Locker locker)
     {
+        // Older screens still read locker fields from users, so keep those values in step with the newer occupant records.
         foreach (var occupant in ActiveOccupants(locker))
         {
             await UpdateUserLockerFields(occupant.UserId, locker);
@@ -964,6 +1136,7 @@
             q = q.Where(l =>
                 Contains(l.Number, s) ||
                 Contains(l.Section, s) ||
+                Contains(l.RfidTagId, s) ||
                 ActiveOccupantUsers(l).Any(u => Contains(u.Name, s) || Contains(u.Username, s)) ||
                 AssetsInLocker(l.Id).Any(a => Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Model, s)));
         }
@@ -1022,10 +1195,12 @@
         !string.IsNullOrWhiteSpace(a.Tag) ? a.Tag :
         !string.IsNullOrWhiteSpace(a.Serial) ? a.Serial : a.Id;
 
-    static string DeviceSubtitle(Asset asset, User? holder)
+    static string DeviceSubtitle(Asset asset, User? holder, IReadOnlyList<User> lockerUsers)
     {
         var model = string.IsNullOrWhiteSpace(asset.Model) ? Format.CategoryLabel(asset.Category) : asset.Model;
-        return holder == null ? model : $"{model} - {holder.Name}";
+        if (holder != null) return $"{model} - direct holder {holder.Name}";
+        if (lockerUsers.Any()) return $"{model} - locker user {string.Join(", ", lockerUsers.Select(u => u.Name))}";
+        return model;
     }
 
     string UniqueUsername(string name)

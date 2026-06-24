@@ -4,6 +4,9 @@ using Microsoft.EntityFrameworkCore.Design;
 
 namespace TopekaIT.Infrastructure.Data;
 
+/// <summary>
+/// Design-time factory for tenant migrations. EF tooling needs a sample division database to build migrations.
+/// </summary>
 public class TopekaDbContextFactory : IDesignTimeDbContextFactory<TopekaDbContext>
 {
     public TopekaDbContext CreateDbContext(string[] args)

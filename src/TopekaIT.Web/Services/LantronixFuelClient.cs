@@ -6,6 +6,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// TCP client for Lantronix fuel controllers. Sends the configured command and gives Core the raw response.
+/// </summary>
 public class LantronixFuelClient : ILantronixFuelClient
 {
     private const int MaxResponseBytes = 8192;

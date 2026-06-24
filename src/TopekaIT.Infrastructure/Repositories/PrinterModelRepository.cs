@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for printer model names and the default model the portal expects.
+/// </summary>
 public class PrinterModelRepository : IPrinterModelRepository
 {
     private readonly IDivisionDbContextFactory _factory;

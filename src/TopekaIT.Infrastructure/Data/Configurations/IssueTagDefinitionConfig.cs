@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for the issue-tag dictionary.
+/// </summary>
 public class IssueTagDefinitionConfig : IEntityTypeConfiguration<IssueTagDefinition>
 {
     public void Configure(EntityTypeBuilder<IssueTagDefinition> b)

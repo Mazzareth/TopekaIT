@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// Printer log data shaped for the log viewer. The raw message stays visible because parsing is helpful, not magic.
+/// </summary>
 public class PrinterLogEntry
 {
     public long Id { get; set; }

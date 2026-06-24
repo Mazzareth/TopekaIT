@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for tickets in the active division.
+/// </summary>
 public class TicketRepository : ITicketRepository
 {
     private readonly IDivisionDbContextFactory _factory;

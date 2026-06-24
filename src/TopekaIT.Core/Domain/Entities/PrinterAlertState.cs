@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// The current open-alert memory for a printer. New logs update this instead of creating a fresh incident every time.
+/// </summary>
 public class PrinterAlertState
 {
     public long Id { get; set; }

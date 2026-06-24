@@ -4,6 +4,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// CSV export tests. Spreadsheet-safe output is boring until one quote breaks it.
+/// </summary>
 public class PrinterLogCsvTests
 {
     [Fact]

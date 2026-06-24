@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for tickets in the current division.
+/// </summary>
 public interface ITicketRepository
 {
     Task<IReadOnlyList<Ticket>> GetAllAsync(CancellationToken ct = default);

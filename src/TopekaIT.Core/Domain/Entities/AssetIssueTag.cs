@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A tagged problem on an asset. Good for quick "what is wrong with this thing?" labels without losing the notes.
+/// </summary>
 public class AssetIssueTag
 {
     public string Id { get; set; } = "";

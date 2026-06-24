@@ -49,7 +49,31 @@ Copy-Item -Path $LocalArchive -Destination $RemoteArchive -ToSession $session -F
 Write-Host "5. Extracting files on server..." -ForegroundColor Cyan
 Invoke-Command -Session $session -ScriptBlock {
     $ErrorActionPreference = 'Continue'
+    if (-not (Test-Path $using:RemotePath)) {
+        New-Item -ItemType Directory -Path $using:RemotePath -Force | Out-Null
+    }
+
+    $configBackupDirectory = Join-Path $using:RemotePath (Join-Path "deployment-config-backups" $using:DeploymentStamp)
+    $serverConfigFiles = @(Get-ChildItem -Path $using:RemotePath -Filter "appsettings*.json" -File -ErrorAction SilentlyContinue)
+    if ($serverConfigFiles.Count -gt 0) {
+        New-Item -ItemType Directory -Path $configBackupDirectory -Force | Out-Null
+        foreach ($configFile in $serverConfigFiles) {
+            Copy-Item -Path $configFile.FullName -Destination (Join-Path $configBackupDirectory $configFile.Name) -Force
+        }
+
+        Write-Output "Preserved $($serverConfigFiles.Count) existing remote appsettings file(s)."
+    }
+
     Expand-Archive -Path $using:RemoteArchive -DestinationPath $using:RemotePath -Force
+
+    if (Test-Path $configBackupDirectory) {
+        foreach ($configFile in Get-ChildItem -Path $configBackupDirectory -Filter "appsettings*.json" -File -ErrorAction SilentlyContinue) {
+            Copy-Item -Path $configFile.FullName -Destination (Join-Path $using:RemotePath $configFile.Name) -Force
+        }
+
+        Write-Output "Restored existing remote appsettings file(s)."
+    }
+
     $deploymentInfoPath = Join-Path $using:RemotePath "deployment-info.txt"
     $using:DeploymentInfo | Set-Content -Path $deploymentInfoPath -Encoding UTF8
     Remove-Item -Path $using:RemoteArchive -Force -ErrorAction SilentlyContinue

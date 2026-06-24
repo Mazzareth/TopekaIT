@@ -8,8 +8,7 @@ using TopekaIT.Infrastructure.Tenant;
 namespace TopekaIT.Web.Services;
 
 /// <summary>
-/// Periodically purges old operational telemetry rows to keep the databases lean.
-/// Default retention: 30 days. Runs once per day.
+/// Periodically purges old operational telemetry rows to keep the databases lean. Default retention: 30 days, once per day.
 /// </summary>
 public class PingRetentionService : BackgroundService
 {

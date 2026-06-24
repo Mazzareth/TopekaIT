@@ -1,3 +1,4 @@
+@* IT asset console. Same asset world as managers, but with the deeper controls IT needs. *@
 @page "/it/assets"
 @attribute [Authorize(Policy = AccessPermissionKeys.AssetsViewItConsole)]
 @using TopekaIT.Core.Domain.Entities
@@ -28,9 +29,6 @@
             }
             @if (_canScanAssets)
             {
-                <button class="btn" @onclick="() => _rfidScanOpen = true">
-                    <Icon Name="Rfid" Size="14" /> RFID Scan
-                </button>
                 <button class="btn btn-primary" @onclick="() => _scanOpen = true">
                     <Icon Name="Scan" Size="14" /> Scan
                 </button>
@@ -120,7 +118,6 @@
                 <div>Tag / S/N</div>
                 <div>Cat</div>
                 <div>Model</div>
-                <div>RFID</div>
                 <div>Holder</div>
                 <div>State</div>
             </div>
@@ -146,16 +143,6 @@
                         <div style="color:var(--text-faint);font-size:12px;">@Format.CategoryLabel(a.Category)</div>
                         <div>
                             <div>@(string.IsNullOrWhiteSpace(a.Model) ? Format.CategoryLabel(a.Category) : a.Model)</div>
-                        </div>
-                        <div>
-                            @if (!string.IsNullOrWhiteSpace(a.RfidTagId))
-                            {
-                                <span class="state-pill" style="font-size:10px;padding:1px 5px;">Linked</span>
-                            }
-                            else
-                            {
-                                <span style="color:var(--text-faint);font-size:12px;">—</span>
-                            }
                         </div>
                         <div>
                             <div>@(holder?.Name ?? "—")</div>
@@ -286,13 +273,10 @@
                     <button class="btn btn-sm" @onclick="() => OpenDetail(sel, null)">
                         <Icon Name="Eye" Size="12" /> Full detail
                     </button>
-                    <button class="btn btn-sm" @onclick='() => OpenDetail(sel, "rfid")'>
-                        <Icon Name="Rfid" Size="12" /> RFID NTAG213
-                    </button>
                     @if (!sel.Flags.HasFlag(StatusFlags.WithHolder))
                     {
                         <button class="btn btn-sm btn-primary" @onclick='() => OpenDetail(sel, "assign")'>
-                            <Icon Name="User" Size="12" /> Assign holder
+                            <Icon Name="User" Size="12" /> Issue device
                         </button>
                     }
                     else
@@ -314,13 +298,11 @@
 </div>
 
 <ScanModal Open="_scanOpen" OnClose="() => _scanOpen = false" OnMatch="OnScanMatch" />
-<RfidScanModal Open="_rfidScanOpen" OnClose="() => _rfidScanOpen = false" OnMatch="OnRfidScanMatch" />
 <AssetDetail Asset="_viewing" Action="@_viewAction" Users="_users" OnClose="CloseDetail" OnChanged="Load" />
 <AssetEditor Open="_createOpen" OnClose="() => _createOpen = false" OnChanged="Load" />
 
 @code {
     bool _scanOpen;
-    bool _rfidScanOpen;
     bool _createOpen;
     bool _canCreateAssets;
     bool _canDeleteAssets;
@@ -395,7 +377,7 @@
             q = q.Where(a =>
             {
                 var holder = _users.FirstOrDefault(u => u.Id == a.HolderId);
-                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.RfidTagId, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
+                return Contains(a.Tag, s) || Contains(a.Serial, s) || Contains(a.Imei, s) || Contains(a.Id, s) || Contains(a.Model, s) || Contains(holder?.Name, s);
             });
         }
 
@@ -427,15 +409,6 @@
     {
         _scanOpen = false;
         _selected = a;
-        await Task.CompletedTask;
-    }
-
-    async Task OnRfidScanMatch(Asset a)
-    {
-        _rfidScanOpen = false;
-        _selected = a;
-        _viewing = a;
-        _viewAction = null;
         await Task.CompletedTask;
     }
 

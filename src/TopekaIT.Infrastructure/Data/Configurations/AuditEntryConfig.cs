@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for individual audit scan rows.
+/// </summary>
 public class AuditEntryConfig : IEntityTypeConfiguration<AuditEntry>
 {
     public void Configure(EntityTypeBuilder<AuditEntry> b)

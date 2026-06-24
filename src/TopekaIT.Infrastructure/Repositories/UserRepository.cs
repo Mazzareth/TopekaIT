@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for users in the master database.
+/// </summary>
 public class UserRepository : IUserRepository
 {
     private readonly IDbContextFactory<MasterDbContext> _factory;

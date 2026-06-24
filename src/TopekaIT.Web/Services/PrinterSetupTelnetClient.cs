@@ -4,6 +4,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Plain TCP/telnet client for PrintNet setup. It is intentionally small because the command safety lives in Core.
+/// </summary>
 public sealed class PrinterSetupTelnetClient : IPrinterSetupTelnetClient
 {
     public async Task<PrinterSetupTelnetLogin> TryLoginAsync(
@@ -83,6 +86,9 @@ public sealed class PrinterSetupTelnetClient : IPrinterSetupTelnetClient
     }
 }
 
+/// <summary>
+/// A live printer command session. It reads until the printer prompt comes back or the timeout wins.
+/// </summary>
 internal sealed class PrinterSetupTelnetSession : IPrinterSetupTelnetSession
 {
     private readonly TcpClient _client;

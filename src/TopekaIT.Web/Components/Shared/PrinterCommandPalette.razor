@@ -1,3 +1,4 @@
+@* Printer command palette. It keeps telnet commands behind catalog checks and admin gates. *@
 @implements IAsyncDisposable
 @inject AppState State
 @inject IJSRuntime JS
@@ -527,6 +528,7 @@
             return false;
         }
 
+        // Protected writes require both an admin-level user and a deliberate UI gate, because this talks to the printer for real.
         if (!_allowProtected)
         {
             reason = "Protected writes require enabling the Protected writes gate.";

@@ -3,6 +3,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for station ledger rows, with a helper that saves the asset mutation and receipt together.
+/// </summary>
 public interface IEquipmentTransactionRepository
 {
     Task<EquipmentTransactionMutationResult?> RecordMutationAsync(
@@ -19,10 +22,21 @@ public interface IEquipmentTransactionRepository
         string? scanSource,
         string? linkedAssetId,
         Action<Asset> mutateAsset,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        EquipmentTransactionMetadata? metadata = null);
 
     Task AddAsync(EquipmentTransaction transaction, CancellationToken ct = default);
     Task<IReadOnlyList<EquipmentTransaction>> GetRecentAsync(int count = 100, CancellationToken ct = default);
 }
 
+/// <summary>
+/// The updated asset plus the transaction row created for that same move.
+/// </summary>
 public sealed record EquipmentTransactionMutationResult(Asset Asset, EquipmentTransaction Transaction);
+
+public sealed record EquipmentTransactionMetadata(
+    string? MobileSessionId,
+    string? ReaderDeviceSerial,
+    string? ScannedLockerId,
+    string? LockerNumberSnapshot,
+    string? EmployeeNameSnapshot);

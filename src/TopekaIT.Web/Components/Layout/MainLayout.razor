@@ -1,3 +1,4 @@
+@* Main app shell. It resolves tenant context and password-change gates before showing the navigation frame. *@
 @inherits LayoutComponentBase
 @implements IDisposable
 @inject AppState State
@@ -36,6 +37,7 @@
     {
         State.OnChange += Rerender;
 
+        // The layout is the first reliable place to enforce this after login, before any tenant page starts loading data.
         var auth = await AuthProvider.GetAuthenticationStateAsync();
         var userId = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "";
         var path = new Uri(Nav.Uri).AbsolutePath;
@@ -55,6 +57,10 @@
         if (string.IsNullOrWhiteSpace(divisionId))
         {
             divisionId = auth.User.FindFirst("active_division")?.Value;
+        }
+        if (string.IsNullOrWhiteSpace(divisionId))
+        {
+            divisionId = StationDivisionFromPath(path);
         }
 
         if (!string.IsNullOrWhiteSpace(divisionId))
@@ -79,4 +85,16 @@
 
     void Rerender() => InvokeAsync(StateHasChanged);
     public void Dispose() => State.OnChange -= Rerender;
+
+    static string? StationDivisionFromPath(string path)
+    {
+        const string prefix = "/station/equipment/";
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var divisionId = path[prefix.Length..].Trim('/');
+        return string.IsNullOrWhiteSpace(divisionId) ? null : Uri.UnescapeDataString(divisionId);
+    }
 }

@@ -11,6 +11,9 @@ using TopekaIT.Infrastructure.Tenant;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Background printer health loop. Pings keep status fresh; occasional SNMP reads enrich inventory metadata.
+/// </summary>
 public class PrinterMonitoringService : BackgroundService
 {
     private readonly IDbContextFactory<MasterDbContext> _masterFactory;
@@ -37,6 +40,7 @@ public class PrinterMonitoringService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Printer Monitoring Service is starting.");
+        await Task.Yield();
 
         while (!stoppingToken.IsCancellationRequested)
         {

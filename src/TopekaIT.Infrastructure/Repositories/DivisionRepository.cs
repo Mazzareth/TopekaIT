@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for divisions in the master database.
+/// </summary>
 public class DivisionRepository : IDivisionRepository
 {
     private readonly IDbContextFactory<MasterDbContext> _factory;

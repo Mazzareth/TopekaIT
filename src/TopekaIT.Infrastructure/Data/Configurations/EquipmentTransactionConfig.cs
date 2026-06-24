@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for equipment-station transaction receipts.
+/// </summary>
 public class EquipmentTransactionConfig : IEntityTypeConfiguration<EquipmentTransaction>
 {
     public void Configure(EntityTypeBuilder<EquipmentTransaction> b)
@@ -24,6 +27,11 @@ public class EquipmentTransactionConfig : IEntityTypeConfiguration<EquipmentTran
         b.Property(x => x.RmaRecordId).HasMaxLength(16);
         b.Property(x => x.RmaLink).HasMaxLength(256);
         b.Property(x => x.ScanSource).HasMaxLength(128);
+        b.Property(x => x.MobileSessionId).HasMaxLength(16);
+        b.Property(x => x.ReaderDeviceSerial).HasMaxLength(128);
+        b.Property(x => x.ScannedLockerId).HasMaxLength(16);
+        b.Property(x => x.LockerNumberSnapshot).HasMaxLength(32);
+        b.Property(x => x.EmployeeNameSnapshot).HasMaxLength(128);
         b.Property(x => x.BeforeStatus).HasMaxLength(32);
         b.Property(x => x.AfterStatus).HasMaxLength(32);
         b.Property(x => x.BeforeHolderId).HasMaxLength(16);

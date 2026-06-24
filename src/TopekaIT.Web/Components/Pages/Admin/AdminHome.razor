@@ -1,3 +1,4 @@
+@* Super-admin landing page for cross-division health, setup, and "what needs attention?" snapshots. *@
 @page "/admin"
 @attribute [Authorize(Policy = AccessPermissionKeys.AdminView)]
 @inject DivisionService DivisionService
@@ -434,10 +435,11 @@
     else
     {
         <div class="card">
-            <div class="asset-table-head" style="grid-template-columns: 1fr 100px 120px 220px;">
+            <div class="asset-table-head" style="grid-template-columns: 1fr 100px 120px 150px 220px;">
                 <div>Name</div>
                 <div>Code</div>
                 <div>ZIP</div>
+                <div>Check-in</div>
                 <div style="text-align: right;">Actions</div>
             </div>
 
@@ -448,17 +450,21 @@
 
             @foreach (var division in _divisions)
             {
-                <div class="asset-row" style="grid-template-columns: 1fr 100px 120px 220px; align-items: center;">
+                <div class="asset-row" style="grid-template-columns: 1fr 100px 120px 150px 220px; align-items: center;">
                     <div>
                         <div style="font-weight: 500;">@division.Name</div>
                         <div class="mono" style="font-size: 12px; color: var(--text-faint);">@division.Id</div>
                     </div>
                     <input class="inline-input mono" style="text-transform: uppercase;" @bind="division.PrinterPasswordCode" @bind:event="oninput" placeholder="6I" />
                     <input class="inline-input mono" @bind="division.PrinterPasswordZipCode" @bind:event="oninput" placeholder="66618" />
+                    <select class="inline-input" @bind="division.EquipmentCheckInIntervalDays">
+                        <option value="14">Biweekly</option>
+                        <option value="30">Monthly</option>
+                    </select>
                     <div style="text-align: right;">
                         @if (_canUpdateDivisionSettings)
                         {
-                            <button class="btn btn-sm" @onclick="() => SaveDivisionPassword(division)">
+                            <button class="btn btn-sm" @onclick="() => SaveDivisionSettings(division)">
                                 <Icon Name="Save" Size="12" /> Save
                             </button>
                         }
@@ -639,11 +645,12 @@
         if (_canEnterDivisions) Nav.NavigateTo($"/admin/enter/{id}");
     }
 
-    async Task SaveDivisionPassword(Division division)
+    async Task SaveDivisionSettings(Division division)
     {
         if (!_canUpdateDivisionSettings) return;
         division.PrinterPasswordCode = NormalizeNullable(division.PrinterPasswordCode?.ToUpperInvariant());
         division.PrinterPasswordZipCode = NormalizeNullable(division.PrinterPasswordZipCode);
+        division.EquipmentCheckInIntervalDays = division.EquipmentCheckInIntervalDays <= 14 ? 14 : 30;
         await DivisionService.UpdateAsync(division);
         State.PushToast($"Updated {division.Name}", "up");
     }

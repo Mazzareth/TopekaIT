@@ -6,6 +6,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for global users.
+/// </summary>
 public class MasterUserConfig : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> b)

@@ -1,3 +1,4 @@
+@* The top rail: division switcher, global search, theme toggle, and the signed-in user's small menu. *@
 @using System.Security.Claims
 @inject AppState State
 @inject IJSRuntime JS
@@ -210,6 +211,7 @@
             return;
         }
 
+        // Division switching rewrites the auth cookie, so hand off to MVC and force a real page load.
         var returnUrl = Uri.EscapeDataString(GetDivisionReturnPath());
         Nav.NavigateTo($"/auth/enter-division/{Uri.EscapeDataString(division.Id)}?ReturnUrl={returnUrl}", forceLoad: true);
     }

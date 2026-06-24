@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for printer events, parsed logs, and active alert state.
+/// </summary>
 public interface IPrinterEventRepository
 {
     Task AddAsync(PrinterEvent ev, CancellationToken ct = default);

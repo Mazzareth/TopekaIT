@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for global Lantronix devices and their polling samples.
+/// </summary>
 public class LantronixDeviceRepository : ILantronixDeviceRepository
 {
     private readonly IDbContextFactory<MasterDbContext> _factory;

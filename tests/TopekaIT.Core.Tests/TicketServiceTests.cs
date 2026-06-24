@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Ticket behavior tests. They mostly protect id generation and the repair-ticket shortcuts used by equipment flows.
+/// </summary>
 public class TicketServiceTests
 {
     [Fact]
@@ -58,14 +61,14 @@ public class TicketServiceTests
     }
 
     [Fact]
-    public async Task SetResolutionAsync_UpdatesResolutionLikeUpdateResolutionAsync()
+    public async Task UpdateResolutionAsync_UpdatesResolution()
     {
         var ticket = Ticket("T-1043");
         var repo = new FakeTicketRepository(ticket);
         var service = new TicketService(repo);
         var originalUpdatedAt = ticket.UpdatedAt;
 
-        var resolved = await service.SetResolutionAsync("T-1043", "Replaced cable");
+        var resolved = await service.UpdateResolutionAsync("T-1043", "Replaced cable");
 
         Assert.Same(ticket, resolved);
         Assert.Equal("Replaced cable", ticket.Resolution);
@@ -75,12 +78,12 @@ public class TicketServiceTests
     }
 
     [Fact]
-    public async Task SetResolutionAsync_ReturnsNullWhenTicketIsMissing()
+    public async Task UpdateResolutionAsync_ReturnsNullWhenTicketIsMissing()
     {
         var repo = new FakeTicketRepository();
         var service = new TicketService(repo);
 
-        var resolved = await service.SetResolutionAsync("missing", "No ticket");
+        var resolved = await service.UpdateResolutionAsync("missing", "No ticket");
 
         Assert.Null(resolved);
         Assert.Empty(repo.UpdatedTickets);

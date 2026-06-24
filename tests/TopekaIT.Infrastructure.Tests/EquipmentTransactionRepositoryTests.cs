@@ -1,12 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using TopekaIT.Core.Domain.Entities;
 using TopekaIT.Core.Domain.Enums;
+using TopekaIT.Core.Ports;
 using TopekaIT.Infrastructure.Data;
 using TopekaIT.Infrastructure.Repositories;
 using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Repository tests for station ledger writes, especially asset before/after snapshots.
+/// </summary>
 public class EquipmentTransactionRepositoryTests
 {
     [Fact]
@@ -52,8 +56,15 @@ public class EquipmentTransactionRepositoryTests
             {
                 a.Status = AssetStatus.Out;
                 a.HolderId = "worker-1";
+                a.LockerId = "locker-1";
                 a.Flags = StatusFlags.WithHolder;
-            });
+            },
+            metadata: new EquipmentTransactionMetadata(
+                "mobile-session-1",
+                "WT-123",
+                "locker-1",
+                "A-01",
+                "Worker One"));
 
         Assert.NotNull(result);
         await using var verify = new TopekaDbContext(options, TestDataProtection.Provider);
@@ -69,5 +80,12 @@ public class EquipmentTransactionRepositoryTests
         Assert.Equal(StatusFlags.WithHolder, transaction.AfterFlags);
         Assert.Equal("InCC", transaction.BeforeStatus);
         Assert.Equal("Out", transaction.AfterStatus);
+        Assert.Null(transaction.BeforeLockerId);
+        Assert.Equal("locker-1", transaction.AfterLockerId);
+        Assert.Equal("mobile-session-1", transaction.MobileSessionId);
+        Assert.Equal("WT-123", transaction.ReaderDeviceSerial);
+        Assert.Equal("locker-1", transaction.ScannedLockerId);
+        Assert.Equal("A-01", transaction.LockerNumberSnapshot);
+        Assert.Equal("Worker One", transaction.EmployeeNameSnapshot);
     }
 }

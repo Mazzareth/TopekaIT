@@ -2,6 +2,9 @@ using System.Text.RegularExpressions;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Tiny fuzzy-ish scoring for command palettes. It favors early fields so names beat secondary details.
+/// </summary>
 public static partial class CommandPaletteSearch
 {
     public static int Score(string? query, params string?[] fields)

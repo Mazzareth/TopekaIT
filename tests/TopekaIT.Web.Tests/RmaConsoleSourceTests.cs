@@ -2,6 +2,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Source guards for the scan-first RMA handoff flow and its sidebar entry.
+/// </summary>
 public class RmaConsoleSourceTests
 {
     [Fact]
@@ -15,7 +18,8 @@ public class RmaConsoleSourceTests
         Assert.Contains("AssetService.FindByScanAsync", source);
         Assert.Contains("Station.SendToDstRmaAsync", source);
         Assert.Contains("Give the device to local DST", source);
-        Assert.Contains("RfidTagId", source);
+        Assert.DoesNotContain("RfidTagId", source);
+        Assert.DoesNotContain("NFC/RFID", source);
     }
 
     [Fact]
@@ -25,5 +29,8 @@ public class RmaConsoleSourceTests
 
         Assert.Contains("\"RMA Flow\"", source);
         Assert.Contains("\"/manager/rma\"", source);
+        Assert.Contains("StationRoute", source);
+        Assert.Contains("Uri.EscapeDataString(TenantContext.DivisionId)", source);
+        Assert.Contains("\"/station/equipment/{Uri.EscapeDataString(TenantContext.DivisionId)}\"", source);
     }
 }

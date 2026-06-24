@@ -6,6 +6,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Polls Lantronix devices one-at-a-time per box and turns the fuel controller's text report into inventory samples.
+/// </summary>
 public class LantronixDeviceService
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> PollLocks = new(StringComparer.OrdinalIgnoreCase);
@@ -171,8 +174,14 @@ public class LantronixDeviceService
     }
 }
 
+/// <summary>
+/// The updated Lantronix device plus the sample written for that poll.
+/// </summary>
 public sealed record LantronixDevicePollResult(LantronixDevice Device, LantronixPollSample Sample);
 
+/// <summary>
+/// Parsed inventory lines from a Lantronix response. Raw text stays attached because field reports are not always pretty.
+/// </summary>
 public sealed record LantronixInventorySnapshot(
     int TankNumber,
     string Product,

@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for RMA records attached to assets.
+/// </summary>
 public class RmaRecordRepository : IRmaRecordRepository
 {
     private readonly IDivisionDbContextFactory _factory;

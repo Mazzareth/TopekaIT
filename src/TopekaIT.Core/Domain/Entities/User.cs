@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A portal user. This carries normal login data, station PIN data, and the tier that starts their access.
+/// </summary>
 public class User
 {
     public string Id { get; set; } = "";

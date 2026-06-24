@@ -5,6 +5,9 @@ using System.Windows.Media;
 
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Main checker window. It is a thin UI over local checks, remote status, and deployment push actions.
+/// </summary>
 public partial class MainWindow : Window
 {
     readonly PowerShellStatusChecker _checker = new();
@@ -131,10 +134,21 @@ public partial class MainWindow : Window
 
             if (!deployResult.Succeeded)
             {
+                StatusText.Text = "DIAGNOSING";
+                ReasonText.Text = "Deployment failed. Checking the remote service for details...";
+                AppendTerminal("$ check remote status after failed push");
+
+                var failureStatusResult = await _checker.CheckAsync(settings);
+                await SettingsStore.AppendHistoryAsync(failureStatusResult);
+
                 StatusText.Text = "DEPLOY FAILED";
                 StatusText.Foreground = (Brush)FindResource("DownBrush");
-                ReasonText.Text = deployResult.Reason;
+                ReasonText.Text = failureStatusResult.Reason;
+                DetailBox.Text = FormatDeployResult(deployResult) + Environment.NewLine + FormatResult(failureStatusResult);
                 AppendTerminal($"deploy failed: {deployResult.Reason}");
+                AppendTerminal($"post-failure status: {failureStatusResult.Reason}");
+                AppendTerminalBlock(FormatResult(failureStatusResult));
+                await RefreshHistoryAsync();
                 return;
             }
 
@@ -224,6 +238,14 @@ public partial class MainWindow : Window
         }
     }
 
+    void AppendTerminalBlock(string text)
+    {
+        foreach (var line in text.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries))
+        {
+            AppendTerminal(line);
+        }
+    }
+
     async Task RefreshHistoryAsync()
     {
         var history = await SettingsStore.LoadRecentHistoryAsync();
@@ -302,6 +324,10 @@ public partial class MainWindow : Window
         builder.AppendLine($"Status:      {result.Status}");
         builder.AppendLine($"Reason:      {result.Reason}");
         builder.AppendLine($"ServiceState:{result.ServiceStatus ?? "n/a"}");
+        builder.AppendLine($"Log on as:   {result.ServiceStartName ?? "n/a"}");
+        builder.AppendLine($"Path name:   {result.ServicePathName ?? "n/a"}");
+        builder.AppendLine($"Svc exit:    {(result.ServiceExitCode.HasValue ? result.ServiceExitCode.Value.ToString() : "n/a")}");
+        builder.AppendLine($"Svc-specific:{(result.ServiceSpecificExitCode.HasValue ? result.ServiceSpecificExitCode.Value.ToString() : "n/a")}");
         builder.AppendLine($"Process:     {(result.ProcessId.HasValue ? $"{result.ProcessName} ({result.ProcessId})" : "n/a")}");
         builder.AppendLine($"Started UTC: {result.ProcessStartTime ?? "n/a"}");
         builder.AppendLine($"Exit code:   {result.ToolExitCode}");
@@ -320,13 +346,24 @@ public partial class MainWindow : Window
             builder.AppendLine(result.DeploymentInfo.Trim());
         }
 
+        if (result.ConfigurationHints.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("Configuration hints:");
+            foreach (var hint in result.ConfigurationHints)
+            {
+                builder.AppendLine($"- {hint}");
+            }
+        }
+
         if (result.Events.Count > 0)
         {
             builder.AppendLine();
-            builder.AppendLine("Recent Service Control Manager events:");
+            builder.AppendLine("Recent Windows events:");
             foreach (var item in result.Events)
             {
-                builder.AppendLine($"- {item.TimeCreated}  Event {item.Id}  {item.LevelDisplayName}");
+                var source = string.Join("/", new[] { item.LogName, item.ProviderName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                builder.AppendLine($"- {item.TimeCreated}  {source}  Event {item.Id}  {item.LevelDisplayName}");
                 builder.AppendLine($"  {item.Message}");
             }
         }

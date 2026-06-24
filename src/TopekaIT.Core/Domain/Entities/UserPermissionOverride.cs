@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A manual yes/no permission tweak for one user. Tiers set the baseline; overrides handle the real-world exceptions.
+/// </summary>
 public class UserPermissionOverride
 {
     public string UserId { get; set; } = "";

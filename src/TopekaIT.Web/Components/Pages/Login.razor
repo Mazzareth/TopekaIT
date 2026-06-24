@@ -1,3 +1,4 @@
+@* Login page. The form posts to MVC so antiforgery and cookie auth stay boring and reliable. *@
 @page "/login"
 @layout LoginLayout
 @attribute [AllowAnonymous]
@@ -28,7 +29,7 @@
         </form>
     </div>
 
-    <a class="btn btn-block login-station-link" href="/station/equipment">Use Check-In / Check-Out Station</a>
+    <a class="btn btn-block login-station-link" href="/station/equipment">Use Device Check-In Station</a>
 </div>
 
 @code {

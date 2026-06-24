@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Infrastructure.Tests;
 
+/// <summary>
+/// Lantronix repository tests for device records, poll samples, and cleanup behavior.
+/// </summary>
 public class LantronixDeviceRepositoryTests
 {
     [Fact]

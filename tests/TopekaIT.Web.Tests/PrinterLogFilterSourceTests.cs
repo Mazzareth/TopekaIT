@@ -2,6 +2,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Source guard for printer log filters and export query wiring.
+/// </summary>
 public class PrinterLogFilterSourceTests
 {
     [Theory]

@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for lockers and occupant history. Assignment methods keep current state and old moves in one place.
+/// </summary>
 public interface ILockerRepository
 {
     Task<IReadOnlyList<Locker>> GetAllAsync(CancellationToken ct = default);

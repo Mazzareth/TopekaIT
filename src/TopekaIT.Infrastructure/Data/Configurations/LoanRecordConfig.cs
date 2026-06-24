@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for spare-loan records.
+/// </summary>
 public class LoanRecordConfig : IEntityTypeConfiguration<LoanRecord>
 {
     public void Configure(EntityTypeBuilder<LoanRecord> b)

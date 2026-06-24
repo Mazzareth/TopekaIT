@@ -5,6 +5,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Source guard that keeps "my tickets" scoped to the signed-in user's requests.
+/// </summary>
 public class MyTicketsScopeTests
 {
     [Fact]

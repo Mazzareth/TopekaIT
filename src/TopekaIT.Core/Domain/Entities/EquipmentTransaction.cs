@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// The equipment-station ledger row. If a device changes hands or goes to RMA, this is the "what happened" receipt.
+/// </summary>
 public class EquipmentTransaction
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N")[..16];
@@ -19,6 +22,11 @@ public class EquipmentTransaction
     public string? RmaRecordId { get; set; }
     public string? RmaLink { get; set; }
     public string? ScanSource { get; set; }
+    public string? MobileSessionId { get; set; }
+    public string? ReaderDeviceSerial { get; set; }
+    public string? ScannedLockerId { get; set; }
+    public string? LockerNumberSnapshot { get; set; }
+    public string? EmployeeNameSnapshot { get; set; }
     public string? BeforeStatus { get; set; }
     public string? AfterStatus { get; set; }
     public string? BeforeHolderId { get; set; }

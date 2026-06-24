@@ -6,6 +6,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// User security tests for password upgrades, temporary passwords, and station PIN behavior.
+/// </summary>
 public class UserServicePasswordTests
 {
     [Fact]
@@ -146,6 +149,25 @@ public class UserServicePasswordTests
         Assert.Null(noDivisionSelected);
         Assert.NotNull(selectedDivision);
         Assert.Equal(otherWorker.Id, selectedDivision!.Employee.Id);
+    }
+
+    [Fact]
+    public async Task ValidateStationPinAsync_CanDisableCrossDivisionFallbackForPinnedStation()
+    {
+        var topekaWorker = User("u-001", "topeka-worker", AccessTier.Worker, "6IA");
+        var otherWorker = User("u-002", "other-worker", AccessTier.Worker, "KCK");
+        var repo = new FakeUserRepository(topekaWorker, otherWorker);
+        var service = new UserService(repo, new FakeDivisionRepository(Division("6IA"), Division("KCK")));
+
+        await service.SetStationPinAsync(topekaWorker.Id, "123456");
+        await service.SetStationPinAsync(otherWorker.Id, "654321");
+
+        var flexibleStation = await service.ValidateStationPinAsync("123456", "KCK");
+        var pinnedStation = await service.ValidateStationPinAsync("123456", "KCK", allowCrossDivisionFallback: false);
+
+        Assert.NotNull(flexibleStation);
+        Assert.Equal(topekaWorker.Id, flexibleStation!.Employee.Id);
+        Assert.Null(pinnedStation);
     }
 
     [Fact]

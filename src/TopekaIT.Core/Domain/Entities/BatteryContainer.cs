@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A named place that holds loose batteries. This is inventory math, not serialized-device tracking.
+/// </summary>
 public class BatteryContainer
 {
     public string Id { get; set; } = "";

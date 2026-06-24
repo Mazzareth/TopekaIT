@@ -3,6 +3,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Display formatting helpers. Keep labels and CSS class decisions here so pages do not each invent their own wording.
+/// </summary>
 public static class Format
 {
     public static string SimpleState(StatusFlags f)
@@ -58,10 +61,6 @@ public static class Format
         _                 => "Scanner",
     };
 
-    public static string HealthScoreCss(int score) =>
-        score >= 75 ? "hs-good" : score >= 50 ? "hs-warn" : "hs-bad";
-
-
     public static string RelTime(DateTimeOffset ts)
     {
         var diff = DateTimeOffset.UtcNow - ts;
@@ -77,9 +76,6 @@ public static class Format
         if (days < 30) return $"{sign}{days}d{suffix}";
         return ts.LocalDateTime.ToString("yyyy-MM-dd");
     }
-
-    public static string ShortDate(DateTimeOffset? ts)
-        => ts.HasValue ? ts.Value.LocalDateTime.ToString("MMM d") : "—";
 
     public static DateTimeOffset? LocalDateStartUtc(string? value)
     {

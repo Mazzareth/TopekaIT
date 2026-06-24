@@ -1,5 +1,8 @@
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Shared UI state for the Blazor shell: command palettes, theme, selected printer, and toast messages.
+/// </summary>
 public class AppState
 {
     public string Theme { get; private set; } = "light";
@@ -65,4 +68,7 @@ public class AppState
     private void NotifyChanged() => OnChange?.Invoke();
 }
 
+/// <summary>
+/// A short-lived message for the toast stack.
+/// </summary>
 public record Toast(string Id, string Message, string Tone);

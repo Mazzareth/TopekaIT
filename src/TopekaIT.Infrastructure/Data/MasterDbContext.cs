@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data.Configurations;
 
 namespace TopekaIT.Infrastructure.Data;
 
+/// <summary>
+/// The global database: users, divisions, access overrides, and cross-division Lantronix setup live here.
+/// </summary>
 public class MasterDbContext : DbContext
 {
     private readonly IDataProtectionProvider _dataProtectionProvider;
@@ -25,6 +28,7 @@ public class MasterDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
+        // Master only gets global tables. Tenant-only configs stay out so one migration set does not leak into the other.
         mb.ApplyConfigurationsFromAssembly(
             typeof(MasterDbContext).Assembly,
             type => type == typeof(MasterUserConfig)

@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// The current division for this request or background operation. If this is not resolved, tenant data should not be touched.
+/// </summary>
 public interface ITenantContext
 {
     string? DivisionId { get; }

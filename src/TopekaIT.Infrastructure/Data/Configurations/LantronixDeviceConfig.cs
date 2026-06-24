@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for global Lantronix devices.
+/// </summary>
 public class LantronixDeviceConfig : IEntityTypeConfiguration<LantronixDevice>
 {
     public void Configure(EntityTypeBuilder<LantronixDevice> b)

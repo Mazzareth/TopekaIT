@@ -1,0 +1,60 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TopekaIT.AvaloniaShell.App"
+             RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <Color x:Key="ShellBackgroundColor">#0A0D12</Color>
+          <Color x:Key="ShellPanelColor">#111722</Color>
+          <Color x:Key="ShellPanelAltColor">#151E2B</Color>
+          <Color x:Key="ShellTextColor">#F4F7FB</Color>
+          <Color x:Key="ShellMutedTextColor">#AEB8C7</Color>
+          <Color x:Key="ShellSubtleTextColor">#7D899B</Color>
+          <Color x:Key="ShellBorderColor">#263244</Color>
+          <Color x:Key="ShellAccentColor">#5CE1B8</Color>
+          <Color x:Key="ShellAccentStrongColor">#2BC99C</Color>
+          <Color x:Key="ShellWarningColor">#FFD166</Color>
+          <SolidColorBrush x:Key="ShellBackgroundBrush" Color="{DynamicResource ShellBackgroundColor}" />
+          <SolidColorBrush x:Key="ShellPanelBrush" Color="{DynamicResource ShellPanelColor}" />
+          <SolidColorBrush x:Key="ShellPanelAltBrush" Color="{DynamicResource ShellPanelAltColor}" />
+          <SolidColorBrush x:Key="ShellTextBrush" Color="{DynamicResource ShellTextColor}" />
+          <SolidColorBrush x:Key="ShellMutedTextBrush" Color="{DynamicResource ShellMutedTextColor}" />
+          <SolidColorBrush x:Key="ShellSubtleTextBrush" Color="{DynamicResource ShellSubtleTextColor}" />
+          <SolidColorBrush x:Key="ShellBorderBrush" Color="{DynamicResource ShellBorderColor}" />
+          <SolidColorBrush x:Key="ShellAccentBrush" Color="{DynamicResource ShellAccentColor}" />
+          <SolidColorBrush x:Key="ShellAccentStrongBrush" Color="{DynamicResource ShellAccentStrongColor}" />
+          <SolidColorBrush x:Key="ShellWarningBrush" Color="{DynamicResource ShellWarningColor}" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <Color x:Key="ShellBackgroundColor">#EEF3F7</Color>
+          <Color x:Key="ShellPanelColor">#FFFFFF</Color>
+          <Color x:Key="ShellPanelAltColor">#F6F9FC</Color>
+          <Color x:Key="ShellTextColor">#111821</Color>
+          <Color x:Key="ShellMutedTextColor">#495667</Color>
+          <Color x:Key="ShellSubtleTextColor">#6C7888</Color>
+          <Color x:Key="ShellBorderColor">#D2DAE5</Color>
+          <Color x:Key="ShellAccentColor">#087D67</Color>
+          <Color x:Key="ShellAccentStrongColor">#006B55</Color>
+          <Color x:Key="ShellWarningColor">#9D6A00</Color>
+          <SolidColorBrush x:Key="ShellBackgroundBrush" Color="{DynamicResource ShellBackgroundColor}" />
+          <SolidColorBrush x:Key="ShellPanelBrush" Color="{DynamicResource ShellPanelColor}" />
+          <SolidColorBrush x:Key="ShellPanelAltBrush" Color="{DynamicResource ShellPanelAltColor}" />
+          <SolidColorBrush x:Key="ShellTextBrush" Color="{DynamicResource ShellTextColor}" />
+          <SolidColorBrush x:Key="ShellMutedTextBrush" Color="{DynamicResource ShellMutedTextColor}" />
+          <SolidColorBrush x:Key="ShellSubtleTextBrush" Color="{DynamicResource ShellSubtleTextColor}" />
+          <SolidColorBrush x:Key="ShellBorderBrush" Color="{DynamicResource ShellBorderColor}" />
+          <SolidColorBrush x:Key="ShellAccentBrush" Color="{DynamicResource ShellAccentColor}" />
+          <SolidColorBrush x:Key="ShellAccentStrongBrush" Color="{DynamicResource ShellAccentStrongColor}" />
+          <SolidColorBrush x:Key="ShellWarningBrush" Color="{DynamicResource ShellWarningColor}" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme DensityStyle="Compact" />
+    <StyleInclude Source="avares://TopekaIT.AvaloniaShell/Styles.axaml" />
+  </Application.Styles>
+</Application>

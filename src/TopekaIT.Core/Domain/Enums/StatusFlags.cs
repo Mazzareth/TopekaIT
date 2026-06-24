@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Enums;
 
+/// <summary>
+/// Asset state flags. One primary location/workflow flag should lead, with modifiers like DayLoan layered on top.
+/// </summary>
 [Flags]
 public enum StatusFlags
 {

@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for assets. Reads pull the attached loan/RMA history because those details are usually needed with the device.
+/// </summary>
 public class AssetRepository : IAssetRepository
 {
     private readonly IDivisionDbContextFactory _factory;
@@ -52,6 +55,7 @@ public class AssetRepository : IAssetRepository
         var asset = await db.Assets.FindAsync(new object?[] { id }, ct);
         if (asset == null) return;
 
+        // Scanner pairing points at another asset, so clear those soft links before deleting the target row.
         await db.Assets
             .Where(a => a.PairedAssetId == id)
             .ExecuteUpdateAsync(s => s.SetProperty(a => a.PairedAssetId, (string?)null), ct);

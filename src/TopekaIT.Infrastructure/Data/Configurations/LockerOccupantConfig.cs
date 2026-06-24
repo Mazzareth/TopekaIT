@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for locker occupant history.
+/// </summary>
 public class LockerOccupantConfig : IEntityTypeConfiguration<LockerOccupant>
 {
     public void Configure(EntityTypeBuilder<LockerOccupant> b)

@@ -7,6 +7,9 @@ using Xunit;
 
 namespace TopekaIT.Core.Tests;
 
+/// <summary>
+/// Checks the permission math: default tiers, overrides, and who is allowed to edit whom.
+/// </summary>
 public class AccessControlServiceTests
 {
     [Fact]

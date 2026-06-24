@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// Printer log data flattened for error-list screens. It keeps the raw line and the friendly parsed shape together.
+/// </summary>
 public class PrinterErrorLogEntry
 {
     public long Id { get; set; }

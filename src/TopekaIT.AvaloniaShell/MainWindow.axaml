@@ -1,0 +1,230 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TopekaIT.AvaloniaShell"
+        x:Class="TopekaIT.AvaloniaShell.MainWindow"
+        x:CompileBindings="False"
+        Title="Topeka IT Portal Prototype"
+        Width="1040"
+        Height="640"
+        MinWidth="760"
+        MinHeight="560"
+        Background="{DynamicResource ShellBackgroundBrush}">
+  <Grid>
+  <ScrollViewer IsVisible="{Binding IsLoginVisible}"
+                DataContext="{Binding Login}"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+    <Grid Margin="32"
+          HorizontalAlignment="Stretch">
+      <Grid MaxWidth="1120"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            RowDefinitions="Auto,24,Auto">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel>
+            <TextBlock Text="Local Warehouse Operations Portal"
+                       Classes="heading"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="Warehouse access, station movement, and operations tools."
+                       Classes="body"
+                       Margin="0,6,0,0" />
+          </StackPanel>
+
+          <Button Grid.Column="1"
+                  Classes="action secondary"
+                  Content="{Binding ThemeButtonText}"
+                  Command="{Binding ToggleThemeCommand}"
+                  VerticalAlignment="Top"
+                  MinWidth="112" />
+        </Grid>
+
+        <Grid x:Name="PanelGrid"
+              Grid.Row="2"
+              ColumnDefinitions="1.05*,24,0.95*">
+          <Border x:Name="SignInPanel" Classes="panel" Grid.Column="0">
+            <StackPanel Spacing="22">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Portal Sign-In" Classes="section-title" />
+                <TextBlock Text="Standard access for dashboards, tickets, assets, and administration."
+                           Classes="body"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+
+              <StackPanel Spacing="12">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="Username" Classes="label" />
+                  <TextBox Classes="prototype-input"
+                           Text="{Binding Username}"
+                           PlaceholderText="Username"
+                           UseFloatingPlaceholder="False" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                  <TextBlock Text="Password" Classes="label" />
+                  <TextBox Classes="prototype-input"
+                           Text="{Binding Password}"
+                           PasswordChar="*"
+                           PlaceholderText="Password"
+                           UseFloatingPlaceholder="False" />
+                </StackPanel>
+              </StackPanel>
+
+              <Button Classes="action accent"
+                      Content="{Binding SignInButtonText}"
+                      Command="{Binding SignInCommand}"
+                      HorizontalAlignment="Stretch" />
+
+              <Border Classes="surface status-surface">
+                <TextBlock Text="{Binding StatusMessage}"
+                           Classes="status"
+                           TextWrapping="Wrap" />
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <Border x:Name="QuickAccessPanel" Grid.Column="2" Classes="panel">
+            <StackPanel Spacing="22">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Quick Access" Classes="section-title" />
+                <TextBlock Text="Fast lane for assigned-device check-in, RMA help, and scan-based confirmation."
+                           Classes="body"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+
+              <StackPanel Spacing="12">
+                <Border Classes="surface">
+                  <StackPanel Spacing="10">
+                    <TextBlock Text="Station PIN" Classes="label" />
+                    <TextBox Classes="prototype-input"
+                             Text="{Binding StationPin}"
+                             PlaceholderText="6-digit PIN"
+                             MaxLength="6"
+                             UseFloatingPlaceholder="False" />
+                  </StackPanel>
+                </Border>
+
+                <Border Classes="surface">
+                  <StackPanel Spacing="10">
+                    <TextBlock Text="Device Scan" Classes="label" />
+                    <TextBox Classes="prototype-input"
+                             Text="{Binding DeviceScan}"
+                             PlaceholderText="Scan or type asset tag"
+                             UseFloatingPlaceholder="False" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+
+              <Button Classes="action accent"
+                      Content="Open Station"
+                      Command="{Binding OpenQuickAccessCommand}"
+                      HorizontalAlignment="Stretch" />
+
+              <TextBlock Text="PIN-first accountability today. Badge scan can slot in later."
+                         Classes="status"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+  </ScrollViewer>
+
+  <Grid IsVisible="{Binding IsHubVisible}"
+        DataContext="{Binding Hub}"
+        Margin="28"
+        RowDefinitions="Auto,24,*">
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel>
+        <TextBlock Text="Operations Hub"
+                   Classes="heading"
+                   TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Subtitle}"
+                   Classes="body"
+                   Margin="0,6,0,0" />
+      </StackPanel>
+
+      <Button Grid.Column="1"
+              Classes="action secondary"
+              Content="Sign Out"
+              Command="{Binding SignOutCommand}"
+              VerticalAlignment="Top" />
+    </Grid>
+
+    <Grid Grid.Row="2"
+          ColumnDefinitions="320,24,*">
+      <Border Classes="panel hub-nav-panel">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="18">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{Binding UserDisplayName}" Classes="section-title" />
+              <TextBlock Text="{Binding AccessSummary}" Classes="status" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Sections}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Spacing="8" Margin="0,0,0,14">
+                    <TextBlock Text="{Binding Name}" Classes="label" />
+                    <ItemsControl ItemsSource="{Binding Tiles}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Button Classes="tile"
+                                  Command="{Binding SelectCommand}"
+                                  HorizontalAlignment="Stretch">
+                            <Grid ColumnDefinitions="*,Auto">
+                              <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Title}"
+                                           Classes="tile-title"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Description}"
+                                           Classes="tile-subtitle"
+                                           TextWrapping="Wrap" />
+                              </StackPanel>
+                              <TextBlock Grid.Column="1"
+                                         Text="Ready"
+                                         Classes="tile-state"
+                                         VerticalAlignment="Center"
+                                         Margin="12,0,0,0" />
+                            </Grid>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <Border Grid.Column="2" Classes="panel hub-detail-panel">
+        <Grid RowDefinitions="Auto,18,*,Auto">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{Binding SelectedTile.Title}" Classes="heading" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding SelectedTile.Description}" Classes="body" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Border Grid.Row="2" Classes="surface">
+            <StackPanel Spacing="14">
+              <TextBlock Text="Native placeholder" Classes="section-title" />
+              <TextBlock Text="{Binding SelectedTile.PlaceholderText}"
+                         Classes="body"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="{Binding SelectedTile.PermissionLabel}"
+                         Classes="status"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+
+          <TextBlock Grid.Row="3"
+                     Text="{Binding TileCountLabel}"
+                     Classes="status"
+                     TextWrapping="Wrap" />
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+  </Grid>
+</Window>

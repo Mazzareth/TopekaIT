@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Enums;
 
+/// <summary>
+/// The broad access ladder. Specific permissions still live in the access catalog.
+/// </summary>
 public enum AccessTier
 {
     Worker = 0,
@@ -8,6 +11,9 @@ public enum AccessTier
     SuperAdmin = 3,
 }
 
+/// <summary>
+/// Parsing helpers for tier values that arrive from claims, forms, or older data.
+/// </summary>
 public static class AccessTierExtensions
 {
     public static AccessTier Normalize(this AccessTier tier) => tier;

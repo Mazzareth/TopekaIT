@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// Flattened incident data for admin reporting across divisions. It is shaped for display, not for editing.
+/// </summary>
 public class PrinterActiveIncidentReportRow
 {
     public string DivisionId { get; set; } = "";

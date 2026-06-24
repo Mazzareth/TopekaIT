@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for tracked equipment and its attached loan/RMA/locker details.
+/// </summary>
 public interface IAssetRepository
 {
     Task<IReadOnlyList<Asset>> GetAllAsync(CancellationToken ct = default);

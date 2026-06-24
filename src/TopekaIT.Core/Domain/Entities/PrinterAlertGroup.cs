@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A grouped printer alert. Same root problem, multiple sightings, one row that humans can actually scan.
+/// </summary>
 public class PrinterAlertGroup
 {
     public string AlertKey { get; set; } = "";

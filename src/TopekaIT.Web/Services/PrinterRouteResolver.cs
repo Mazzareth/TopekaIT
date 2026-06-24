@@ -7,6 +7,9 @@ using TopekaIT.Infrastructure.Tenant;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Builds a printer-IP-to-division route map so background sinks know which tenant database should receive a log.
+/// </summary>
 public sealed class PrinterRouteResolver
 {
     private static readonly TimeSpan PrinterMapRefreshInterval = TimeSpan.FromMinutes(5);
@@ -76,4 +79,7 @@ public sealed class PrinterRouteResolver
     }
 }
 
+/// <summary>
+/// Where a printer event should be written once its IP address is recognized.
+/// </summary>
 public sealed record PrinterRoute(string PrinterId, string ConnectionString);

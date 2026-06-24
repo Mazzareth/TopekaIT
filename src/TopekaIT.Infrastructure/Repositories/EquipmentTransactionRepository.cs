@@ -6,6 +6,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// Writes the equipment-station ledger. The main path updates the asset and the transaction row together so the receipt matches reality.
+/// </summary>
 public class EquipmentTransactionRepository : IEquipmentTransactionRepository
 {
     private readonly IDivisionDbContextFactory _factory;
@@ -29,7 +32,8 @@ public class EquipmentTransactionRepository : IEquipmentTransactionRepository
         string? scanSource,
         string? linkedAssetId,
         Action<Asset> mutateAsset,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        EquipmentTransactionMetadata? metadata = null)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
         var isInMemory = string.Equals(db.Database.ProviderName, "Microsoft.EntityFrameworkCore.InMemory", StringComparison.Ordinal);
@@ -58,6 +62,11 @@ public class EquipmentTransactionRepository : IEquipmentTransactionRepository
             RmaRecordId = rmaRecordId,
             RmaLink = rmaLink,
             ScanSource = NormalizeNullable(scanSource),
+            MobileSessionId = NormalizeNullable(metadata?.MobileSessionId),
+            ReaderDeviceSerial = NormalizeNullable(metadata?.ReaderDeviceSerial),
+            ScannedLockerId = NormalizeNullable(metadata?.ScannedLockerId),
+            LockerNumberSnapshot = NormalizeNullable(metadata?.LockerNumberSnapshot),
+            EmployeeNameSnapshot = NormalizeNullable(metadata?.EmployeeNameSnapshot),
             BeforeStatus = before.Status,
             AfterStatus = after.Status,
             BeforeHolderId = before.HolderId,
@@ -99,6 +108,7 @@ public class EquipmentTransactionRepository : IEquipmentTransactionRepository
             .ToListAsync(ct);
     }
 
+    // The string state is intentionally human-readable; it is the "what changed?" note when someone audits the audit trail.
     private static AssetSnapshot Snapshot(Asset asset) => new(
         asset.Status.ToString(),
         asset.HolderId,

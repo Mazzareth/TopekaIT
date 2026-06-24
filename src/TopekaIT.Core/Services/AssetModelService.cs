@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Keeps the asset model pick-list behind the asset forms.
+/// </summary>
 public class AssetModelService
 {
     private readonly IAssetModelRepository _repository;

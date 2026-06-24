@@ -5,6 +5,9 @@ using TopekaIT.Infrastructure.Data;
 
 namespace TopekaIT.Infrastructure.Repositories;
 
+/// <summary>
+/// EF storage for asset model names used by the asset forms.
+/// </summary>
 public class AssetModelRepository : IAssetModelRepository
 {
     private readonly IDivisionDbContextFactory _factory;

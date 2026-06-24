@@ -2,6 +2,9 @@ using System.Runtime.CompilerServices;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Finds repo files from test output folders. Source tests are a little odd, so this keeps the path hunt in one place.
+/// </summary>
 internal static class RepositorySource
 {
     public static string Read(params string[] relativePath) =>

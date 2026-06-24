@@ -3,6 +3,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Web.Services;
 
+/// <summary>
+/// Builds CSV exports for printer logs with boring, spreadsheet-safe escaping.
+/// </summary>
 public static class PrinterLogCsv
 {
     public static string Build(IEnumerable<PrinterLogEntry> entries)

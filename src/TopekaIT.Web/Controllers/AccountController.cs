@@ -9,6 +9,9 @@ using TopekaIT.Core.Services;
 
 namespace TopekaIT.Web.Controllers;
 
+/// <summary>
+/// Cookie-auth endpoints. Razor can render the forms, but login/logout/division switching need real HTTP responses.
+/// </summary>
 public class AccountController : Controller
 {
     private readonly UserService _users;

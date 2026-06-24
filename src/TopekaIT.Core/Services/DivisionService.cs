@@ -3,6 +3,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Reads and maintains the division list that controls which tenant databases the portal can enter.
+/// </summary>
 public class DivisionService
 {
     private readonly IDivisionRepository _repo;

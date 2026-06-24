@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Enums;
 
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// One scanned item inside an audit session: what we expected, what we found, and why it did or did not match.
+/// </summary>
 public class AuditEntry
 {
     public string Id { get; set; } = "";

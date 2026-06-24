@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for raw printer events.
+/// </summary>
 public class PrinterEventConfig : IEntityTypeConfiguration<PrinterEvent>
 {
     public void Configure(EntityTypeBuilder<PrinterEvent> b)

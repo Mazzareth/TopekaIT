@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// One printer ping sample. Small rows, many rows, useful when the printer says "I was fine" and the chart says otherwise.
+/// </summary>
 public class PingSample
 {
     public long Id { get; set; }

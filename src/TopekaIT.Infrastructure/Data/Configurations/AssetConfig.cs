@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for assets and their related workflow records.
+/// </summary>
 public class AssetConfig : IEntityTypeConfiguration<Asset>
 {
     public void Configure(EntityTypeBuilder<Asset> b)
@@ -16,7 +19,6 @@ public class AssetConfig : IEntityTypeConfiguration<Asset>
         b.Property(x => x.Tag).HasMaxLength(64);
         b.Property(x => x.Serial).HasMaxLength(64);
         b.Property(x => x.Imei).HasMaxLength(32);
-        b.Property(x => x.RfidTagId).HasMaxLength(64);
         b.Property(x => x.Model).HasMaxLength(128);
         b.Property(x => x.Status).HasConversion<string>().HasMaxLength(32);
         b.Property(x => x.Flags).HasConversion<int>();
@@ -36,9 +38,6 @@ public class AssetConfig : IEntityTypeConfiguration<Asset>
 
         b.HasIndex(x => x.Serial);
         b.HasIndex(x => x.Tag);
-        b.HasIndex(x => x.RfidTagId)
-            .IsUnique()
-            .HasFilter("[RfidTagId] IS NOT NULL");
         b.HasIndex(x => x.HolderId);
     }
 }

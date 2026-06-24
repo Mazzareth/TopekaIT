@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for saved view filters.
+/// </summary>
 public class SavedViewConfig : IEntityTypeConfiguration<SavedView>
 {
     public void Configure(EntityTypeBuilder<SavedView> b)

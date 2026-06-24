@@ -3,6 +3,9 @@ using System.Text.Json;
 
 namespace TopekaIT.DeploymentChecker;
 
+/// <summary>
+/// Tiny JSON settings store for the checker. It keeps preferences local to the user profile.
+/// </summary>
 public static class SettingsStore
 {
     static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };

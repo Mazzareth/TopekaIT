@@ -4,6 +4,9 @@ using TopekaIT.Core.Ports;
 
 namespace TopekaIT.Core.Services;
 
+/// <summary>
+/// Creates and updates work tickets, including the auto-repair tickets raised by station and RMA flows.
+/// </summary>
 public class TicketService
 {
     private const int InitialTicketNumber = 1042;
@@ -92,11 +95,6 @@ public class TicketService
         t.UpdatedAt = DateTimeOffset.UtcNow;
         await _repo.UpdateAsync(t, ct);
         return t;
-    }
-
-    public async Task<Ticket?> SetResolutionAsync(string id, string resolution, CancellationToken ct = default)
-    {
-        return await UpdateResolutionAsync(id, resolution, ct);
     }
 
     private async Task<Ticket> CreateTicketAsync(

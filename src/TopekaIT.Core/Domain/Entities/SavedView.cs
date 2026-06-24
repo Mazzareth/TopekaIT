@@ -1,5 +1,8 @@
 namespace TopekaIT.Core.Domain.Entities;
 
+/// <summary>
+/// A saved filter layout for a user. The filter stays JSON so the UI can evolve without a migration every Tuesday.
+/// </summary>
 public class SavedView
 {
     public string Id { get; set; } = "";

@@ -11,9 +11,7 @@ using TopekaIT.Infrastructure.Tenant;
 namespace TopekaIT.Web.Services;
 
 /// <summary>
-/// Listens on TCP and UDP ports (default 4010) for printer log messages.
-/// Printers can be configured to send status/error messages to this endpoint.
-/// Each message is parsed and stored as a PrinterEvent, matched to a printer by IP address.
+/// Listens on TCP and UDP for printer log messages, matches them by IP, and stores them as printer events.
 /// </summary>
 public class PrinterLogSinkService : BackgroundService
 {
@@ -40,6 +38,8 @@ public class PrinterLogSinkService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        await Task.Yield();
+
         await Task.WhenAll(
             RunTcpListenerAsync(stoppingToken),
             RunUdpListenerAsync(stoppingToken));

@@ -4,6 +4,9 @@ using TopekaIT.Core.Services;
 
 namespace TopekaIT.Web.Authorization;
 
+/// <summary>
+/// Last mile of permission checks: pull the signed-in user id, ask Core for effective access, and approve only that permission.
+/// </summary>
 public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionRequirement>
 {
     private readonly AccessControlService _access;

@@ -2,6 +2,9 @@ using Xunit;
 
 namespace TopekaIT.Web.Tests;
 
+/// <summary>
+/// Source guards for the printer command palette, especially the telnet safety gates.
+/// </summary>
 public class PrinterCommandPaletteSourceTests
 {
     [Fact]
@@ -37,7 +40,4 @@ public class PrinterCommandPaletteSourceTests
 
     private static string ReadRepoFile(params string[] relativePath) =>
         RepositorySource.Read(relativePath);
-
-    private static string RepoPath(params string[] relativePath)
-        => RepositorySource.Path(relativePath);
 }

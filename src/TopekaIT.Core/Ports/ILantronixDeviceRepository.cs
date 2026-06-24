@@ -2,6 +2,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Core.Ports;
 
+/// <summary>
+/// Storage for Lantronix devices and their poll history.
+/// </summary>
 public interface ILantronixDeviceRepository
 {
     Task<IReadOnlyList<LantronixDevice>> GetAllAsync(CancellationToken ct = default);

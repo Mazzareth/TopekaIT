@@ -4,6 +4,9 @@ using TopekaIT.Core.Domain.Entities;
 
 namespace TopekaIT.Infrastructure.Data.Configurations;
 
+/// <summary>
+/// EF map for issue tags attached to assets.
+/// </summary>
 public class AssetIssueTagConfig : IEntityTypeConfiguration<AssetIssueTag>
 {
     public void Configure(EntityTypeBuilder<AssetIssueTag> b)
